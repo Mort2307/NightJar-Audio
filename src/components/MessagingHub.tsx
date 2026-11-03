@@ -27,6 +27,11 @@ const roleLabel=(role:string)=>role==='admin'?'Nightjar Admin':role==='editor'?'
 export default function MessagingHub({role,currentUserId,initialRecipientUserId,initialConversationId,initialCollaborationId,onRecipientHandled,onUnreadChange,onStatusChange,notify,demoMode=false,simulationMode=false}:Props){
   const [conversations,setConversations]=useState<any[]>([]);
   const [directory,setDirectory]=useState<any[]>([]);
+  const [directoryQuery,setDirectoryQuery]=useState('');
+  const [directoryRole,setDirectoryRole]=useState<'all'|'creator'|'writer'|'editor'|'artist'>('all');
+  const [directoryAvailability,setDirectoryAvailability]=useState<'all'|'listed'|'not-listed'>('all');
+  const [directoryLoading,setDirectoryLoading]=useState(true);
+  const [directoryError,setDirectoryError]=useState(false);
   const [selectedId,setSelectedId]=useState<string|null>(null);
   const [messages,setMessages]=useState<any[]>([]);
   const [query,setQuery]=useState('');
@@ -94,19 +99,25 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
   };
 
   const loadDirectory=async()=>{
+    setDirectoryLoading(true);
     try{
       if(demoMode){
         setDirectory([
-          {userId:'demo-writer-mara',role:'writer',name:'Mara Bell',handle:'marabell',headline:'Dialogue-first Writer'},
-          {userId:'demo-creator-noah',role:'creator',name:'Noah Vale',handle:'noahvale',headline:'Character-led Creator'},
-          {userId:'demo-editor-sam',role:'editor',name:'Sam Reed',handle:'samreed',headline:'Dialogue editing and production polish'},
-          {userId:'demo-artist-lena',role:'artist',name:'Lena Moss',handle:'lenamoss',headline:'Illustration, cover art and character artwork'},
+          {userId:'demo-writer-mara',role:'writer',roles:['writer'],name:'Mara Bell',handle:'marabell',headline:'Dialogue-first Writer',roleSpecialties:['Dialogue','Character development'],roleAvailability:'Open to commissions'},
+          {userId:'demo-creator-noah',role:'creator',roles:['creator'],name:'Noah Vale',handle:'noahvale',headline:'Character-led Creator',roleSpecialties:['Character performance','Narration'],roleAvailability:'Open to collaborations'},
+          {userId:'demo-editor-sam',role:'editor',roles:['editor'],name:'Sam Reed',handle:'samreed',headline:'Dialogue editing and production polish',roleSpecialties:['Dialogue editing','Mixing'],roleAvailability:'Open for bookings'},
+          {userId:'demo-artist-lena',role:'artist',roles:['artist'],name:'Lena Moss',handle:'lenamoss',headline:'Illustration, cover art and character artwork',roleSpecialties:['Illustration','Cover artwork'],roleAvailability:'Open for commissions'},
         ].filter((item)=>item.userId!==currentUserId));
       }else{
         const data=await nightjarCollaboration.directory();
-        setDirectory((data.people??[]).filter((item:any)=>['creator','writer','editor','artist'].includes(String(item.role))&&item.userId!==currentUserId));
+        setDirectory((data.people??[]).filter((item:any)=>{
+          const roles=Array.isArray(item.roles)?item.roles:[item.role];
+          return roles.some((value:any)=>['creator','writer','editor','artist'].includes(String(value)))&&item.userId!==currentUserId;
+        }));
       }
-    }catch{/* existing conversations still work */}
+      setDirectoryError(false);
+    }catch{setDirectoryError(true);}
+    finally{setDirectoryLoading(false);}
   };
 
   const loadMessages=async(conversationId:string,quiet=false)=>{
@@ -219,13 +230,22 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
     openThread(conversation.id,collaborationId);
   };
 
+  const personRoles=(person:any):string[]=>Array.from(new Set<string>(
+    (Array.isArray(person.roles)&&person.roles.length?person.roles:[person.role])
+      .map((value:unknown)=>String(value)).filter((value:string)=>['creator','writer','editor','artist'].includes(value)),
+  ));
   const filteredPeople=useMemo(()=>{
-    const needle=query.trim().toLowerCase();
+    const needle=directoryQuery.trim().toLowerCase();
     return directory.filter((person:any)=>{
+      const roles=personRoles(person);
+      if(directoryRole!=='all'&&!roles.includes(directoryRole))return false;
+      const hasAvailability=Boolean(String(person.roleAvailability??'').trim());
+      if(directoryAvailability==='listed'&&!hasAvailability)return false;
+      if(directoryAvailability==='not-listed'&&hasAvailability)return false;
       if(!needle)return true;
-      return [person.name,person.handle,person.headline,person.role,...(person.roleSpecialties??[]),...(person.favouriteTags??[])].filter(Boolean).join(' ').toLowerCase().includes(needle);
-    }).slice(0,30);
-  },[directory,query]);
+      return [person.name,person.handle,person.headline,...roles,...(person.roleSpecialties??[]),...(person.roleFocus??[]),...(person.roleSecondary??[]),...(person.favouriteTags??[])].filter(Boolean).join(' ').toLowerCase().includes(needle);
+    });
+  },[directory,directoryQuery,directoryRole,directoryAvailability]);
 
   const send=async()=>{
     const conversationId=selectedId;
@@ -352,8 +372,32 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
 
     <div className={mobileThreadOpen?'messaging-layout thread-open':'messaging-layout'}>
       <aside className="messaging-sidebar">
-        <label className="messaging-search"><Search size={16}/><input aria-label="Search conversations or professionals" value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search inbox or find a professional…"/></label>
-        {!!query.trim()&&<div className="messaging-directory" aria-label="Professional directory matches"><p className="messaging-section-label">START A CONVERSATION</p>{filteredPeople.filter((person:any)=>!conversations.some((item)=>item.otherUserId===person.userId)).map((person:any)=><button key={person.userId} onClick={()=>void startWith(person.userId)}><span>{String(person.name??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span><div><strong>{person.name}</strong><small>{roleLabel(person.role)}{person.handle?' · @'+String(person.handle).replace(/^@/,''):''}</small></div></button>)}{!filteredPeople.some((person:any)=>!conversations.some((item)=>item.otherUserId===person.userId))&&<div className="people-empty">No new contacts match. Check your inbox results below.</div>}</div>}
+        <label className="messaging-search"><Search size={16}/><input aria-label="Search conversations" value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search your conversations…"/></label>
+        <section className="creative-partners" aria-label="Find creative partners">
+          <div className="creative-partners-heading"><div><span className="mini-label">NIGHTJAR CREATIVE NETWORK</span><h3>Find Creative Partners</h3><p>Meet professionals across every creative role. No existing project or Marketplace listing needed.</p></div><span className="creative-partner-count">{directory.length}</span></div>
+          <label className="creative-partner-search"><Search size={14}/><input aria-label="Search creative partners" value={directoryQuery} onChange={(event)=>setDirectoryQuery(event.target.value)} placeholder="Name, skill, specialty or tag…"/></label>
+          <div className="creative-partner-filters">
+            <label><span>Role</span><select aria-label="Filter creative partners by role" value={directoryRole} onChange={(event)=>setDirectoryRole(event.target.value as typeof directoryRole)}><option value="all">All creative roles</option><option value="creator">VA Creators</option><option value="writer">Writers</option><option value="editor">Audio Editors</option><option value="artist">Artists</option></select></label>
+            <label><span>Availability</span><select aria-label="Filter by profile availability" value={directoryAvailability} onChange={(event)=>setDirectoryAvailability(event.target.value as typeof directoryAvailability)}><option value="all">Any profile</option><option value="listed">Availability listed</option><option value="not-listed">Not specified</option></select></label>
+          </div>
+          <div className="creative-partner-results"><div className="creative-partner-results-head"><strong>{filteredPeople.length} {filteredPeople.length===1?'professional':'professionals'}</strong><span>Public professional profiles</span></div>
+            {directoryLoading?<div className="people-empty" role="status">Finding NightJar professionals…</div>:directoryError?<div className="people-empty" role="alert">The directory could not load. <button type="button" className="text-button" onClick={()=>void loadDirectory()}>Try again</button></div>:filteredPeople.length?filteredPeople.map((person:any)=>{
+              const roles=personRoles(person);
+              const existing=conversations.some((item)=>item.otherUserId===person.userId);
+              const availability=String(person.roleAvailability??'').trim();
+              return <article className="creative-partner-card" key={person.userId}>
+                <span className="creative-partner-avatar">{person.avatarUrl?<img src={person.avatarUrl} alt="" loading="lazy" decoding="async"/>:String(person.name??'NJ').split(' ').map((part:string)=>part[0]).join('').slice(0,2)}</span>
+                <div className="creative-partner-details"><strong>{person.name??'NightJar professional'}</strong>{person.handle&&<small>@{String(person.handle).replace(/^@/,'')}</small>}
+                  <div className="creative-partner-roles">{roles.map((item)=> <span key={item}>{roleLabel(item)}</span>)}</div>
+                  {person.headline&&<p>{person.headline}</p>}
+                  {!!(person.roleSpecialties??[]).length&&<small className="creative-partner-specialties">{person.roleSpecialties.slice(0,3).join(' · ')}</small>}
+                  {availability&&<small className="creative-partner-availability"><span aria-hidden="true">●</span> {availability}</small>}
+                </div>
+                <button type="button" className="creative-partner-message" onClick={()=>void startWith(person.userId)}>{existing?'Open chat':'Message'} <MessageCircle size={13}/></button>
+              </article>;
+            }):<div className="people-empty">No professionals match those filters. Try another role or search term.</div>}
+          </div>
+        </section>
         <div className="messaging-conversations">
           <div className="messaging-conversation-head"><span className="mini-label">CONVERSATIONS</span><strong>{visibleConversations.length}</strong></div>
           <div className="messaging-filter-tabs" role="tablist" aria-label="Message inbox filters">

@@ -121,3 +121,44 @@
   .messaging-hub .message-compose small { font-size:12px; }
   .messaging-hub .direct-message { max-width:92%; }
 }
+
+
+/* Dedicated professional discovery, separate from inbox search and filters. */
+.messaging-hub .creative-partners {
+  margin:12px 0 15px;
+  padding:14px;
+  border:1px solid var(--nj-line-default);
+  border-radius:14px;
+  background:linear-gradient(145deg,rgba(221,166,124,.075),rgba(255,255,255,.015));
+}
+.messaging-hub .creative-partners-heading { display:flex;align-items:flex-start;justify-content:space-between;gap:10px; }
+.messaging-hub .creative-partners-heading h3 { margin:4px 0 5px;font-size:18px; }
+.messaging-hub .creative-partners-heading p { margin:0;color:var(--nj-text-secondary);font-size:12px;line-height:1.45; }
+.messaging-hub .creative-partner-count { flex:0 0 auto;min-width:30px;height:30px;display:grid;place-items:center;border:1px solid var(--nj-line-default);border-radius:9px;color:var(--nj-accent);font-size:12px;font-weight:700; }
+.messaging-hub .creative-partner-search { display:flex;align-items:center;gap:8px;margin-top:12px;padding:0 10px;border:1px solid var(--nj-line-default);border-radius:9px;background:rgba(0,0,0,.16);color:var(--nj-text-secondary); }
+.messaging-hub .creative-partner-search input { width:100%;min-width:0;min-height:42px;border:0;outline:0;background:transparent;color:var(--nj-text-primary);font-size:13px; }
+.messaging-hub .creative-partner-filters { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px; }
+.messaging-hub .creative-partner-filters label { display:grid;gap:4px;min-width:0;color:var(--nj-text-secondary);font-size:10px;font-weight:700; }
+.messaging-hub .creative-partner-filters select { width:100%;min-width:0;min-height:38px;padding:5px 7px;border:1px solid var(--nj-line-default);border-radius:8px;background:var(--nj-panel-raised);color:var(--nj-text-primary);font-size:11px; }
+.messaging-hub .creative-partner-results { margin-top:11px; }
+.messaging-hub .creative-partner-results-head { display:flex;justify-content:space-between;gap:8px;margin-bottom:7px;color:var(--nj-text-secondary);font-size:10px; }
+.messaging-hub .creative-partner-results-head strong { color:var(--nj-text-primary);font-size:11px; }
+.messaging-hub .creative-partner-card { display:grid;grid-template-columns:36px minmax(0,1fr);gap:8px;padding:10px 0;border-top:1px solid var(--nj-line-subtle,var(--nj-line-default)); }
+.messaging-hub .creative-partner-avatar { width:36px;height:36px;display:grid;place-items:center;overflow:hidden;border:1px solid var(--nj-line-default);border-radius:50%;background:rgba(221,166,124,.1);color:var(--nj-accent);font-size:11px;font-weight:700; }
+.messaging-hub .creative-partner-avatar img { width:100%;height:100%;object-fit:cover; }
+.messaging-hub .creative-partner-details { min-width:0;display:flex;flex-direction:column;gap:3px; }
+.messaging-hub .creative-partner-details > strong { color:var(--nj-text-primary);font-size:12px; }
+.messaging-hub .creative-partner-details > small { color:var(--nj-text-secondary);font-size:10px; }
+.messaging-hub .creative-partner-details p { margin:2px 0 0;color:var(--nj-text-secondary);font-size:11px;line-height:1.4;overflow-wrap:anywhere; }
+.messaging-hub .creative-partner-roles { display:flex;flex-wrap:wrap;gap:4px; }
+.messaging-hub .creative-partner-roles span { padding:2px 6px;border:1px solid var(--nj-line-default);border-radius:99px;color:var(--nj-accent);font-size:9px; }
+.messaging-hub .creative-partner-details .creative-partner-specialties { line-height:1.35; }
+.messaging-hub .creative-partner-details .creative-partner-availability { color:var(--nj-text-primary); }
+.messaging-hub .creative-partner-availability span { color:var(--nj-accent);font-size:8px; }
+.messaging-hub .creative-partner-message { grid-column:2;justify-self:start;display:inline-flex;align-items:center;gap:6px;min-height:34px;margin-top:2px;padding:5px 9px;border:1px solid var(--nj-line-default);border-radius:8px;background:rgba(221,166,124,.08);color:var(--nj-text-primary);font-size:11px;font-weight:700; }
+.messaging-hub .creative-partner-message:hover { border-color:var(--nj-accent); }
+.messaging-hub .creative-partner-results .people-empty { padding:14px 5px; }
+@media (max-width:760px) {
+  .messaging-hub .creative-partners { margin-top:10px; }
+  .messaging-hub .creative-partner-filters { grid-template-columns:1fr 1fr; }
+}
