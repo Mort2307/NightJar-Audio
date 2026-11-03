@@ -64,7 +64,7 @@ export function buildDiditResubmissionCallables(deps: {
   requireActiveIdentity: (request: any) => Promise<Identity>;
   requireAdminIdentity: (request: any) => Identity;
 }) {
-  const myDiditResubmission = onCall({region:REGION}, async request => {
+  const myDiditResubmission = onCall({region:REGION,secrets:[DIDIT_WORKFLOW_ID]}, async request => {
     const identity = await deps.requireActiveIdentity(request);
     const [ageSnap, formSnap] = await Promise.all([ageRef(identity.uid).get(), requestRef(identity.uid).get()]);
     const age = ageSnap.data() ?? {}, form = formSnap.data() ?? {};
@@ -95,7 +95,7 @@ export function buildDiditResubmissionCallables(deps: {
     };
   });
 
-  const requestDiditResubmission = onCall({region:REGION}, async request => {
+  const requestDiditResubmission = onCall({region:REGION,secrets:[DIDIT_API_KEY,DIDIT_WORKFLOW_ID,DIDIT_ENVIRONMENT]}, async request => {
     const identity = await deps.requireActiveIdentity(request);
     const reason = text((request.data as Record<string,unknown> | undefined)?.reason,40);
     if (!reasons.has(reason) || (request.data as Record<string,unknown> | undefined)?.explicitConsent !== true)
