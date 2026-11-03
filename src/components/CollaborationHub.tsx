@@ -234,7 +234,7 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
               <button className="primary-button" onClick={() => void respond(proposal, 'accepted')}>Accept</button>
               <button className="ghost-button" onClick={() => void respond(proposal, 'declined')}><X size={13}/> Decline</button>
             </>}
-            {['accepted','discussing','interested'].includes(proposal.status) && <button className="secondary-button" onClick={() => void setStatus(proposal, 'in_production')}>Mark in production</button>}
+            {proposal.status === 'accepted' && <button className="secondary-button" onClick={() => void setStatus(proposal, 'in_production')}>Mark in production</button>}
             {proposal.status === 'in_production' && <button className="primary-button" onClick={() => void setStatus(proposal, 'completed')}>Mark completed</button>}
             {isInitiator && !['withdrawn','declined','completed'].includes(proposal.status) && <button className="ghost-button" onClick={() => void setStatus(proposal, 'withdrawn')}>Withdraw</button>}
           </div>
