@@ -20,8 +20,13 @@ function resultGuidance(result: AdminDiditExistingResult) {
   if (result.verified) return result.outcome === 'already_verified'
     ? 'Already verified. No additional check or professional approval was made.'
     : 'Validated existing Didit 18+ approval recorded on this account. Professional roles still require your separate approval.';
-  if (result.outcome === 'adult_evidence_missing')
-    return 'Didit reports an overall approval but the individual ID verification has not supplied approved, valid 18+ documentary evidence. Review that feature in Didit before rechecking.';
+  if (result.outcome === 'adult_evidence_missing') {
+    if (result.evidenceIssue === 'birth_date_not_returned')
+      return 'Didit reports Approved, but did not return a usable date of birth from an approved ID step. Check the ID Verification → Returned data settings in Didit. Repeating the ID check without fixing that configuration may waste credits.';
+    if (result.evidenceIssue === 'id_step_not_approved')
+      return 'The overall Didit session is Approved, but the individual identity-document step is not Approved. Review that step in Didit; an overall/manual approval is not enough for NightJar’s 18+ gate.';
+    return 'The document result does not currently prove verified adulthood. Review the ID evidence in Didit; NightJar cannot override the age requirement.';
+  }
   if (result.outcome === 'provider_not_approved')
     return 'The existing Didit decision is not Approved yet. Check its overall session status and any manual-review requirements.';
   return 'Nightjar cannot find a reconcilable live Didit session for this account. Do not initiate another paid session.';
@@ -37,6 +42,9 @@ export default function AdminDiditMemberOps({ onVerified }: { onVerified?: () =>
   const [loading, setLoading] = useState(true);
   const [inspecting, setInspecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncingQueue, setSyncingQueue] = useState(false);
+  const [batchProgress, setBatchProgress] = useState('');
+  const [batchResults, setBatchResults] = useState<Array<{userId:string;email:string;message:string;verified:boolean}>>([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [checkedAt, setCheckedAt] = useState('');
@@ -87,7 +95,7 @@ export default function AdminDiditMemberOps({ onVerified }: { onVerified?: () =>
   };
 
   const sync = async () => {
-    if (!selected || !detail || !detail.sessionRecorded || !detail.sessionBound || detail.providerVerified || syncing) return;
+    if (!selected || !detail || !detail.sessionRecorded || !detail.sessionBound || detail.providerVerified || syncing || syncingQueue) return;
     if (!window.confirm('Re-read ONLY the existing live Didit decision for ' + selected.email + '? This does not create or charge for a new ID session. Nightjar will save Verified 18+ ONLY if the current provider result contains approved, account-matched documentary adult evidence. Professional approval remains separate.')) return;
     setSyncing(true);
     setNotice('');
@@ -115,6 +123,59 @@ export default function AdminDiditMemberOps({ onVerified }: { onVerified?: () =>
     }
   };
 
+  // An operator-triggered, sequential existing-result check; not a batch
+  // provider verification. Never send a POST to create a Didit session.
+  const syncPendingExisting = async () => {
+    if (syncing || syncingQueue || loading) return;
+    const candidates = members.filter(member =>
+      member.sessionRecorded && !member.providerVerified && member.accountStatus !== 'suspended').slice(0,8);
+    if (!candidates.length) return;
+    if (!window.confirm('Check the EXISTING Didit decisions for up to ' + candidates.length +
+      ' pending NightJar members? This reads each linked decision once, cannot start a new ID check and only records Verified 18+ when Didit returns valid, securely bound documentary adult evidence. Professional approvals stay separate.')) return;
+    setSyncingQueue(true);
+    setBatchResults([]);
+    setBatchProgress('Checking existing Didit decisions…');
+    let anyVerified = false;
+    const reports: Array<{userId:string;email:string;message:string;verified:boolean}> = [];
+    try {
+      for (let index=0; index<candidates.length; index++) {
+        const member=candidates[index];
+        setBatchProgress('Checking ' + (index+1) + ' of ' + candidates.length + ' existing results…');
+        try {
+          const evidence=await nightjarAdministration.inspectDiditMemberCase(member.userId);
+          if (!evidence.sessionBound) {
+            reports.push({userId:member.userId,email:member.email,message:diagnosticGuidance[evidence.outcome],verified:false});
+            continue;
+          }
+          if (evidence.providerVerified) {
+            reports.push({userId:member.userId,email:member.email,message:'Already verified 18+. No action required.',verified:true});
+            continue;
+          }
+          const result=await nightjarAdministration.syncApplicantExistingDidit(member.userId);
+          reports.push({userId:member.userId,email:member.email,message:resultGuidance(result),verified:result.verified});
+          anyVerified ||= result.verified;
+        } catch (cause) {
+          reports.push({userId:member.userId,email:member.email,
+            message:cause instanceof Error ? cause.message : 'Could not safely read this existing provider result.',
+            verified:false});
+        }
+        setBatchResults([...reports]);
+      }
+      setBatchResults([...reports]);
+      if (anyVerified) onVerified?.();
+      await load();
+      if (selectedId) {
+        const refreshed = await nightjarAdministration.inspectDiditMemberCase(selectedId).catch(()=>null);
+        if (refreshed) setDetail(refreshed);
+      }
+      setBatchProgress('Existing-result check complete: '+
+        reports.filter(item=>item.verified).length+' verified · '+
+        reports.filter(item=>!item.verified).length+' still need attention. No new ID sessions started.');
+    } catch {
+      setBatchProgress('Could not refresh every record. Review the results shown; do not repeat an ID check.');
+    } finally {setSyncingQueue(false);}
+  };
+
   const awaiting = members.filter(member => member.sessionRecorded && !member.providerVerified).length;
   const safeAdminIssueLabels: Record<string,string> = {
     DOCUMENT_EXPIRED: 'ID document expired',
@@ -128,17 +189,29 @@ export default function AdminDiditMemberOps({ onVerified }: { onVerified?: () =>
   return <section className="nj-didit-members" aria-label="Nightjar member verification operations">
     <div className="nj-didit-members-heading">
       <div><span className="mini-label">OWNER ONLY · DIDIT OPERATIONS</span><h3>Member verification desk</h3>
-        <p>Find a tester or member, inspect the account-bound verification and securely check their existing Didit decision. This never launches a paid check or approves a professional role.</p>
+        <p>Didit approval, verified-adult access and professional role approval are three different states. Check linked results here without buying another identity verification.</p>
       </div>
-      <button type="button" className="secondary-button" disabled={loading || syncing} onClick={() => void load()}>
+      <button type="button" className="secondary-button" disabled={loading || syncing || syncingQueue} onClick={() => void load()}>
         <RefreshCw size={16}/>{loading ? 'Checking members…' : 'Refresh member directory'}
       </button>
     </div>
     <div className="nj-didit-members-stats">
-      <span><strong>{awaiting}</strong><small>Linked checks not verified</small></span>
+      <span><strong>{awaiting}</strong><small>NightJar checks not yet verified 18+ (not Didit approvals)</small></span>
       <span><strong>{confirmed}</strong><small>Verified 18+ records</small></span>
       <span><strong>{members.length}</strong><small>Accounts listed</small></span>
     </div>
+    <div className="nj-didit-case-actions">
+      <button type="button" className="primary-button" disabled={loading || syncing || syncingQueue || awaiting === 0}
+        onClick={()=>void syncPendingExisting()}>
+        <ShieldCheck size={16}/>{syncingQueue ? 'Checking previous Didit decisions…' : 'Check all linked pending results · no new ID checks'}
+      </button>
+      <small>Checks up to 8 existing linked sessions, one at a time. Provider-approved adults are recorded only if their ID evidence proves 18+. This does not approve creator roles.</small>
+    </div>
+    {batchProgress && <p role="status" className="nj-didit-case-notice">{batchProgress}</p>}
+    {batchResults.length>0 && <div className="nj-didit-case-notice" aria-label="Existing Didit synchronisation outcomes">
+      <strong>Results by account</strong>
+      <ul>{batchResults.map(item=><li key={item.userId}><strong>{item.email || 'NightJar member'}:</strong> {item.message}</li>)}</ul>
+    </div>}
     {limited && <p className="access-note">Directory capped at 300 accounts. A wider search requires server-side pagination; these are not all Nightjar accounts.</p>}
     <div className="nj-didit-members-layout">
       <div className="nj-didit-members-browser">
@@ -163,7 +236,7 @@ export default function AdminDiditMemberOps({ onVerified }: { onVerified?: () =>
         {!selected && <div className="nj-didit-members-placeholder"><Fingerprint size={24}/><strong>Select an account</strong><span>Review its verification status, secure session link, webhook activity and existing-result recovery options.</span></div>}
         {selected && <>
           <div className="nj-didit-case-title"><div><strong>{selected.email || 'Selected member'}</strong><span>Account verification investigation</span></div>
-            <button className="secondary-button" type="button" disabled={inspecting || syncing} onClick={()=>void inspect(selected.userId)}><RefreshCw size={15}/>Inspect</button>
+            <button className="secondary-button" type="button" disabled={inspecting || syncing || syncingQueue} onClick={()=>void inspect(selected.userId)}><RefreshCw size={15}/>Inspect</button>
           </div>
           {inspecting && <p role="status">Reading account-linked evidence…</p>}
           {detail && <>
@@ -189,7 +262,7 @@ export default function AdminDiditMemberOps({ onVerified }: { onVerified?: () =>
             </div>}
             {detail.lastWebhookReceivedAt && <p className="nj-didit-muted">Last signed webhook: {new Date(detail.lastWebhookReceivedAt).toLocaleString('en-GB')}</p>}
             <div className="nj-didit-case-actions">
-              <button type="button" className="primary-button" disabled={syncing || inspecting || detail.providerVerified || !detail.sessionBound} onClick={()=>void sync()}>
+              <button type="button" className="primary-button" disabled={syncing || syncingQueue || inspecting || detail.providerVerified || !detail.sessionBound} onClick={()=>void sync()}>
                 <ShieldCheck size={17}/>{syncing ? 'Validating existing decision…' : 'Sync existing Didit result · no new check'}
               </button>
               <a href="https://business.didit.me/sign-in" target="_blank" rel="noopener noreferrer" className="secondary-button">Review in Didit <ExternalLink size={14}/></a>
