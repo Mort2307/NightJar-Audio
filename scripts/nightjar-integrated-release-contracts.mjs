@@ -130,6 +130,19 @@ for(const item of messageFollowup.files) {
   overrides.set(item.path,item);
 }
 
+// PR #326: member-visible listening label only. The reviewed App.tsx PR #319
+// hash remains immutable and no server-side access gate is changed.
+const betaLabelFollowup=JSON.parse(string('docs/NIGHTJAR_BETA_LISTENING_LABEL_FOLLOWUP.json'));
+assert.equal(betaLabelFollowup.pr,326);
+assert.deepEqual(betaLabelFollowup.files.map(item=>item.path),['src/App.tsx']);
+for(const item of betaLabelFollowup.files) {
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'label is anchored to approved App UI');
+  assert.equal(item.baselineSha,previous.sha,'do not rewrite historical RC hashes');
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  overrides.set(item.path,item);
+}
+
 // PR #335: Find Creative Partners adds discoverability without widening
 // the existing messaging authorization model. Pin each changed UI file to
 // the immediately preceding approved source version.
@@ -146,19 +159,6 @@ for(const item of creativePartnersFollowup.files) {
     manifest.includes.flatMap(pr=>pr.files).find(file=>file.path===item.path);
   assert.ok(previous,'creative partner UI must anchor to an approved earlier source');
   assert.equal(item.baselineSha,previous.sha,'preserve all earlier release-candidate and follow-up SHAs');
-  overrides.set(item.path,item);
-}
-
-// PR #326: member-visible listening label only. The reviewed App.tsx PR #319
-// hash remains immutable and no server-side access gate is changed.
-const betaLabelFollowup=JSON.parse(string('docs/NIGHTJAR_BETA_LISTENING_LABEL_FOLLOWUP.json'));
-assert.equal(betaLabelFollowup.pr,326);
-assert.deepEqual(betaLabelFollowup.files.map(item=>item.path),['src/App.tsx']);
-for(const item of betaLabelFollowup.files) {
-  const previous=overrides.get(item.path);
-  assert.ok(previous,'label is anchored to approved App UI');
-  assert.equal(item.baselineSha,previous.sha,'do not rewrite historical RC hashes');
-  assert.match(item.sha,/^[0-9a-f]{40}$/);
   overrides.set(item.path,item);
 }
 
