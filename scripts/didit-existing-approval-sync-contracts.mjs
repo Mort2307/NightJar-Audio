@@ -5,6 +5,7 @@ const backend=fs.readFileSync('functions/src/index.ts','utf8');
 const provider=fs.readFileSync('functions/src/didit.ts','utf8');
 const dashboard=fs.readFileSync('src/components/AdminDiditMemberOps.tsx','utf8');
 const api=fs.readFileSync('src/platform/firebase-administration.ts','utf8');
+const hostingWorkflow=fs.readFileSync('.github/workflows/firebase-hosting-merge.yml','utf8');
 const member=backend.slice(backend.indexOf('export const reconcileMyDiditVerification = onCall'),
   backend.indexOf('// Owner-only read-only evidence trail'));
 const owner=backend.slice(backend.indexOf('export const adminReconcileMemberDidit = onCall'),
@@ -43,4 +44,7 @@ assert.match(dashboard,/\.slice\(0,8\)/,'bounded admin reconciliation batch');
 assert.match(dashboard,/window\.confirm\(/,'owner explicitly approves running read-only reconciliation');
 assert.doesNotMatch(dashboard,/startAgeAssurance|startDiditSession|startMyDiditControlledCheck/,
   'no UI path creates a new paid verification');
+assert.match(hostingWorkflow,/\[nightjar-didit-sync-repair-release\]/,'explicit backend release tag is required');
+assert.match(hostingWorkflow,/inputs\[function_names\]=processDiditWebhook,reconcileMyDiditVerification,adminReconcileMemberDidit/,
+  'only the three changed Didit backend callables are deployed before Hosting');
 console.log('Didit existing-approval sync and no-charge recovery contracts PASS');
