@@ -1,0 +1,11 @@
+{
+  "pr": 331,
+  "reason": "Didit same-session document resubmission adds a narrowly scoped member recovery panel and import to the existing age gate. New UI logic lives in DiditDocumentResubmission; no prior RC content or age access gate is replaced. Exact SHA anchored to approved PR #326 App.tsx.",
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "90e2e766082c7879f976292450c623ad5a0dee20",
+      "sha": "4d39b13a30438373af23fcc197f5eddc5790786e"
+    }
+  ]
+}
