@@ -54,6 +54,8 @@ jobs:
       - run: npm ci --no-fund
       - run: npm run check
       - run: npm run build
+      - name: Test guarded Didit resubmission policy without provider calls
+        run: node --test lib/didit-resubmission-guards.test.js
       - name: Determine backend change scope
         id: scope
         run: node ../scripts/ci-release-scope.mjs
