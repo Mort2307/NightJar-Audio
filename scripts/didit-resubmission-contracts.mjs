@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const backend=fs.readFileSync('functions/src/didit-resubmissions.ts','utf8');
+const diditStarter=fs.readFileSync('functions/src/didit.ts','utf8');
 const entry=fs.readFileSync('functions/src/index.ts','utf8');
 const policy=fs.readFileSync('functions/src/didit-resubmission-guards.ts','utf8');
 const member=fs.readFileSync('src/components/DiditDocumentResubmission.tsx','utf8');
@@ -29,6 +30,10 @@ assert.match(backend,/new_status:'Resubmitted'/,'provider receives same-session 
 assert.match(backend,/nodes_to_resubmit:\[\{node_id:selection\.nodeId,feature:'OCR'\}\]/,
   'only one provider-selected document OCR step may be repeated');
 assert.match(backend,/send_email:false/,'no unreviewed provider email or PII disclosure');
+assert.match(diditStarter,/if \(oldId && existing\.provider === 'didit' && existing\.environment === env\(\)\)/,
+  'already linked checks cannot create a second billable provider session');
+assert.match(app,/!\['FAIL','ABANDONED','EXPIRED','PENDING_REVIEW'\]\.includes\(ageProviderStatus\)/,
+  'failed existing check must not show the start-new-check action');
 assert.match(policy,/id\.status==='Approved'/,'approved ID missing DOB must halt');
 assert.match(policy,/ids\.length!==1/,'ambiguous ID steps halt');
 assert.match(policy,/id\.verification_method !== 'document'/,'no wallet/lookup repeat');
