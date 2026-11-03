@@ -25,7 +25,7 @@ const MAX_PROVIDER_REQUESTS = 2; // Hard per-member/same-session spending guard.
 const MAX_MEMBER_REQUESTS = 3;
 const COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const reasons = new Set(['unclear_document', 'wrong_document', 'expired_document', 'document_not_detected', 'other']);
-const eligibleAgeStates = new Set(['PENDING_REVIEW', 'FAIL', 'ABANDONED', 'EXPIRED', 'PENDING']);
+const eligibleAgeStates = new Set(['PENDING_REVIEW', 'FAIL', 'ABANDONED', 'EXPIRED']);
 const text = (value: unknown, max=128) => typeof value === 'string' ? value.trim().slice(0,max) : '';
 const cleanStatus = (value: unknown): RequestState | 'none' => (
   ['requested', 'processing', 'ready', 'denied', 'needs_manual_review'].includes(String(value))
