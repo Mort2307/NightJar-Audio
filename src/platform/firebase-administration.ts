@@ -84,6 +84,7 @@ export type AdminDiditExistingResult = {
     'adult_evidence_missing' | 'no_reconcilable_session';
   providerStatus?: string;
   idFeatureStatuses?: string[];
+  evidenceIssue?: 'id_step_not_approved' | 'birth_date_not_returned' | 'adult_evidence_unconfirmed';
 };
 export type AdminDiditMemberSummary = {
   userId: string; email: string; accountStatus: string;
