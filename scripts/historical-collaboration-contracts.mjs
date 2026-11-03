@@ -8,6 +8,7 @@ const creator = read('src/components/CreatorProfile.tsx');
 const writer = read('src/components/WriterDiscovery.tsx');
 const publicProfile = read('src/components/PublicProfile.tsx');
 const api = read('src/platform/firebase-collaboration.ts');
+const marketplaceActions = read('src/components/MarketplaceScriptActions.tsx');
 
 assert.match(server, /const verifiedCollaborationEvidence =/, 'server reconciles evidence');
 assert.match(server, /normaliseReleaseContributors\(data.contributors\)/, 'released work counts only linked credited accounts');
@@ -25,6 +26,23 @@ assert.match(button, /Missing an older collaboration\?/, 'legacy missing-credit 
 assert.match(button, /workflowOnlyCount/, 'private workflow results shown without private details');
 assert.doesNotMatch(button, /updateCollaborationStatus|setStatus\(|saveMyProfile/, 'handshake cannot self-award a collaboration');
 assert.match(api, /getVerifiedCollaborationHistory/, 'typed callable connected');
+assert.match(server, /initiatedByUserId: data\.initiatedByUserId \?\? data\.writerUserId/, 'proposal payload preserves the initiator');
+assert.match(server, /await requireAgeVerified\(identity\.uid\);[\s\S]*?const input = \(request\.data \?\? \{\}\) as Record<string, unknown>;/, 'marketplace interest requires the same age gate as marketplace access');
+assert.match(server, /const expectedResponderUserId = data\?\.initiatedByUserId[\s\S]*?expectedResponderUserId !== identity\.uid/, 'Writer can respond to a Creator-initiated marketplace interest');
+assert.match(server, /const initiatorUserId = cleanText\(data\.initiatedByUserId, 160\) \|\| data\.writerUserId/, 'response notifications route to the original initiator');
+assert.match(server, /Only the person who initiated this collaboration can withdraw it/, 'only the initiator can withdraw a request');
+assert.match(server, /const alreadyOpen = priorRequests\.docs\.some/, 'duplicate active marketplace interests are prevented');
+assert.match(server, /listing\.collaborationWanted !== true/, 'Writer must explicitly opt in to collaboration interest');
+assert.match(marketplaceActions, /script\.marketplace\?\.collaborationWanted===true/, 'interest button only appears on Writer opt-in listings');
+assert.match(server, /Both parties must accept the collaboration before production can begin/, 'production requires mutual acceptance');
+assert.match(server, /A collaboration must be in production before it can be completed/, 'completion requires a production state');
+assert.match(hub, /proposal\.status === 'accepted' && <button className="secondary-button" onClick=\{\(\) => void setStatus\(proposal, 'in_production'\)\}/, 'UI only offers production start after acceptance');
+assert.match(hub, /const incoming = role === 'writer'[\s\S]*?proposal\.initiatedByUserId !== proposal\.writerUserId/, 'Writer workspace recognises Creator-initiated interest');
+assert.match(hub, /\{incoming && !\['declined','withdrawn','completed'\]/, 'Writer can accept, discuss or decline incoming interest');
+assert.match(hub, /const counterpartUserId = role === 'writer' \? proposal\.recipientUserId : proposal\.writerUserId/, 'collaboration messaging targets the other participant');
+assert.match(marketplaceActions, /Express collaboration interest/, 'marketplace exposes an explicit collaboration CTA');
+assert.match(marketplaceActions, /mode==='interest'[\s\S]*?nightjarCollaboration\.expressInterest/, 'formal interest creates a collaboration request');
+assert.match(marketplaceActions, /else if\(mode==='interest'\)/, 'ordinary Writer questions do not create collaboration requests');
 assert.match(hub, /<CollaborationHistoryButton/, 'directory badges are clickable');
 assert.match(hub, /className="nj-collab-select"/, 'directory selection remains independent');
 for (const [name, source] of [['Creator', creator], ['Public', publicProfile]]) {
