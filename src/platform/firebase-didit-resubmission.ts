@@ -18,6 +18,7 @@ export type AdminDiditResubmissionItem = {
   userId: string;
   email: string;
   revision: number;
+  status: 'requested'|'processing'|'needs_manual_review';
   reason: DiditResubmissionReason;
   cycle: number;
   requestedAt: string | null;
