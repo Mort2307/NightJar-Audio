@@ -213,6 +213,20 @@ export const verifiedAdultFromDecision = (decision: unknown, at = new Date()) =>
   });
 };
 
+// Only a safe categorical signal leaves this helper. No raw date of birth is
+// logged, persisted or returned to the Nightjar administrative UI.
+export const diditDocumentBirthDateReturned = (decision: unknown): boolean => {
+  const obj = decision && typeof decision === 'object' ? decision as Record<string, any> : {};
+  const ids = Array.isArray(obj.id_verifications) ? obj.id_verifications : [];
+  return ids.some((id: unknown) => {
+    if (!id || typeof id !== 'object') return false;
+    const feature = id as Record<string, unknown>;
+    return ['Approved','APPROVED'].includes(String(feature.status)) &&
+      typeof feature.date_of_birth === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(feature.date_of_birth);
+  });
+};
+
 const equalHmac = (message: string | Buffer, signature: string, secret: string) => {
   if (!/^[a-f\d]{64}$/i.test(signature)) return false;
   const expected = createHmac('sha256', secret).update(message).digest();
@@ -332,7 +346,7 @@ export const processDiditWebhook = onDocumentCreated({
   const session = sessionSnapshot.data() ?? {};
   const uid = text(session.uid);
   if (!uid || session.environment !== payload.environment || session.workflowId !== payload.workflowId ||
-      (session.applicationId && session.applicationId !== payload.applicationId) ||
+      (session.applicationId && payload.applicationId && session.applicationId !== payload.applicationId) ||
       uid !== payload.vendorData) {
     await doc.ref.set({ ignored: true, processedAt: FieldValue.serverTimestamp() }, { merge: true });
     return;
