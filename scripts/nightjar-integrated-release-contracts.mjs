@@ -143,6 +143,22 @@ for(const item of betaLabelFollowup.files) {
   overrides.set(item.path,item);
 }
 
+
+// PR #331: same-session Didit document-recovery component mounted in the
+// approved age gate. Keep the PR #326 UI exact blob immutable and allow only
+// the explicitly reviewed App.tsx change for the new member panel.
+const resubmissionFollowup=JSON.parse(string('docs/NIGHTJAR_DIDIT_RESUBMISSION_FOLLOWUP.json'));
+assert.equal(resubmissionFollowup.pr,331,'Didit resubmission requires its own PR review');
+assert.deepEqual(resubmissionFollowup.files.map(item=>item.path),['src/App.tsx'],
+  'Didit resubmission must not silently change unrelated integrated RC files');
+for(const item of resubmissionFollowup.files) {
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'resubmission UI must be anchored to the approved existing App');
+  assert.equal(item.baselineSha,previous.sha,'historical approved App blobs remain immutable');
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){
