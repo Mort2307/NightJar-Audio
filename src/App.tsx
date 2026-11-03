@@ -27,6 +27,7 @@ import { scrollNightjarToTop } from './platform/scroll-navigation';
 import { revealHomeSection, revealWorkspaceSection } from './platform/reveal-navigation';
 import { nightjarAge } from './platform/firebase-age';
 import { nightjarDiditControlled } from './platform/firebase-didit-controlled';
+import DiditDocumentResubmission from './components/DiditDocumentResubmission';
 import { nightjarLegal } from './platform/firebase-legal';
 import { NIGHTJAR_AGE_NOTICE_VERSION } from './legal/nightjarLegal';
 import { nightjarScripts } from './platform/firebase-scripts';
@@ -5047,6 +5048,7 @@ function App() {
             </button>
             {diditRecoveryMessage&&<p role="status" className="nj-didit-recovery-message">{diditRecoveryMessage}</p>}
           </section>}
+          {!ageProviderVerified && <DiditDocumentResubmission />}
           <button type="button" className="secondary-button wide-button" disabled={ageLoading} onClick={() => void refreshAgeStatus()}><RefreshCw size={16} /> Refresh verification status</button>
           {ageProviderStatus === 'PENDING_REVIEW' && <p className="access-fine">Your previous check is under review. Contact Nightjar support instead of starting another paid verification.</p>}
           <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Didit verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
