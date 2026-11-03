@@ -15,6 +15,7 @@ import {
   DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT,
   diditConfigured, diditMode, diditPass, verifiedAdultFromDecision,
 } from './didit';
+import { selectDocumentResubmission, canRequestNewReview } from './didit-resubmission-guards';
 
 type Identity = { uid: string; email: string; admin: boolean };
 type RequestState = 'requested' | 'processing' | 'ready' | 'denied' | 'needs_manual_review';
@@ -25,7 +26,6 @@ const MAX_MEMBER_REQUESTS = 3;
 const COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const reasons = new Set(['unclear_document', 'wrong_document', 'expired_document', 'document_not_detected', 'other']);
 const eligibleAgeStates = new Set(['PENDING_REVIEW', 'FAIL', 'ABANDONED', 'EXPIRED', 'PENDING']);
-const changeableProviderStates = new Set(['Approved', 'Declined', 'In Review', 'Kyc Expired', 'Abandoned']);
 const text = (value: unknown, max=128) => typeof value === 'string' ? value.trim().slice(0,max) : '';
 const cleanStatus = (value: unknown): RequestState | 'none' => (
   ['requested', 'processing', 'ready', 'denied', 'needs_manual_review'].includes(String(value))
@@ -79,10 +79,10 @@ export function buildDiditResubmissionCallables(deps: {
     const sent = Number(current.providerRequests ?? 0);
     const requested = Number(current.memberRequests ?? 0);
     const ageEligible = eligibleAgeStates.has(String(age.status)) && !diditPass(age);
-    const cooldown = Number(current.lastProviderRequestMs ?? 0) + COOLDOWN_MS > Date.now();
-    const canRequest = ageEligible && sent < MAX_PROVIDER_REQUESTS &&
-      requested < MAX_MEMBER_REQUESTS && !['requested','processing','needs_manual_review'].includes(state) &&
-      (state !== 'ready' || !cooldown);
+    const canRequest = ageEligible && canRequestNewReview({
+      accountStatus:String(age.status), providerRequests:sent, memberRequests:requested,
+      requestStatus:state, lastProviderRequestMs:Number(current.lastProviderRequestMs ?? 0), now:Date.now(),
+    });
     const launchUrl = state === 'ready' && sameSession ? safeUrl(session.url) : null;
     return {
       ...publicStatus(current, launchUrl),
@@ -229,23 +229,28 @@ export function buildDiditResubmissionCallables(deps: {
         decision.session_kind !== 'user' ||
         (data.applicationId && decision.application_id !== data.applicationId))
       return manual('Didit account binding must be investigated. No resubmission was requested.');
-    if (!changeableProviderStates.has(String(decision.status)))
-      return manual('Didit is not currently in a state eligible for a document resubmission.');
-    if (decision.status === 'Approved' && verifiedAdultFromDecision(decision))
-      return manual('Didit already provides adult evidence. Reconcile the existing approval instead of resubmitting.');
-
-    const ids=Array.isArray(decision.id_verifications) ? decision.id_verifications : [];
-    // Do not silently choose among multiple document nodes or restart an approved
-    // OCR step merely because DOB was hidden by the workflow's returned-data setting.
-    if (ids.length !== 1) return manual('Review the ID step and workflow settings in Didit before requesting resubmission.');
-    const id=ids[0];
-    const nodeId=typeof id?.node_id==='string' && /^feature_[a-zA-Z0-9_-]{2,100}$/.test(id.node_id) ? id.node_id : null;
-    if (!nodeId || (id.verification_method && id.verification_method !== 'document'))
-      return manual('No single supported documentary ID step was found. Review the workflow in Didit.');
-    if (id.status === 'Approved')
-      return manual('ID step already Approved. Check missing date-of-birth return settings before requesting another paid check.');
-    if (!['Declined','In Review','Not Finished','Expired'].includes(String(id.status)))
-      return manual('The ID step is not an eligible failed document check. Review the result in Didit.');
+    const selection=selectDocumentResubmission(decision,verifiedAdultFromDecision(decision));
+    if(!selection.allowed) {
+      const guidance:Record<string,string>={
+        provider_status:'Didit is not currently in a state eligible for a document resubmission.',
+        already_adult:'Didit already provides adult evidence. Reconcile the existing approval.',
+        missing_or_multiple_id_steps:'Review the ID step and workflow settings in Didit before requesting resubmission.',
+        unsupported_document_node:'No single supported documentary ID step was found. Review the workflow in Didit.',
+        approved_id_without_adult_evidence:'ID step already Approved. Check missing date-of-birth return settings before requesting another paid check.',
+        id_not_rejectable:'The ID step is not an eligible failed document check. Review the result in Didit.',
+      };
+      return manual(guidance[selection.reason] ?? genericMessage);
+    }
+    // A genuine approval or account change may arrive during the provider read.
+    // Re-check immediately before PATCH; never alter a new/superseding session.
+    const [freshAgeSnap,freshSessionSnap]=await Promise.all([
+      ageRef(uid).get(),sessionRef(data.sessionId).get(),
+    ]);
+    const freshAge=freshAgeSnap.data() ?? {},freshSession=freshSessionSnap.data() ?? {};
+    if(diditPass(freshAge) || freshAge.sessionId!==data.sessionId ||
+      !eligibleAgeStates.has(String(freshAge.status)) ||
+      !isAccountBound(uid,freshAge,freshSession))
+      return manual('The linked account changed before resubmission; reconcile the existing result first.');
 
     // If the provider PATCH times out or produces an ambiguous response, the
     // durable processing claim remains consumed. NEVER retry automatically.
@@ -255,7 +260,7 @@ export function buildDiditResubmissionCallables(deps: {
         headers:{'x-api-key':DIDIT_API_KEY.value(),'content-type':'application/json'},
         body:JSON.stringify({
           new_status:'Resubmitted',
-          nodes_to_resubmit:[{node_id:nodeId,feature:'OCR'}],
+          nodes_to_resubmit:[{node_id:selection.nodeId,feature:'OCR'}],
           comment:'NightJar reviewed a member request for replacement ID document; redo the documentary ID step only.',
           send_email:false,
         }),
