@@ -32,6 +32,8 @@ assert.match(server, /const expectedResponderUserId = data\?\.initiatedByUserId[
 assert.match(server, /const initiatorUserId = cleanText\(data\.initiatedByUserId, 160\) \|\| data\.writerUserId/, 'response notifications route to the original initiator');
 assert.match(server, /Only the person who initiated this collaboration can withdraw it/, 'only the initiator can withdraw a request');
 assert.match(server, /const alreadyOpen = priorRequests\.docs\.some/, 'duplicate active marketplace interests are prevented');
+assert.match(server, /listing\.collaborationWanted !== true/, 'Writer must explicitly opt in to collaboration interest');
+assert.match(marketplaceActions, /script\.marketplace\?\.collaborationWanted===true/, 'interest button only appears on Writer opt-in listings');
 assert.match(server, /Both parties must accept the collaboration before production can begin/, 'production requires mutual acceptance');
 assert.match(server, /A collaboration must be in production before it can be completed/, 'completion requires a production state');
 assert.match(hub, /proposal\.status === 'accepted' && <button className="secondary-button" onClick=\{\(\) => void setStatus\(proposal, 'in_production'\)\}/, 'UI only offers production start after acceptance');
