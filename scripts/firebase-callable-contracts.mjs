@@ -37,6 +37,20 @@ if(qualityExports) {
   }
 }
 
+// Didit document resubmission callables are deliberately factory-bound to
+// the existing account/admin identity guards. Validate each named export,
+// rather than whitelisting unknown or unimplemented backend endpoints.
+const diditResubmissionFactory=functionSources.find(source =>
+  source.includes('export function buildDiditResubmissionCallables(')) ?? '';
+const diditResubmissionExports=indexSource.match(/export\s+const\s*\{([^}]+)\}\s*=\s*buildDiditResubmissionCallables\s*\(/);
+if(diditResubmissionExports) {
+  for(const name of diditResubmissionExports[1].split(',').map(value=>value.trim())) {
+    if(/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) &&
+       new RegExp('const\\s+'+name+'\\s*=\\s*onCall\\b').test(diditResubmissionFactory))
+      exported.add(name);
+  }
+}
+
 const referenced=[];
 for(const file of platformFiles){
   const source=fs.readFileSync(path.join(platformDir,file),'utf8');

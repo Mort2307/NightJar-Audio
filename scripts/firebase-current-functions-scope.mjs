@@ -54,6 +54,26 @@ for (const statement of source.statements) {
         names.push(...exported);
         continue;
       }
+      // Explicitly audited Didit recovery handlers; the deployment scope
+      // must never grow silently by exporting an unaudited provider mutation.
+      if (ts.isObjectBindingPattern(declaration.name) && ts.isCallExpression(declaration.initializer) &&
+          ts.isIdentifier(declaration.initializer.expression) &&
+          declaration.initializer.expression.text === 'buildDiditResubmissionCallables') {
+        const providerSource=readFileSync('functions/src/didit-resubmissions.ts','utf8');
+        const required=['myDiditResubmission','requestDiditResubmission',
+          'adminListDiditResubmissions','adminReviewDiditResubmission'];
+        const exported=declaration.name.elements.map(element=>{
+          if(!ts.isIdentifier(element.name)||element.propertyName||element.initializer||element.dotDotDotToken)
+            throw new Error('Unsupported Didit recovery export binding');
+          return element.name.text;
+        });
+        if(exported.length!==required.length||required.some(name=>
+          !exported.includes(name)||!providerSource.includes('const '+name+' = onCall('))) {
+          throw new Error('Didit recovery callable scope changed: security review required');
+        }
+        names.push(...exported);
+        continue;
+      }
       if (!ts.isIdentifier(declaration.name) || !ts.isCallExpression(declaration.initializer)) {
         throw new Error('Unsupported top-level Cloud Function export in ' + filename);
       }

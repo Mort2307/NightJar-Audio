@@ -35,6 +35,13 @@ export const startDiditSession = async (uid: string) => {
       return { sessionId: oldId, launchUrl: old.url, status: 'PENDING', provider: 'didit', environment: env(), configured: true };
     }
   }
+  // A prior linked live KYC cannot silently become a second billable session
+  // after decline, expiry, missing age evidence or a stale resume URL.
+  // Member-requested resubmission and owner review operate on that SAME ID.
+  if (oldId && existing.provider === 'didit' && existing.environment === env()) {
+    throw new HttpsError('failed-precondition',
+      'An existing Didit verification is linked to your Nightjar account. Use document resubmission or contact support; no new identity check was started.');
+  }
   // Transactional claim ensures concurrent devices cannot start duplicate paid checks.
   const claimed = await db().runTransaction(async (tx) => {
     const ref = ageRef(uid);
