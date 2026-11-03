@@ -101,7 +101,7 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
   return <div className="marketplace-script-actions">
     {script.marketplace?.sampleAvailable&&<span className="nj-term-label"><button type="button" className="secondary-button" disabled={sampleBusy||readOnlyPreview} onClick={()=>void openSample()}><LockKeyhole size={14}/>{sampleBusy?'Opening…':'Read protected sample'}</button><ContextHelp topic="protected-sample"/></span>}
     {readOnlyPreview?<span className="status-pill muted">Read-only live preview</span>:<>
-      <button className="primary-button" onClick={()=>openContact('interest')}><MessageCircle size={14}/> Express collaboration interest</button>
+      {script.marketplace?.collaborationWanted===true&&<button className="primary-button" onClick={()=>openContact('interest')}><MessageCircle size={14}/> Express collaboration interest</button>}
       <button className="secondary-button" onClick={()=>openContact('question')}><MessageCircle size={14}/> Ask Writer</button>
       <button className="secondary-button" onClick={()=>openContact('rights')}><FileKey2 size={14}/> Discuss licensing</button>
       {WRITER_PRICE_NEGOTIATION_ENABLED&&<button className="primary-button" onClick={()=>openContact('licence')}><FileKey2 size={14}/> Make rights offer</button>}
