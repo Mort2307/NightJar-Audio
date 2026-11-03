@@ -29,7 +29,7 @@ test('member requests are bounded, serialized, and have a cooldown',()=>{
     requestStatus:'none',lastProviderRequestMs:0,now:1000000000};
   assert.equal(canRequestNewReview(initial),true);
   for(const change of [
-    {accountStatus:'COMPLETE'}, {providerRequests:2}, {memberRequests:3},
+    {accountStatus:'COMPLETE'}, {accountStatus:'PENDING'}, {providerRequests:2}, {memberRequests:3},
     {requestStatus:'processing'},{requestStatus:'requested'},
     {requestStatus:'needs_manual_review'},
     {requestStatus:'ready',lastProviderRequestMs:initial.now-100},
