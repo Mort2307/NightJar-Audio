@@ -5022,7 +5022,7 @@ function App() {
             </label>}
           </section>}
           {ageStatusError && <div className="access-note" role="alert">{ageStatusError}</div>}
-          {!DIDIT_VERIFICATION_PAUSED && <button className="primary-button wide-button" disabled={ageLoading ||
+          {!DIDIT_VERIFICATION_PAUSED && !['FAIL','ABANDONED','EXPIRED','PENDING_REVIEW'].includes(ageProviderStatus) && <button className="primary-button wide-button" disabled={ageLoading ||
             (!ageNoticeAccepted && !ageNoticeAcknowledged) ||
             (!ageProviderVerified && !ageDiditPermission) ||
             (ageProviderStatus === 'PENDING_REVIEW')} onClick={() => void beginAgeVerificationFromGate()}>
