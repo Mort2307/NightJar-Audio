@@ -11422,6 +11422,12 @@ export const updateCollaborationStatus = onCall({ region: REGION }, async (reque
   if (status === 'withdrawn' && initiatorUserId !== identity.uid) {
     throw new HttpsError('permission-denied', 'Only the person who initiated this collaboration can withdraw it.');
   }
+  if (status === 'in_production' && data.status !== 'accepted') {
+    throw new HttpsError('failed-precondition', 'Both parties must accept the collaboration before production can begin.');
+  }
+  if (status === 'completed' && data.status !== 'in_production') {
+    throw new HttpsError('failed-precondition', 'A collaboration must be in production before it can be completed.');
+  }
 
   await ref.set({
     status,
