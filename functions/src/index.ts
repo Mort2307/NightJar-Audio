@@ -15,6 +15,7 @@ import { hasPaidEntitlement } from './entitlements';
 import { canUseBetaListening } from './entitlements';
 import { buildVerifiedCreditCallables } from './verified-credits';
 import { buildNightjarQualityCallables } from './nightjar-quality';
+import { buildDiditResubmissionCallables } from './didit-resubmissions';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -15116,3 +15117,10 @@ export const {
   submitTesterFeedback,adminListTesterFeedback,adminReviewTesterFeedback,
   adminGetQualityAcceptance,adminRecordQualityCheck,
 } = buildNightjarQualityCallables(requireActiveIdentity,requireAdminIdentity,requireAgeVerified);
+
+// Explicit member request + admin-reviewed one-step Didit ID resubmission.
+// These callables do not start a new provider session or bypass verified-adult checks.
+export const { myDiditResubmission, requestDiditResubmission,
+  adminListDiditResubmissions, adminReviewDiditResubmission } = buildDiditResubmissionCallables({
+  requireActiveIdentity, requireAdminIdentity,
+});
