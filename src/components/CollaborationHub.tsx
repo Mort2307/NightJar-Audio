@@ -199,10 +199,20 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
 
     {loading ? <div className="people-empty">Loading collaboration state…</div> : relevant.length === 0 ? <div className="people-empty"><MessageCircle size={18}/><strong>No collaboration proposals yet.</strong><span>{role === 'writer' ? 'Send a manuscript directly when you are ready.' : 'Incoming collaboration proposals will appear here with an explicit response path.'}</span></div> : <div className="collaboration-list">
       {relevant.map((proposal) => {
-        const incoming = role !== 'writer' && proposal.recipientUserId;
+        // A Creator marketplace interest is initiated by the Creator but belongs
+        // to the Writer's manuscript. Legacy Writer proposals have no initiator
+        // field and retain their original Writer -> collaborator direction.
+        const incoming = role === 'writer'
+          ? Boolean(proposal.initiatedByUserId && proposal.initiatedByUserId !== proposal.writerUserId)
+          : Boolean(proposal.recipientUserId && proposal.recipientRole === role && proposal.initiatedByUserId !== proposal.recipientUserId);
+        const isInitiator = proposal.initiatedByUserId
+          ? proposal.initiatedByUserId === (role === 'writer' ? proposal.writerUserId : proposal.recipientUserId)
+          : role === 'writer';
+        const counterpartName = role === 'writer' ? proposal.recipientName : proposal.writerName;
+        const counterpartUserId = role === 'writer' ? proposal.recipientUserId : proposal.writerUserId;
         return <article className="collaboration-card" key={proposal.id}>
           <div className="collaboration-card-top">
-            <div><span className="nj-term-label">{statusLabel(proposal.status)} <ContextHelp topic="collaboration-status"/></span><h3>{proposal.scriptTitle}</h3><p>{incoming ? 'From ' + proposal.writerName : 'To ' + proposal.recipientName}</p></div>
+            <div><span className="nj-term-label">{statusLabel(proposal.status)} <ContextHelp topic="collaboration-status"/></span><h3>{proposal.scriptTitle}</h3><p>{incoming ? 'From ' : 'To '}{counterpartName}{proposal.initiatedByUserId && proposal.initiatedByUserId !== proposal.writerUserId ? ' · Marketplace interest' : ''}</p></div>
             <FileText size={18}/>
           </div>
           {proposal.message && <p className="collaboration-message">{proposal.message}</p>}
@@ -213,12 +223,12 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
           {proposal.responseNote && <p className="collaboration-response"><strong>Response:</strong> {proposal.responseNote}</p>}
           <div className="collaboration-actions">
             <button className="secondary-button" onClick={() => {
-              const targetUserId = role === 'writer' ? proposal.recipientUserId : proposal.writerUserId;
+              const targetUserId = counterpartUserId;
               if (!targetUserId) return;
               if (onMessageUser) onMessageUser(targetUserId, proposal.id);
               else window.dispatchEvent(new CustomEvent('nightjar:message-user', { detail: { userId: targetUserId, collaborationId: proposal.id } }));
             }}><MessageCircle size={13}/> Message collaborator</button>
-            {role !== 'writer' && !['declined','withdrawn','completed'].includes(proposal.status) && <>
+            {incoming && !['declined','withdrawn','completed'].includes(proposal.status) && <>
               <button className="secondary-button" onClick={() => void respond(proposal, 'interested')}><Check size={13}/> Interested</button>
               <button className="secondary-button" onClick={() => void respond(proposal, 'discussing')}>Discuss</button>
               <button className="primary-button" onClick={() => void respond(proposal, 'accepted')}>Accept</button>
@@ -226,7 +236,7 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
             </>}
             {['accepted','discussing','interested'].includes(proposal.status) && <button className="secondary-button" onClick={() => void setStatus(proposal, 'in_production')}>Mark in production</button>}
             {proposal.status === 'in_production' && <button className="primary-button" onClick={() => void setStatus(proposal, 'completed')}>Mark completed</button>}
-            {role === 'writer' && !['withdrawn','declined','completed'].includes(proposal.status) && <button className="ghost-button" onClick={() => void setStatus(proposal, 'withdrawn')}>Withdraw</button>}
+            {isInitiator && !['withdrawn','declined','completed'].includes(proposal.status) && <button className="ghost-button" onClick={() => void setStatus(proposal, 'withdrawn')}>Withdraw</button>}
           </div>
         </article>;
       })}
