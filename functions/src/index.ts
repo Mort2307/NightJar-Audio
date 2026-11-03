@@ -8604,7 +8604,7 @@ export const adminReconcileMemberDidit = onCall({
       ['Approved','APPROVED'].includes(String(feature?.status)));
     const evidenceIssue = approvedIds.length === 0 ? 'id_step_not_approved'
       : approvedIds.every((feature: any) => typeof feature?.date_of_birth !== 'string' ||
-          !/^\\d{4}-\\d{2}-\\d{2}$/.test(feature.date_of_birth))
+          !/^\d{4}-\d{2}-\d{2}$/.test(feature.date_of_birth))
         ? 'birth_date_not_returned'
         : 'adult_evidence_unconfirmed';
     return { verified: false, outcome: 'adult_evidence_missing',
