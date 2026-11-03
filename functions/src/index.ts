@@ -11294,8 +11294,8 @@ export const expressScriptInterest = onCall({ region: REGION }, async (request) 
   const data = script.data();
   if (!data) throw new HttpsError('not-found', 'Marketplace script not found.');
   const listing = normaliseScriptMarketplace(data.marketplace);
-  if (listing.visibility !== 'marketplace' || !listing.synopsis.trim() || !['Approved','Published'].includes(String(data.status ?? ''))) {
-    throw new HttpsError('failed-precondition', 'This script is not currently open in the marketplace.');
+  if (listing.visibility !== 'marketplace' || !listing.synopsis.trim() || listing.collaborationWanted !== true || !['Approved','Published'].includes(String(data.status ?? ''))) {
+    throw new HttpsError('failed-precondition', 'This script is not currently open for collaboration interest.');
   }
   const writerUserId = cleanText(data.writerUserId, 160);
   if (!writerUserId || writerUserId === identity.uid) throw new HttpsError('failed-precondition', 'This script has no eligible writer account.');
