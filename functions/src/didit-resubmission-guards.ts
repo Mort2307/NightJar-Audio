@@ -39,7 +39,7 @@ export function canRequestNewReview(params:{
   accountStatus:string; providerRequests:number;memberRequests:number;
   requestStatus:string;lastProviderRequestMs:number;now:number;
 }):boolean {
-  const eligible=new Set(['PENDING_REVIEW','FAIL','ABANDONED','EXPIRED','PENDING']);
+  const eligible=new Set(['PENDING_REVIEW','FAIL','ABANDONED','EXPIRED']);
   if (!eligible.has(params.accountStatus) || params.providerRequests>=2 ||
     params.memberRequests>=3 ||
     ['requested','processing','needs_manual_review'].includes(params.requestStatus))return false;
