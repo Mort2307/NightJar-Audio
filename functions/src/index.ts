@@ -10909,6 +10909,7 @@ const collaborationPayload = (data: Record<string, any>, id: string) => ({
   recipientUserId: data.recipientUserId ?? null,
   recipientName: data.recipientName ?? 'Nightjar collaborator',
   recipientRole: data.recipientRole ?? null,
+  initiatedByUserId: data.initiatedByUserId ?? data.writerUserId ?? null,
   message: data.message ?? '',
   paymentProposal: data.paymentProposal ?? '',
   licenceSummary: data.licenceSummary ?? '',
@@ -11314,7 +11315,7 @@ export const expressScriptInterest = onCall({ region: REGION }, async (request) 
     paymentProposal: '',
     licenceSummary: '',
     status: 'interested' as CollaborationStatus,
-    responseNote: message,
+    responseNote: '',
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     respondedAt: FieldValue.serverTimestamp(),
@@ -11354,7 +11355,13 @@ export const respondCollaborationProposal = onCall({ region: REGION }, async (re
   const ref = db.collection('collaborationProposals').doc(collaborationId);
   const snapshot = await ref.get();
   const data = snapshot.data();
-  if (!data || data.recipientUserId !== identity.uid) throw new HttpsError('not-found', 'Collaboration proposal not found.');
+  // The receiver is the other party from the recorded initiator. For legacy
+  // Writer-originated proposals this remains recipientUserId; for marketplace
+  // interest initiated by a Creator, the Writer is the responder.
+  const expectedResponderUserId = data?.initiatedByUserId && data.initiatedByUserId !== data.writerUserId
+    ? data.writerUserId
+    : data?.recipientUserId;
+  if (!data || expectedResponderUserId !== identity.uid) throw new HttpsError('not-found', 'Collaboration proposal not found.');
   if (['declined','withdrawn','completed'].includes(String(data.status ?? ''))) {
     throw new HttpsError('failed-precondition', 'This collaboration is already closed.');
   }
@@ -11367,12 +11374,14 @@ export const respondCollaborationProposal = onCall({ region: REGION }, async (re
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
-  if (data.writerUserId) {
-    await createNotification(String(data.writerUserId), {
+  const initiatorUserId = cleanText(data.initiatedByUserId, 160) || data.writerUserId;
+  const responderName = identity.uid === data.writerUserId ? data.writerName : data.recipientName;
+  if (initiatorUserId && initiatorUserId !== identity.uid) {
+    await createNotification(String(initiatorUserId), {
       type: 'collaboration',
       subtype: 'response',
       title: status === 'declined' ? 'Collaboration proposal declined' : 'Collaboration proposal updated',
-      message: `${data.recipientName ?? 'A collaborator'} marked ${data.scriptTitle ?? 'your proposal'} as ${status.replace('_', ' ')}.`,
+      message: `${responderName ?? 'A collaborator'} marked ${data.scriptTitle ?? 'your proposal'} as ${status.replace('_', ' ')}.`,
       collaborationId,
       scriptId: data.scriptId ?? null,
     });
@@ -11397,8 +11406,9 @@ export const updateCollaborationStatus = onCall({ region: REGION }, async (reque
   if (!data || (data.writerUserId !== identity.uid && data.recipientUserId !== identity.uid)) {
     throw new HttpsError('not-found', 'Collaboration proposal not found.');
   }
-  if (status === 'withdrawn' && data.writerUserId !== identity.uid) {
-    throw new HttpsError('permission-denied', 'Only the writer can withdraw this proposal.');
+  const initiatorUserId = cleanText(data.initiatedByUserId, 160) || data.writerUserId;
+  if (status === 'withdrawn' && initiatorUserId !== identity.uid) {
+    throw new HttpsError('permission-denied', 'Only the person who initiated this collaboration can withdraw it.');
   }
 
   await ref.set({
