@@ -270,6 +270,30 @@ export function buildDiditResubmissionCallables(deps: {
       const response=await result.json() as Record<string,unknown>;
       if (response?.session_id !== data.sessionId)
         return manual('Didit returned an unexpected response. Review the existing session before any other action.');
+      // Didit can issue a refreshed resume URL for a resubmitted older session.
+      // Read only the EXISTING session again; validate the account binding
+      // and fixed provider host before replacing the stored opaque link.
+      try {
+        const latest=await fetch('https://verification.didit.me/v3/session/'+encodeURIComponent(data.sessionId)+'/decision/',{
+          method:'GET',headers:{'x-api-key':DIDIT_API_KEY.value(),Accept:'application/json'},
+          signal:AbortSignal.timeout(10000),
+        });
+        if(latest.ok) {
+          const refreshed=await latest.json() as Record<string,unknown>;
+          const url=safeUrl(refreshed?.session_url);
+          if(url && refreshed.session_id===data.sessionId && refreshed.vendor_data===uid &&
+            refreshed.workflow_id===data.workflowId && refreshed.environment==='live' &&
+            refreshed.session_kind==='user' &&
+            (!data.applicationId || refreshed.application_id===data.applicationId)) {
+            await getFirestore().runTransaction(async tx=>{
+              const ref=sessionRef(data.sessionId),snapshot=await tx.get(ref);
+              const current=snapshot.data() ?? {};
+              if(current.uid===uid && current.workflowId===data.workflowId && current.environment==='live')
+                tx.update(ref,{url,updatedAt:FieldValue.serverTimestamp()});
+            });
+          }
+        }
+      } catch { /* Resubmission accepted; original bound URL remains available. Never retry PATCH. */ }
       return finish('ready',readyMessage);
     } catch {
       return manual('Didit result is uncertain. Check the original session in Didit; do not repeat the provider request.');
