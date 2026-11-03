@@ -137,17 +137,17 @@ export function buildDiditResubmissionCallables(deps: {
 
   const adminListDiditResubmissions = onCall({region:REGION}, async request => {
     deps.requireAdminIdentity(request);
-    const snapshot = await getFirestore().collection(COLLECTION).where('status','==','requested').limit(40).get();
+    const snapshot = await getFirestore().collection(COLLECTION).where('status','in',['requested','processing','needs_manual_review']).limit(80).get();
     const pending = await Promise.all(snapshot.docs.map(async doc => {
       const row = doc.data();
       const account = (await getFirestore().collection('accounts').doc(doc.id).get()).data() ?? {};
       return {
         userId:doc.id, email:text(account.email,160) || 'Unknown account',
-        revision:Number(row.revision ?? 0), reason:reasons.has(row.reason) ? row.reason : 'other',
+        revision:Number(row.revision ?? 0), status:cleanStatus(row.status), reason:reasons.has(row.reason) ? row.reason : 'other',
         cycle:Number(row.providerRequests ?? 0), requestedAt:row.requestedAt?.toDate?.()?.toISOString?.() ?? null,
       };
     }));
-    return {pending:pending.sort((a,b)=>String(a.requestedAt ?? '').localeCompare(String(b.requestedAt ?? ''))),limit:40};
+    return {pending:pending.sort((a,b)=>String(a.requestedAt ?? '').localeCompare(String(b.requestedAt ?? ''))),limit:80};
   });
 
   const adminReviewDiditResubmission = onCall({
