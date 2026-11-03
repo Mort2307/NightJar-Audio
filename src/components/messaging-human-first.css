@@ -162,9 +162,3 @@
   .messaging-hub .creative-partners { margin-top:10px; }
   .messaging-hub .creative-partner-filters { grid-template-columns:1fr 1fr; }
 }
-
-.messaging-hub .creative-partner-results { max-height:390px;overflow-y:auto;overscroll-behavior:contain; }
-.messaging-hub .creative-partner-actions { grid-column:2;display:flex;flex-wrap:wrap;gap:6px;margin-top:2px; }
-.messaging-hub .creative-partner-actions button { display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:5px 9px;border:1px solid var(--nj-line-default);border-radius:8px;font-size:11px;font-weight:700; }
-.messaging-hub .creative-partner-profile { background:transparent;color:var(--nj-text-secondary); }
-.messaging-hub .creative-partner-message { grid-column:auto;justify-self:start;margin-top:0; }
