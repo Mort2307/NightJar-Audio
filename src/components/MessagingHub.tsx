@@ -9,6 +9,7 @@ type Role='creator'|'writer'|'editor'|'artist'|'admin';
 type Props={
   role:Role;
   currentUserId?:string|null;
+  onOpenProfile?:(userId:string,role?:string)=>void;
   initialRecipientUserId?:string|null;
   initialConversationId?:string|null;
   initialCollaborationId?:string|null;
@@ -24,7 +25,7 @@ type MessageTargetEvent=CustomEvent<{userId?:string;collaborationId?:string|null
 
 const roleLabel=(role:string)=>role==='admin'?'Nightjar Admin':role==='editor'?'Audio Editor':role==='writer'?'Writer':role==='artist'?'Artist':'VA Creator';
 
-export default function MessagingHub({role,currentUserId,initialRecipientUserId,initialConversationId,initialCollaborationId,onRecipientHandled,onUnreadChange,onStatusChange,notify,demoMode=false,simulationMode=false}:Props){
+export default function MessagingHub({role,currentUserId,onOpenProfile,initialRecipientUserId,initialConversationId,initialCollaborationId,onRecipientHandled,onUnreadChange,onStatusChange,notify,demoMode=false,simulationMode=false}:Props){
   const [conversations,setConversations]=useState<any[]>([]);
   const [directory,setDirectory]=useState<any[]>([]);
   const [directoryQuery,setDirectoryQuery]=useState('');
@@ -393,7 +394,7 @@ export default function MessagingHub({role,currentUserId,initialRecipientUserId,
                   {!!(person.roleSpecialties??[]).length&&<small className="creative-partner-specialties">{person.roleSpecialties.slice(0,3).join(' · ')}</small>}
                   {availability&&<small className="creative-partner-availability"><span aria-hidden="true">●</span> {availability}</small>}
                 </div>
-                <button type="button" className="creative-partner-message" onClick={()=>void startWith(person.userId)}>{existing?'Open chat':'Message'} <MessageCircle size={13}/></button>
+                <div className="creative-partner-actions">{onOpenProfile&&<button type="button" className="creative-partner-profile" onClick={()=>onOpenProfile(person.userId,roles[0])}>View profile</button>}<button type="button" className="creative-partner-message" onClick={()=>void startWith(person.userId)}>{existing?'Open chat':'Message'} <MessageCircle size={13}/></button></div>
               </article>;
             }):<div className="people-empty">No professionals match those filters. Try another role or search term.</div>}
           </div>
