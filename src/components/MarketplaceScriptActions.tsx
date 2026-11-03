@@ -14,7 +14,7 @@ const pounds=(pence:number)=>new Intl.NumberFormat('en-GB',{style:'currency',cur
 export default function MarketplaceScriptActions({script,readOnlyPreview,demoMode,simulationMode,notify,onMessageUser}:Props){
   const [sample,setSample]=useState<{scriptId:string;title:string;sample:string}|null>(null);
   const [sampleBusy,setSampleBusy]=useState(false);
-  const [mode,setMode]=useState<'question'|'rights'|'licence'|null>(null);
+  const [mode,setMode]=useState<'question'|'rights'|'licence'|'interest'|null>(null);
   const [body,setBody]=useState('');
   const [price,setPrice]=useState(script.marketplace?.commissionPricePence?(script.marketplace.commissionPricePence/100).toFixed(2):'');
   const [licenceType,setLicenceType]=useState<'non-exclusive'|'exclusive'>('non-exclusive');
@@ -29,7 +29,7 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
     catch(cause){notify(cause instanceof Error?cause.message:'The Writer has not authorised a preview.');}
     finally{setSampleBusy(false);}
   };
-  const openContact=(next:'question'|'rights'|'licence')=>{
+  const openContact=(next:'question'|'rights'|'licence'|'interest')=>{
     if(readOnlyPreview||(demoMode&&!simulationMode))return notify('This action requires an authorised VA account.');
     if(next==='licence'&&!WRITER_PRICE_NEGOTIATION_ENABLED)return notify('Licence offers are not currently available. You can still contact the Writer.');
     setMode(next);setError('');setBody('');
@@ -46,7 +46,7 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
       let collaborationId:string|undefined;
       if(mode==='licence'){
         await nightjarLicenceOffers.create(script.id,{amountPence,licenceType,termMonths:months,usageDetails:usage.trim()});
-      }else{
+      }else if(mode==='interest'){
         const result=await nightjarCollaboration.expressInterest(script.id,body.trim());
         collaborationId=result.proposal?.id;
       }
@@ -56,10 +56,10 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
       if(!id)throw new Error('Could not open the direct-message conversation.');
       const firstMessage=mode==='licence'
         ? 'Rights offer regarding '+script.title+': '+pounds(amountPence)+' · '+licenceType+' · '+months+' months.\nProposed audio use: '+usage.trim()+'\n\n'+body.trim()+'\n\nThis is an offer only; no payment or licence has been granted.'
-        : body.trim();
+        : mode==='interest' ? 'Collaboration interest in '+script.title+':\n\n'+body.trim() : body.trim();
       await nightjarMessaging.send(id,firstMessage,collaborationId);
       setMode(null);
-      notify(mode==='licence'?'Rights offer and message sent. Track responses in the licence workspace.':'Your enquiry was sent directly to the Writer.');
+      notify(mode==='licence'?'Rights offer and message sent. Track responses in the licence workspace.':mode==='interest'?'Your collaboration interest was sent to the Writer. Track the response in Collaborations.':'Your message was sent directly to the Writer.');
       onMessageUser?.(script.writerUserId,collaborationId??null);
     }catch(cause){
       const reason=cause instanceof Error?cause.message:'The request failed.';
@@ -80,7 +80,7 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
         <section className="marketplace-modal" role="dialog" aria-modal="true" aria-label="Contact the Writer">
           <header><div><span className="mini-label">WRITER CONTACT</span><h3>{script.title}</h3><p>Writer: {script.writerName}</p></div><button className="secondary-button" disabled={busy} onClick={()=>setMode(null)}><X size={14}/> Close</button></header>
           <div className="marketplace-modal-body marketplace-offer-form">
-            <div className="marketplace-offer-modes"><button className={mode==='question'?'primary-button':'secondary-button'} onClick={()=>setMode('question')}>Ask a question</button><button className={mode==='rights'?'primary-button':'secondary-button'} onClick={()=>setMode('rights')}>Discuss licensing</button>{WRITER_PRICE_NEGOTIATION_ENABLED&&<button className={mode==='licence'?'primary-button':'secondary-button'} onClick={()=>setMode('licence')}>Offer to licence</button>}</div>
+            <div className="marketplace-offer-modes"><button className={mode==='question'?'primary-button':'secondary-button'} onClick={()=>setMode('question')}>Ask a question</button><button className={mode==='interest'?'primary-button':'secondary-button'} onClick={()=>setMode('interest')}>Collaborate</button><button className={mode==='rights'?'primary-button':'secondary-button'} onClick={()=>setMode('rights')}>Discuss licensing</button>{WRITER_PRICE_NEGOTIATION_ENABLED&&<button className={mode==='licence'?'primary-button':'secondary-button'} onClick={()=>setMode('licence')}>Offer to licence</button>}</div>
             {mode==='rights' && <p className="marketplace-offer-warning"><ShieldCheck size={15}/> This opens a conversation with the Writer. Use the structured offer form if you wish to propose a price. Discussions and offers do not collect payment or grant rights.</p>}
             {WRITER_PRICE_NEGOTIATION_ENABLED && mode==='licence'&&<div className="marketplace-offer-terms">
               <label><span className="nj-term-label">Offer price (£) <ContextHelp topic="licence-price"/></span><input type="number" value={price} min="1" max="100000" step=".01" onChange={e=>setPrice(e.target.value)}/></label>
@@ -88,11 +88,12 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
               <label><span className="nj-term-label">Duration in months <ContextHelp topic="licence-term"/></span><input type="number" value={months} min="1" max="120" onChange={e=>setMonths(Number(e.target.value))}/></label>
               <label className="marketplace-offer-span"><span className="nj-term-label">Intended audio use <ContextHelp topic="usage-rights"/></span><textarea maxLength={1200} rows={3} value={usage} onChange={e=>setUsage(e.target.value)}/></label>
             </div>}
-            <label>Your message to the Writer<textarea value={body} maxLength={1600} rows={4} onChange={e=>setBody(e.target.value)} placeholder={mode==='rights'?'Introduce yourself and discuss possible script use, without proposing financial terms…':'Introduce yourself, ask about the script or discuss a collaboration…'}/></label>
+            {mode==='interest'&&<p className="marketplace-offer-warning"><ShieldCheck size={15}/> This sends a formal collaboration-interest request to the Writer and adds it to both Creatives' Collaboration workspaces. The Writer can accept, discuss or decline. No rights or payment are agreed by expressing interest.</p>}
+            <label>{mode==='interest'?'Why would you like to work on this script?':'Your message to the Writer'}<textarea value={body} maxLength={1600} rows={4} onChange={e=>setBody(e.target.value)} placeholder={mode==='rights'?'Introduce yourself and discuss possible script use, without proposing financial terms…':mode==='interest'?'Introduce yourself, the role you have in mind and what you could bring to this production…':'Introduce yourself, ask about the script or discuss a collaboration…'}/></label>
             {WRITER_PRICE_NEGOTIATION_ENABLED && mode==='licence'&&<p className="marketplace-offer-warning"><ShieldCheck size={15}/> <ContextHelp topic="licence-status"/> This records an offer and starts a conversation, not a purchase. No charge or licence transfer can occur until compliant payment and final contract verification are enabled.</p>}
             {error&&<p className="manuscript-review-error" role="alert">{error}</p>}
           </div>
-          <footer><button className="primary-button" disabled={busy||!body.trim()} onClick={()=>void send()}>{busy?'Sending…':mode==='licence'?'Send rights offer & message':'Send enquiry & message'} <ArrowRight size={14}/></button></footer>
+          <footer><button className="primary-button" disabled={busy||!body.trim()} onClick={()=>void send()}>{busy?'Sending…':mode==='licence'?'Send rights offer & message':mode==='interest'?'Send collaboration interest':'Send message'} <ArrowRight size={14}/></button></footer>
         </section>
       </div>}
     </>
@@ -100,6 +101,7 @@ export default function MarketplaceScriptActions({script,readOnlyPreview,demoMod
   return <div className="marketplace-script-actions">
     {script.marketplace?.sampleAvailable&&<span className="nj-term-label"><button type="button" className="secondary-button" disabled={sampleBusy||readOnlyPreview} onClick={()=>void openSample()}><LockKeyhole size={14}/>{sampleBusy?'Opening…':'Read protected sample'}</button><ContextHelp topic="protected-sample"/></span>}
     {readOnlyPreview?<span className="status-pill muted">Read-only live preview</span>:<>
+      <button className="primary-button" onClick={()=>openContact('interest')}><MessageCircle size={14}/> Express collaboration interest</button>
       <button className="secondary-button" onClick={()=>openContact('question')}><MessageCircle size={14}/> Ask Writer</button>
       <button className="secondary-button" onClick={()=>openContact('rights')}><FileKey2 size={14}/> Discuss licensing</button>
       {WRITER_PRICE_NEGOTIATION_ENABLED&&<button className="primary-button" onClick={()=>openContact('licence')}><FileKey2 size={14}/> Make rights offer</button>}
