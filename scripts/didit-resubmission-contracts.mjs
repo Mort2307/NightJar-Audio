@@ -17,6 +17,8 @@ assert.match(backend,/deps\.requireAdminIdentity\(request\)/,'admin queue/review
 assert.match(backend,/if \(uid === admin\.uid\)/,'admin cannot approve their own request');
 assert.match(backend,/item\.status !== 'requested' \|\| Number\(item\.revision\) !== revision/,'stale review rejected');
 assert.match(backend,/tx\.update\(r,\{\s*status:'processing', claimId/,'atomic durable claim before provider call');
+assert.match(backend,/where\('status','in',\['requested','processing','needs_manual_review'\]\)/,
+  'uncertain outcomes remain visible to administrators without automatic retry');
 assert.match(backend,/MAX_PROVIDER_REQUESTS = 2/,'hard account/session provider cap');
 assert.match(backend,/MAX_MEMBER_REQUESTS = 3/,'member request spam cap');
 assert.match(backend,/explicitConsent !== true/,'member explicit consent');
