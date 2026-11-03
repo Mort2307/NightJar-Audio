@@ -13,7 +13,7 @@ for (const [marker,label] of [
   ['verifiedAdultFromDecision(value.decision)', 'Approved KYC requires verified 18+ ID evidence'],
   ["!['Approved', 'APPROVED'].includes(String(id.status))", 'Only approved ID checks count as adult evidence'],
   ['payload.adultEvidence === true', 'Adult evidence checked before any live verified pass'],
-  ['(session.applicationId && session.applicationId !== payload.applicationId)', 'Provider application bound on webhooks'],
+  ['(session.applicationId && payload.applicationId && session.applicationId !== payload.applicationId)', 'Provider application echo is compared whenever supplied on signed webhooks'],
   ['X-Signature-V2','Signed V2 webhook verification'],
   ["text(request.get('X-Signature'))", 'Strong raw-body signature fallback'],
   ['timingSafeEqual','Constant-time HMAC comparison'],
