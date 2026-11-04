@@ -2170,10 +2170,15 @@ const publicProfilePayload = (
     favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
     favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
     roleProfiles: publicRoleProfiles,
-    ...roleProfileSlice(data, publicRole),
-    ...(publicProfessionalRoles.includes(publicRole as AccountRole) ? {} : {
-      roleAvailability: null, roleDetailOne: null, roleDetailTwo: null, portfolioNote: null,
-    }),
+    ...roleProfileSlice({
+      ...data,
+      roleProfiles: publicRoleProfiles,
+      ...(publicRole === 'listener' ? {
+        roleFocus: [], roleSpecialties: [], roleSecondary: [],
+        roleAvailability: null, roleHeadline: null, roleBio: null,
+        roleDetailOne: null, roleDetailTwo: null, portfolioNote: null,
+      } : {}),
+    }, publicRole),
   };
 };
 
