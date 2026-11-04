@@ -6,16 +6,12 @@ export type ProfileTypeRecord = {
   type: NightjarProfileType;
   enabled: boolean;
   visibility: ProfileVisibility;
-  headline: string;
-  bio: string;
-  specialties: string[];
-  portfolioItemIds: string[];
   schemaVersion: 1;
 };
 
 /**
- * Profile presentation is deliberately separate from professional permissions.
- * This module validates profile metadata only; it never grants account roles.
+ * Profile type settings control presentation only. Role-specific content remains
+ * in profiles/{uid}.roleProfiles and professional permissions remain on accounts.
  */
 export const isNightjarProfileType = (value: unknown): value is NightjarProfileType =>
   typeof value === 'string' && (NIGHTJAR_PROFILE_TYPES as readonly string[]).includes(value);
@@ -27,15 +23,17 @@ export const normaliseProfileTypeRecord = (
   type,
   enabled: input.enabled === true,
   visibility: input.visibility === 'public' || input.visibility === 'unlisted' ? input.visibility : 'private',
-  headline: String(input.headline ?? '').trim().slice(0, 140),
-  bio: String(input.bio ?? '').trim().slice(0, 1200),
-  specialties: Array.from(new Set((Array.isArray(input.specialties) ? input.specialties : [])
-    .filter((item): item is string => typeof item === 'string')
-    .map((item) => item.trim().slice(0, 60))
-    .filter(Boolean))).slice(0, 30),
-  portfolioItemIds: Array.from(new Set((Array.isArray(input.portfolioItemIds) ? input.portfolioItemIds : [])
-    .filter((item): item is string => typeof item === 'string')
-    .map((item) => item.trim())
-    .filter(Boolean))).slice(0, 30),
   schemaVersion: 1,
 });
+
+export const normaliseProfileTypeSettings = (input: unknown): Partial<Record<NightjarProfileType, ProfileTypeRecord>> => {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  const source = input as Record<string, unknown>;
+  const result: Partial<Record<NightjarProfileType, ProfileTypeRecord>> = {};
+  for (const type of NIGHTJAR_PROFILE_TYPES) {
+    const raw = source[type];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    result[type] = normaliseProfileTypeRecord(type, raw as Partial<ProfileTypeRecord>);
+  }
+  return result;
+};
