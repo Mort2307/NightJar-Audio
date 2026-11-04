@@ -15,7 +15,7 @@ import { hasPaidEntitlement } from './entitlements';
 import { canUseBetaListening } from './entitlements';
 import { buildVerifiedCreditCallables } from './verified-credits';
 import { buildNightjarQualityCallables } from './nightjar-quality';
-import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, type NightjarProfileType } from './profile-types';
+import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes, type NightjarProfileType } from './profile-types';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -2133,12 +2133,7 @@ const publicProfilePayload = (
   const hasExplicitSettings = Number(data.profileTypeSettingsRevision ?? 0) > 0;
   // Directory results include public profiles only. Unlisted profiles remain
   // reachable by direct profile URL through getPublicProfile, not discovery.
-  const publicTypes = NIGHTJAR_PROFILE_TYPES.filter((type) => {
-    if (type !== 'listener' && !approvedRoles.includes(type as AccountRole)) return false;
-    if (!hasExplicitSettings) return true;
-    const setting = settings[type];
-    return setting?.enabled === true && setting.visibility === 'public';
-  });
+  const publicTypes = resolveVisibleProfileTypes(approvedRoles, settings, hasExplicitSettings, { directory: true });
   const publicProfessionalRoles = publicTypes.filter((type) => type !== 'listener') as AccountRole[];
   const activeRole = cleanText(accountData.role, 30);
   const publicRole = publicTypes.includes(activeRole as NightjarProfileType)
@@ -2435,14 +2430,12 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   const professionalRoles = professionalRolesForAccount(accountData ?? {});
   const storedProfileSettings = normaliseProfileTypeSettings(data.profileTypeSettings);
   const hasExplicitProfileSettings = Number(data.profileTypeSettingsRevision ?? 0) > 0;
-  const publicProfileTypes = NIGHTJAR_PROFILE_TYPES.filter((type) => {
-    const isApproved = type === 'listener' || professionalRoles.includes(type as AccountRole);
-    if (!isApproved) return false;
-    if (ownerPreview) return true;
-    if (!hasExplicitProfileSettings) return true; // Backwards-compatible legacy profile visibility.
-    const setting = storedProfileSettings[type];
-    return setting?.enabled === true && setting.visibility !== 'private';
-  });
+  const publicProfileTypes = resolveVisibleProfileTypes(
+    professionalRoles,
+    storedProfileSettings,
+    hasExplicitProfileSettings,
+    { ownerPreview },
+  );
   const publicProfessionalRoles = publicProfileTypes.filter((type) => type !== 'listener') as AccountRole[];
   const activePublicRole = cleanText(accountData?.role, 30);
   const role = publicProfileTypes.includes(activePublicRole as NightjarProfileType)
