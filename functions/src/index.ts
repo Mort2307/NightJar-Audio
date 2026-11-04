@@ -1121,7 +1121,7 @@ export const getMyCommitmentEligibility = onCall({ region: REGION }, async (requ
       .filter((doc) => doc.exists)
       .map((doc) => ({ id: doc.id, status: doc.data()?.status, startDate: String(doc.data()?.startDate ?? '') }))
       .sort((a, b) => b.startDate.localeCompare(a.startDate));
-    selectedPeriodId = availablePeriods.find((period) => period.status === 'open')?.id ?? null;
+    selectedPeriodId = availablePeriods.find((period) => period.status === 'open')?.id ?? availablePeriods[0]?.id ?? null;
   }
   const assignments = allAssignments
     .filter((item) => selectedPeriodId && item.periodId === selectedPeriodId && approvedRoles.includes(item.role as AccountRole));
