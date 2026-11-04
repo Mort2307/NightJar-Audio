@@ -11879,3 +11879,52 @@ textarea:focus-visible,
 .nj-commitment-error{font-size:12px;color:#ffb5a9}
 .nj-commitment-refresh{margin-top:10px}
 @media(max-width:520px){.nj-commitment-task-title{align-items:flex-start;flex-direction:column}.nj-commitment-evidence-form button,.nj-commitment-refresh{width:100%}}
+
+/* Admin commitment operations */
+.nj-commitment-admin{margin:22px 0;padding:clamp(15px,2.4vw,24px);border:1px solid rgba(214,179,117,.22);border-radius:17px;background:linear-gradient(145deg,rgba(28,24,26,.98),rgba(15,14,16,.98));color:var(--ivory)}
+.nj-commitment-admin>header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.nj-commitment-admin>header h2{margin:5px 0;font-size:clamp(20px,2.6vw,26px)}
+.nj-commitment-admin>header p,.nj-commitment-admin-card>p{margin:6px 0 14px;color:var(--muted);font-size:12px;line-height:1.55}
+.nj-commitment-admin-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;color:var(--muted);font-size:11px}
+.nj-commitment-admin-toolbar button,.nj-commitment-admin-subhead button{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 10px;border:1px solid rgba(214,179,117,.22);border-radius:8px;background:rgba(188,143,82,.06);color:#e7d0ac;font:inherit;font-size:11px}
+.nj-commitment-admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.nj-commitment-admin-card{min-width:0;padding:15px;border:1px solid rgba(214,179,117,.15);border-radius:13px;background:rgba(255,255,255,.018)}
+.nj-commitment-admin-card h3{margin:5px 0;font-size:17px}
+.nj-commitment-admin-card>label,.nj-commitment-template-task>label,.nj-commitment-exception>label{display:grid;gap:5px;margin:10px 0;color:#dfc9aa;font-size:11px}
+.nj-commitment-admin-card input:not([type=checkbox]),.nj-commitment-admin-card select,.nj-commitment-admin-card textarea{width:100%;min-width:0;min-height:38px;padding:8px 10px;border:1px solid rgba(214,179,117,.2);border-radius:8px;background:#211c20;color:var(--ivory);font:inherit;font-size:12px}
+.nj-commitment-admin-card textarea{resize:vertical}
+.nj-commitment-admin-subhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0 8px}
+.nj-commitment-admin-subhead strong{font-size:12px}
+.nj-commitment-template-task{padding:11px;margin:9px 0;border:1px solid rgba(214,179,117,.12);border-radius:10px;background:rgba(0,0,0,.12)}
+.nj-commitment-task-options{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.nj-commitment-task-options label{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px}
+.nj-commitment-task-options label input[type=checkbox]{accent-color:#c6a16b;width:16px;height:16px}
+.nj-commitment-task-options label input[type=number]{width:70px;min-height:32px}
+.nj-commitment-task-options button{border:0;background:none;color:#d6a49b;font:inherit;font-size:11px}
+.nj-commitment-admin-primary{display:flex;align-items:center;justify-content:center;width:100%;min-height:42px;margin-top:12px;padding:9px;border:1px solid rgba(214,179,117,.38);border-radius:9px;background:linear-gradient(120deg,rgba(173,132,77,.22),rgba(105,77,48,.2));color:#f1dcb8;font:inherit;font-size:12px}
+.nj-commitment-admin-primary:disabled{opacity:.45}
+.nj-commitment-admin-card hr{border:0;border-top:1px solid rgba(214,179,117,.14);margin:16px 0}
+.nj-commitment-admin-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.nj-commitment-period-list{display:grid;gap:6px;margin-top:14px}
+.nj-commitment-period-list>div{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px;border:1px solid rgba(214,179,117,.1);border-radius:8px;font-size:10px;color:var(--muted)}
+.nj-commitment-period-list>div span{flex:1;min-width:120px}
+.nj-commitment-period-list strong{color:#e2c79d;text-transform:uppercase}
+.nj-commitment-period-list button{display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border:1px solid rgba(214,179,117,.18);border-radius:7px;background:none;color:#e6cda9;font:inherit;font-size:10px}
+.nj-commitment-review{margin-top:14px}
+.nj-commitment-admin-empty{display:flex;align-items:center;gap:8px;padding:14px;color:#a8d8b8;font-size:12px}
+.nj-commitment-review-item{padding:13px;margin:12px 0;border:1px solid rgba(214,179,117,.14);border-radius:11px;background:rgba(0,0,0,.12)}
+.nj-commitment-review-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.nj-commitment-review-head strong{font-size:12px}
+.nj-commitment-review-head small{font-size:10px;color:var(--muted)}
+.nj-commitment-review-task{padding:10px 0;border-top:1px solid rgba(214,179,117,.1)}
+.nj-commitment-review-task>strong{font-size:12px}
+.nj-commitment-evidence-view{padding:9px;margin:8px 0;border-radius:8px;background:rgba(255,255,255,.025)}
+.nj-commitment-evidence-view p{margin:0 0 6px;color:#e7d8c2;font-size:12px;line-height:1.5;white-space:pre-wrap}
+.nj-commitment-evidence-view a{color:#e4c58f;font-size:11px;overflow-wrap:anywhere}
+.nj-commitment-review-task textarea,.nj-commitment-exception textarea{width:100%;margin:8px 0;padding:9px;border:1px solid rgba(214,179,117,.18);border-radius:8px;background:#211c20;color:var(--ivory);font:inherit;font-size:11px}
+.nj-commitment-review-actions{display:flex;gap:8px;flex-wrap:wrap}
+.nj-commitment-review-actions button,.nj-commitment-exception button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:7px 10px;border:1px solid rgba(214,179,117,.24);border-radius:8px;background:rgba(188,143,82,.07);color:#e8d0aa;font:inherit;font-size:11px}
+.nj-commitment-exception{display:grid;gap:6px;padding-top:10px;border-top:1px dashed rgba(214,179,117,.16)}
+.nj-commitment-admin-error{color:#ffb5a9;font-size:12px}
+.nj-commitment-admin-message{color:#a7d8b8;font-size:12px}
+@media(max-width:760px){.nj-commitment-admin-grid{grid-template-columns:1fr}.nj-commitment-review-head{flex-direction:column}}
