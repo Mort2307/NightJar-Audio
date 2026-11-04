@@ -203,8 +203,8 @@ export default function UserProfileStudio({
             const setting = profileTypeSettings[type] ?? { type, enabled: false, visibility: 'private' as const, schemaVersion: 1 as const };
             const approved = type === 'listener' || (Array.isArray(roles) ? roles.includes(type) : role === type);
             return <div className="nj-profile-type-setting" key={type}>
-              <div className="nj-profile-type-setting-copy"><strong>{PROFILE_TYPE_LABELS[type]}</strong><small>{approved ? 'Available on this account' : 'Private draft only until professional approval'}</small></div>
-              <label className="nj-profile-type-enable"><input type="checkbox" checked={setting.enabled} onChange={(event) => updateProfileType(type, { enabled: event.target.checked, visibility: !approved ? 'private' : undefined })}/> Active</label>
+              <div className="nj-profile-type-setting-copy"><strong>{PROFILE_TYPE_LABELS[type]}</strong><small>{approved ? 'Available on this account' : 'Requires professional role approval'}</small></div>
+              <label className="nj-profile-type-enable"><input type="checkbox" checked={setting.enabled} disabled={!approved} onChange={(event) => updateProfileType(type, { enabled: event.target.checked })}/> Active</label>
               <label className="nj-profile-type-visibility">Visibility<select value={approved ? setting.visibility : 'private'} disabled={!approved || !setting.enabled} onChange={(event) => updateProfileType(type, { visibility: event.target.value as NightjarProfileVisibility })}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label>
             </div>;
           })}
