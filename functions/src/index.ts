@@ -15,6 +15,7 @@ import { hasPaidEntitlement } from './entitlements';
 import { canUseBetaListening } from './entitlements';
 import { buildVerifiedCreditCallables } from './verified-credits';
 import { buildNightjarQualityCallables } from './nightjar-quality';
+import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, type NightjarProfileType } from './profile-types';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -801,6 +802,65 @@ const validateHandle = (value: string) => {
 };
 
 const profileRef = (uid: string) => db.collection('profiles').doc(uid);
+
+const profileTypeSettingsSnapshot = (data: Record<string, any> | undefined) => ({
+  revision: Math.max(0, Number(data?.profileTypeSettingsRevision ?? 0)),
+  settings: normaliseProfileTypeSettings(data?.profileTypeSettings),
+});
+
+export const getMyProfileTypeSettings = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const snapshot = await profileRef(identity.uid).get();
+  return profileTypeSettingsSnapshot(snapshot.data());
+});
+
+export const saveMyProfileTypeSettings = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const expectedRevision = Number(input.expectedRevision);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new HttpsError('invalid-argument', 'Invalid profile settings version.');
+  }
+  if (!input.settings || typeof input.settings !== 'object' || Array.isArray(input.settings)) {
+    throw new HttpsError('invalid-argument', 'Profile type settings are required.');
+  }
+  const raw = input.settings as Record<string, unknown>;
+  if (Object.keys(raw).some((key) => !isNightjarProfileType(key))) {
+    throw new HttpsError('invalid-argument', 'One or more profile types are not supported.');
+  }
+  const settings: Partial<Record<NightjarProfileType, ReturnType<typeof normaliseProfileTypeRecord>>> = {};
+  for (const type of NIGHTJAR_PROFILE_TYPES) {
+    const value = raw[type];
+    if (value === undefined) continue;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new HttpsError('invalid-argument', 'A profile type setting is invalid.');
+    }
+    const record = value as Record<string, unknown>;
+    if (record.enabled !== undefined && typeof record.enabled !== 'boolean') {
+      throw new HttpsError('invalid-argument', 'Profile enabled state must be true or false.');
+    }
+    if (record.visibility !== undefined && !['public', 'private', 'unlisted'].includes(String(record.visibility))) {
+      throw new HttpsError('invalid-argument', 'Choose public, unlisted or private visibility.');
+    }
+    settings[type] = normaliseProfileTypeRecord(type, record as never);
+  }
+  const ref = profileRef(identity.uid);
+  return db.runTransaction(async (tx) => {
+    const current = profileTypeSettingsSnapshot((await tx.get(ref)).data());
+    if (current.revision !== expectedRevision) {
+      return { saved: false, ...current };
+    }
+    const revision = current.revision + 1;
+    tx.set(ref, {
+      profileTypeSettings: settings,
+      profileTypeSettingsRevision: revision,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { saved: true, revision, settings };
+  });
+});
 
 const profileTagUsageCollection = () => db.collection('profileTagCreatorUsage');
 
