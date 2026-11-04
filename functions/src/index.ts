@@ -3447,6 +3447,7 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
 
   const profile = await profileRef(creatorUserId).get();
   const data = profile.data();
+  if (!data) throw new HttpsError('not-found', 'Creator profile not found.');
   if (!profileTypePublicToAudience(account.data() ?? {}, data, 'creator', false)) throw new HttpsError('not-found', 'Creator profile not found.');
   const [viewerSubscription, betaTester] = await Promise.all([
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
@@ -5764,6 +5765,7 @@ const spotlightForRole = async (role: 'creator' | 'writer' | 'editor' | 'artist'
       .map(async (doc) => {
         const profile = await profileRef(doc.id).get();
         const data = profile.data();
+        if (!data) return null;
         if (!profileTypePublicToAudience(doc.data() ?? {}, data, role, true)) return null;
         return {
           kind: role,
