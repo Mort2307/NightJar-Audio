@@ -833,6 +833,14 @@ export const saveMyProfileTypeSettings = onCall({ region: REGION }, async (reque
   if (Object.keys(raw).some((key) => !isNightjarProfileType(key))) {
     throw new HttpsError('invalid-argument', 'One or more profile types are not supported.');
   }
+  const accountSnapshot = await accountRef(identity.uid).get();
+  const approvedRoles = professionalRolesForAccount(accountSnapshot.data() ?? {});
+  for (const [type, value] of Object.entries(raw)) {
+    if (type === 'listener' || !value || typeof value !== 'object' || Array.isArray(value)) continue;
+    if ((value as Record<string, unknown>).enabled === true && !approvedRoles.includes(type as AccountRole)) {
+      throw new HttpsError('failed-precondition', 'A professional profile can only be enabled after that role is approved.');
+    }
+  }
   const settings: Partial<Record<NightjarProfileType, ReturnType<typeof normaliseProfileTypeRecord>>> = {};
   for (const type of NIGHTJAR_PROFILE_TYPES) {
     const value = raw[type];
