@@ -37,3 +37,18 @@ export const normaliseProfileTypeSettings = (input: unknown): Partial<Record<Nig
   }
   return result;
 };
+
+export const resolveVisibleProfileTypes = (
+  approvedRoles: readonly string[],
+  settings: Partial<Record<NightjarProfileType, ProfileTypeRecord>>,
+  hasExplicitSettings: boolean,
+  options: { ownerPreview?: boolean; directory?: boolean } = {},
+): NightjarProfileType[] => NIGHTJAR_PROFILE_TYPES.filter((type) => {
+  if (type !== 'listener' && !approvedRoles.includes(type)) return false;
+  if (options.ownerPreview) return true;
+  if (!hasExplicitSettings) return true;
+  const setting = settings[type];
+  if (setting?.enabled !== true || setting.visibility === 'private') return false;
+  if (options.directory && setting.visibility !== 'public') return false;
+  return true;
+});
