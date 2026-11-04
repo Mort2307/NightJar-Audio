@@ -26,5 +26,6 @@ export const calculateCreatorPoolPence = (eligibleNetRevenuePence: number, perce
   if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
     throw new Error('Creator Pool percentage must be a whole number between 0 and 100.');
   }
-  return Math.floor(eligibleNetRevenuePence * percent / 100);
+  return Math.floor(eligibleNetRevenuePence / 100) * percent
+    + Math.floor((eligibleNetRevenuePence % 100) * percent / 100);
 };
