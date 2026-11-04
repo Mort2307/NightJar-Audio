@@ -38,6 +38,13 @@ export default function CompensationControlCentre() {
   const [reconciliationNotes, setReconciliationNotes] = useState<Record<string, string>>({});
   const [paymentRefs, setPaymentRefs] = useState<Record<string, string>>({});
   const [paymentAmounts, setPaymentAmounts] = useState<Record<string, string>>({});
+  const [taxLedger, setTaxLedger] = useState<{ ledger: { periodId: string; reservePence?: number; reserveNote?: string; confirmedLiabilityPence?: number; accountantReference?: string; paidPence?: number } | null; payments: Array<{ id: string; amountPence: number; reference: string; paidAt: string }> }>({ ledger: null, payments: [] });
+  const [taxReserve, setTaxReserve] = useState('');
+  const [taxReserveNote, setTaxReserveNote] = useState('');
+  const [taxLiability, setTaxLiability] = useState('');
+  const [accountantReference, setAccountantReference] = useState('');
+  const [taxPaymentAmount, setTaxPaymentAmount] = useState('');
+  const [taxPaymentReference, setTaxPaymentReference] = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true); setError('');
@@ -52,6 +59,18 @@ export default function CompensationControlCentre() {
       setPayoutPeriod(payout as PayoutPeriod);
     } catch {
       setPayoutPeriod(null);
+    }
+    try {
+      const tax = await nightjarAccount.adminGetTaxLedger(periodId);
+      setTaxLedger(tax);
+      if (tax.ledger) {
+        setTaxReserve((tax.ledger.reservePence === undefined ? '' : (tax.ledger.reservePence / 100).toFixed(2)));
+        setTaxLiability((tax.ledger.confirmedLiabilityPence === undefined ? '' : (tax.ledger.confirmedLiabilityPence / 100).toFixed(2)));
+        setTaxReserveNote(tax.ledger.reserveNote ?? '');
+        setAccountantReference(tax.ledger.accountantReference ?? '');
+      }
+    } catch {
+      setTaxLedger({ ledger: null, payments: [] });
     } finally { setLoading(false); }
   }, [periodId]);
   useEffect(() => { void refresh(); }, [refresh]);
@@ -82,6 +101,19 @@ export default function CompensationControlCentre() {
     periodId, userId: payout.userId, amountPence: pence(paymentAmounts[payout.userId] ?? (payout.outstandingPence / 100).toFixed(2)),
     reference: paymentRefs[payout.userId] ?? '', paidAt: today,
   }), 'Manual payment record added.');
+
+  const saveTaxReserve = () => run('tax-reserve', () => nightjarAccount.adminSetTaxReserve({
+    periodId, reservePence: pence(taxReserve), note: taxReserveNote.trim(),
+  }), 'Cash reserve recorded. This is not a tax calculation or payment.');
+
+  const confirmTaxLiability = () => run('tax-liability', () => nightjarAccount.adminSetConfirmedTaxLiability({
+    periodId, liabilityPence: pence(taxLiability), accountantReference: accountantReference.trim(),
+  }), 'Accountant-confirmed tax liability recorded.');
+
+  const recordTaxPayment = () => run('tax-payment', () => nightjarAccount.adminRecordTaxPayment({
+    periodId, amountPence: pence(taxPaymentAmount), reference: taxPaymentReference.trim(), paidAt: today,
+  }), 'Tax payment record added.');
+
 
   const reconciled = settlements.filter((item) => item.status === 'reconciled').length;
   const pending = settlements.length - reconciled;
@@ -151,6 +183,31 @@ export default function CompensationControlCentre() {
         </div>)}
       </div> : <div className="nj-compensation-empty"><ShieldCheck size={17}/><span>No payout ledger exists for this period yet. It will only be created after all source settlements are reconciled and the commitment period is closed.</span></div>}
       {!payoutPeriod && <button className="nj-compensation-primary" type="button" disabled={busy === 'prepare' || pending > 0 || !settlements.length} onClick={() => void prepare()}>{busy === 'prepare' ? 'Preparing…' : 'Prepare Creator Pool draft'}</button>}
+    </article>
+    <article className="nj-compensation-card nj-tax-ledger">
+      <span className="mini-label">04 / TAX RESERVE & LIABILITY LEDGER</span><h3>Keep reserves separate from tax actually due</h3>
+      <p>No tax rate is assumed. Record a cash reserve separately from an accountant-confirmed liability, then record actual tax payments against that liability.</p>
+      <div className="nj-compensation-stats">
+        <div><span>Cash reserve</span><strong>{money(taxLedger.ledger?.reservePence ?? 0)}</strong></div>
+        <div><span>Confirmed liability</span><strong>{money(taxLedger.ledger?.confirmedLiabilityPence ?? 0)}</strong></div>
+        <div><span>Recorded as paid</span><strong>{money(taxLedger.ledger?.paidPence ?? 0)}</strong></div>
+      </div>
+      <div className="nj-compensation-form-grid">
+        <label>Cash reserve (£)<input type="number" min="0" step="0.01" value={taxReserve} onChange={(event) => setTaxReserve(event.target.value)} placeholder="Set manually"/></label>
+        <label className="wide">Reserve note<input value={taxReserveNote} onChange={(event) => setTaxReserveNote(event.target.value)} placeholder="Why this cash amount is being reserved"/></label>
+      </div>
+      <button className="nj-compensation-primary" type="button" disabled={busy === 'tax-reserve' || taxReserveNote.trim().length < 8} onClick={() => void saveTaxReserve()}>{busy === 'tax-reserve' ? 'Saving…' : 'Save cash reserve'}</button>
+      <div className="nj-compensation-form-grid nj-tax-liability-form">
+        <label>Accountant-confirmed liability (£)<input type="number" min="0" step="0.01" value={taxLiability} onChange={(event) => setTaxLiability(event.target.value)} placeholder="Only after professional confirmation"/></label>
+        <label>Accountant / HMRC reference<input value={accountantReference} onChange={(event) => setAccountantReference(event.target.value)} placeholder="Reference or source"/></label>
+      </div>
+      <button className="nj-compensation-primary" type="button" disabled={busy === 'tax-liability' || accountantReference.trim().length < 4 || !taxLiability} onClick={() => void confirmTaxLiability()}>{busy === 'tax-liability' ? 'Saving…' : 'Record confirmed liability'}</button>
+      {!!taxLedger.ledger?.confirmedLiabilityPence && <div className="nj-compensation-form-grid nj-tax-liability-form">
+        <label>Actual payment (£)<input type="number" min="0.01" step="0.01" value={taxPaymentAmount} onChange={(event) => setTaxPaymentAmount(event.target.value)} placeholder="Amount paid"/></label>
+        <label>Payment reference<input value={taxPaymentReference} onChange={(event) => setTaxPaymentReference(event.target.value)} placeholder="Bank / HMRC payment reference"/></label>
+      </div>}
+      {!!taxLedger.ledger?.confirmedLiabilityPence && <button className="nj-compensation-primary" type="button" disabled={busy === 'tax-payment' || !taxPaymentReference.trim() || !taxPaymentAmount} onClick={() => void recordTaxPayment()}>{busy === 'tax-payment' ? 'Recording…' : 'Record actual tax payment'}</button>}
+      {taxLedger.payments.map((payment) => <div className="nj-tax-payment-row" key={payment.id}><span>{payment.paidAt} · {payment.reference}</span><strong>{money(payment.amountPence)}</strong></div>)}
     </article>
     <p className="nj-compensation-footnote">No bank transfers or automatic payouts are initiated here. This centre records reconciled source data, approved payout liabilities and payment references. Tax liabilities and payments require their own accountant-confirmed ledger.</p>
   </section>;
