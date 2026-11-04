@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { BadgeCheck, BookOpen, Calculator, Check, ChevronRight, CircleDollarSign, Eye, EyeOff, FileCheck2, Headphones, Mic2, Pencil, ShieldCheck, SlidersHorizontal, UsersRound } from 'lucide-react';
+import { BadgeCheck, BookOpen, Check, ChevronRight, CircleDollarSign, Eye, EyeOff, FileCheck2, Headphones, Mic2, Pencil, ShieldCheck, SlidersHorizontal, UsersRound } from 'lucide-react';
 import './admin-systems-preview.css';
 
 type PreviewTab = 'profiles' | 'commitments' | 'compensation';
