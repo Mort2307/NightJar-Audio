@@ -109,6 +109,9 @@ const adminAssignCommitmentTemplateCall = httpsCallable<{ periodId: string; user
 const adminReviewCommitmentTaskCall = httpsCallable<{ assignmentId: string; taskId: string; decision: 'approved' | 'rejected' | 'cancelled' | 'excused'; reason?: string }, { reviewed: boolean; taskId: string; state: string }>(functions, 'adminReviewCommitmentTask');
 const adminSetCommitmentExceptionCall = httpsCallable<{ assignmentId: string; reason: string }, { saved: boolean; assignmentId: string }>(functions, 'adminSetCommitmentException');
 const adminListCommitmentReviewQueueCall = httpsCallable<void, { queue: Array<{ assignmentId: string; userId: string; periodId: string; role: NightjarCommitmentRole; pendingTasks: Array<{ id: string; title: string; evidenceIds: string[] }> }> }>(functions, 'adminListCommitmentReviewQueue');
+const adminListCommitmentTemplatesCall = httpsCallable<void, { templates: Array<{ id: string; role: NightjarCommitmentRole; version: number; effectiveFrom: string; tasks: NightjarCommitmentTask[]; status: string }> }>(functions, 'adminListCommitmentTemplates');
+const adminListCommitmentPeriodsCall = httpsCallable<void, { periods: Array<{ id: string; startDate: string; endDate: string; status: string }> }>(functions, 'adminListCommitmentPeriods');
+const adminCloseCommitmentPeriodCall = httpsCallable<{ periodId: string }, { closed: boolean; periodId: string; alreadyClosed: boolean }>(functions, 'adminCloseCommitmentPeriod');
 export const nightjarAccount = {
   async registrationAccess(email: string) {
     return (await registrationStatusCall({ email: email.trim() })).data;
@@ -163,6 +166,18 @@ export const nightjarAccount = {
 
   async adminSetCommitmentException(input: { assignmentId: string; reason: string }) {
     return (await adminSetCommitmentExceptionCall(input)).data;
+  },
+
+  async adminListCommitmentTemplates() {
+    return (await adminListCommitmentTemplatesCall()).data;
+  },
+
+  async adminListCommitmentPeriods() {
+    return (await adminListCommitmentPeriodsCall()).data;
+  },
+
+  async adminCloseCommitmentPeriod(periodId: string) {
+    return (await adminCloseCommitmentPeriodCall({ periodId })).data;
   },
 
   async adminListCommitmentReviewQueue() {
