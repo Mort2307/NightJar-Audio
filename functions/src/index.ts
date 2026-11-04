@@ -3141,7 +3141,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
         userId: doc.id,
         role,
         roles: nightjarTeam ? ['listener'] : publicProfileTypes,
-        approvedProfessionalRoles: nightjarTeam ? [] : professionalRoles,
+        approvedProfessionalRoles: nightjarTeam ? [] : publicProfileTypes.filter((type) => type !== 'listener'),
         nightjarTeam,
         displayName: data.displayName ?? 'Nightjar member',
         name: data.displayName ?? 'Nightjar member',
@@ -3373,7 +3373,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       headerImageMode: ['cinematic','portrait','custom'].includes(String(data.headerImageMode)) ? data.headerImageMode : 'portrait',
       // Professional approval originates from account privileges, never
       // release credits or self-authored profile fields. Applies to ALL tabs.
-      approvedProfessionalRoles: professionalRoles,
+      approvedProfessionalRoles: ownerPreview ? professionalRoles : publicProfessionalRoles,
       profileTypes: publicProfileTypes.map((type) => ({ type, visibility: ownerPreview ? (storedProfileSettings[type]?.visibility ?? 'private') : (storedProfileSettings[type]?.visibility ?? 'public') })),
       verifiedCredits,
       bio: data.bio ?? null,
@@ -16003,7 +16003,7 @@ export const getVoiceCallingCard = onCall({ region: REGION }, async (request) =>
   if (!creatorId) throw new HttpsError('invalid-argument','Creator required.');
   const [account, profile] = await Promise.all([accountRef(creatorId).get(), profileRef(creatorId).get()]);
   if (account.data()?.status !== 'active' || !professionalRolesForAccount(account.data() ?? {}).includes('creator')
-    || !profile.exists || (profile.data()?.publicProfile === false && identity.uid !== creatorId)) return { release: null, releaseId: null };
+    || !profile.exists || (!profileTypePublicToAudience(account.data() ?? {}, profile.data(), 'creator', false) && identity.uid !== creatorId)) return { release: null, releaseId: null };
   const releaseId = cleanText(profile.data()?.voiceCallingCardReleaseId, 160);
   if (!releaseId) return { release: null, releaseId: null };
   const doc = await releaseRef(releaseId).get();
