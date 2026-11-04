@@ -11991,3 +11991,5 @@ textarea:focus-visible,
 .nj-adjustment-row>div{display:grid;gap:4px;min-width:0}
 .nj-adjustment-row strong{font-size:11px;overflow-wrap:anywhere}
 .nj-adjustment-row small{font-size:10px;color:var(--muted);line-height:1.45}
+
+.nj-commitment-due-date{display:block;margin:6px 0;color:#d8b989;font-size:10px}
