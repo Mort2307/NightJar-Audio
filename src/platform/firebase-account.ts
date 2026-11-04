@@ -89,7 +89,7 @@ const stageRoleCall = httpsCallable<{ role?: 'creator' | 'listener' | 'writer' |
 export type NightjarCommitmentRole = NightjarProfessionalRole;
 export type NightjarCommitmentTaskState = 'not_started' | 'in_progress' | 'submitted' | 'approved' | 'rejected' | 'excused' | 'cancelled';
 export type NightjarCommitmentTask = {
-  id: string; title: string; description?: string; mandatory: boolean; dueDay?: number | null;
+  id: string; title: string; description?: string; mandatory: boolean; dueDay?: number | null; dueAt?: string | null;
   state: NightjarCommitmentTaskState; evidenceIds?: string[]; reviewReason?: string | null;
 };
 export type NightjarCommitmentAssignment = {
