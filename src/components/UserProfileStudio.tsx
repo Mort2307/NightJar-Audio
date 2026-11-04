@@ -9,6 +9,7 @@ import ContextHelp from './ContextHelp';
 import LegalAgreementPanel from './LegalAgreementPanel';
 import ProfileSectionBoundary from './ProfileSectionBoundary';
 import ImageFramingEditor from './ImageFramingEditor';
+import MyCommitmentsPanel from './MyCommitmentsPanel';
 import FramedApprovedImage from './FramedApprovedImage';
 import type {ImageFraming} from '../platform/image-framing';
 import { PROFILE_CATEGORY_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
@@ -212,6 +213,8 @@ export default function UserProfileStudio({
         <div className="nj-profile-type-actions"><small>Unlisted profiles are available by direct link but are not intended for public discovery. Private profiles are not returned to other members.</small><button type="button" className="primary-button" disabled={!profileTypeDirty || profileTypeSaving || simulationMode} onClick={() => void saveProfileTypeSettings()}>{profileTypeSaving ? 'Saving…' : 'Save profile visibility'}</button></div>
       </>}
     </section>
+
+    {!simulationMode && <MyCommitmentsPanel/>}
 
     <div className="premium-user-value-strip">
       <div><UserCircle2 size={16}/><span><strong>Personal identity</strong><small>One profile across Nightjar</small></span></div>
