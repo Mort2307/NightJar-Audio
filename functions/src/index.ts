@@ -1321,6 +1321,10 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   const admin = requireAdminIdentity(request);
   const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
   if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid monthly period.');
+  const financeControlRef = financePeriodControlRef(periodId);
+  const controlSnapshot = await financeControlRef.get();
+  const controlRevision = Number(controlSnapshot.data()?.revision ?? 0);
+  if (controlSnapshot.data()?.payoutPrepared === true) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
   const [commitmentPeriod, settlements, adjustments, assignments, existingPayoutPeriod] = await Promise.all([
     commitmentPeriodRef(periodId).get(),
     db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(500).get(),
@@ -1387,8 +1391,11 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   const allocation = allocateCreatorPool(creatorPoolPence, members);
   const payoutPeriod = creatorPayoutPeriodRef(periodId);
   await db.runTransaction(async (tx) => {
-    const existing = await tx.get(payoutPeriod);
-    if (existing.exists) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
+    const [existing, control] = await Promise.all([tx.get(payoutPeriod), tx.get(financeControlRef)]);
+    if (existing.exists || control.data()?.payoutPrepared === true) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
+    if (Number(control.data()?.revision ?? 0) !== controlRevision) {
+      throw new HttpsError('aborted', 'Revenue changed while this calculation was being prepared. Refresh the settlement register and try again.');
+    }
     tx.create(payoutPeriod, {
       periodId, status: 'draft', currency: 'GBP',
       eligibleNetRevenuePence, creatorPoolPercent: 50, creatorPoolPence,
@@ -1402,6 +1409,7 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
       preparedAt: FieldValue.serverTimestamp(),
       policyVersion: 1,
     });
+    tx.set(financeControlRef, { revision: controlRevision + 1, payoutPrepared: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     for (const payout of allocation.payouts) {
       tx.create(creatorPayoutRef(periodId, payout.userId), {
         periodId, userId: payout.userId, amountPence: payout.amountPence,
