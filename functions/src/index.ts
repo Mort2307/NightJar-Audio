@@ -16,6 +16,7 @@ import { canUseBetaListening } from './entitlements';
 import { buildVerifiedCreditCallables } from './verified-credits';
 import { buildNightjarQualityCallables } from './nightjar-quality';
 import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes, type NightjarProfileType } from './profile-types';
+import { evaluateRoleCommitments, type RoleCommitmentAssessment } from './commitment-eligibility';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -861,6 +862,287 @@ export const saveMyProfileTypeSettings = onCall({ region: REGION }, async (reque
     return { saved: true, revision, settings };
   });
 });
+
+const COMMITMENT_ROLES = ['creator', 'writer', 'editor', 'artist'] as const;
+type CommitmentRole = typeof COMMITMENT_ROLES[number];
+const isCommitmentRole = (value: unknown): value is CommitmentRole =>
+  typeof value === 'string' && (COMMITMENT_ROLES as readonly string[]).includes(value);
+const commitmentPeriodRef = (periodId: string) => db.collection('commitmentPeriods').doc(periodId);
+const commitmentTemplateRef = (templateId: string) => db.collection('commitmentTemplates').doc(templateId);
+const commitmentAssignmentRef = (assignmentId: string) => db.collection('commitmentAssignments').doc(assignmentId);
+const validCommitmentPeriodId = (value: unknown): value is string =>
+  typeof value === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+const validCommitmentDocId = (value: unknown): value is string =>
+  typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(value);
+const commitmentAssignmentId = (periodId: string, userId: string, role: CommitmentRole) =>
+  [periodId, userId, role].join('__');
+
+export const adminCreateCommitmentTemplate = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const role = input.role;
+  const effectiveFrom = cleanText(input.effectiveFrom, 10);
+  if (!isCommitmentRole(role) || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom) || Number.isNaN(Date.parse(effectiveFrom))) {
+    throw new HttpsError('invalid-argument', 'Choose a valid creative role and effective date.');
+  }
+  if (!Array.isArray(input.tasks) || input.tasks.length < 1 || input.tasks.length > 40) {
+    throw new HttpsError('invalid-argument', 'A commitment template needs between 1 and 40 tasks.');
+  }
+  const seen = new Set<string>();
+  const tasks = input.tasks.map((raw) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new HttpsError('invalid-argument', 'A commitment task is invalid.');
+    const task = raw as Record<string, unknown>;
+    const id = cleanText(task.id, 60);
+    const title = cleanText(task.title, 120);
+    const description = cleanText(task.description, 500);
+    const mandatory = task.mandatory === true;
+    const dueDay = task.dueDay === undefined || task.dueDay === null ? null : Number(task.dueDay);
+    if (!/^[A-Za-z0-9_-]{1,60}$/.test(id) || !title || seen.has(id)
+      || (task.mandatory !== true && task.mandatory !== false)
+      || (dueDay !== null && (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31))) {
+      throw new HttpsError('invalid-argument', 'A commitment task has an invalid ID, title, mandatory flag or due day.');
+    }
+    seen.add(id);
+    return { id, title, description, mandatory, dueDay, state: 'not_started' as const };
+  });
+  const latest = await db.collection('commitmentTemplates').where('role', '==', role).orderBy('version', 'desc').limit(1).get();
+  const version = Number(latest.docs[0]?.data()?.version ?? 0) + 1;
+  const templateId = role + '__v' + version;
+  const ref = commitmentTemplateRef(templateId);
+  await ref.create({
+    role, version, effectiveFrom, tasks, status: 'published',
+    createdByAdminUserId: admin.uid,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { templateId, role, version, effectiveFrom, tasks };
+});
+
+export const adminCreateCommitmentPeriod = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const startDate = cleanText(input.startDate, 10);
+  const endDate = cleanText(input.endDate, 10);
+  if (!validCommitmentPeriodId(periodId) || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)
+    || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
+    || Number.isNaN(Date.parse(startDate)) || Number.isNaN(Date.parse(endDate)) || startDate > endDate) {
+    throw new HttpsError('invalid-argument', 'Choose a valid monthly commitment period and date range.');
+  }
+  const ref = commitmentPeriodRef(periodId);
+  return db.runTransaction(async (tx) => {
+    const existing = await tx.get(ref);
+    if (existing.exists) throw new HttpsError('already-exists', 'This commitment period already exists.');
+    tx.create(ref, {
+      periodId, startDate, endDate, status: 'open',
+      createdByAdminUserId: admin.uid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return { created: true, periodId, startDate, endDate, status: 'open' };
+  });
+});
+
+export const adminAssignCommitmentTemplate = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const userId = cleanText(input.userId, 160);
+  const role = input.role;
+  const templateId = cleanText(input.templateId, 100);
+  if (!validCommitmentPeriodId(periodId) || !validCommitmentDocId(userId)
+    || !isCommitmentRole(role) || !/^(creator|writer|editor|artist)__v\d+$/.test(templateId)) {
+    throw new HttpsError('invalid-argument', 'Period, member, role and template are required.');
+  }
+  const periodRef = commitmentPeriodRef(periodId);
+  const templateRef = commitmentTemplateRef(templateId);
+  const accountDocument = accountRef(userId);
+  const assignmentRef = commitmentAssignmentRef(commitmentAssignmentId(periodId, userId, role));
+  return db.runTransaction(async (tx) => {
+    const [periodSnap, templateSnap, accountSnap, assignmentSnap] = await Promise.all([
+      tx.get(periodRef), tx.get(templateRef), tx.get(accountDocument), tx.get(assignmentRef),
+    ]);
+    const period = periodSnap.data() ?? {};
+    const template = templateSnap.data() ?? {};
+    const account = accountSnap.data() ?? {};
+    if (!periodSnap.exists || period.status !== 'open') throw new HttpsError('failed-precondition', 'The commitment period is missing or closed.');
+    if (!templateSnap.exists || template.status !== 'published' || template.role !== role
+      || String(template.effectiveFrom ?? '') > String(period.startDate ?? '')) {
+      throw new HttpsError('failed-precondition', 'The selected template is not effective for this period.');
+    }
+    if (!accountSnap.exists || account.status !== 'active' || !professionalRolesForAccount(account).includes(role as AccountRole)) {
+      throw new HttpsError('failed-precondition', 'This member does not have an active approved role for this assignment.');
+    }
+    if (assignmentSnap.exists) throw new HttpsError('already-exists', 'This member already has an assignment for this role and period.');
+    const tasks = (Array.isArray(template.tasks) ? template.tasks : []).map((task: Record<string, any>) => ({
+      id: cleanText(task.id, 60), title: cleanText(task.title, 120),
+      description: cleanText(task.description, 500), mandatory: task.mandatory === true,
+      dueDay: task.dueDay ?? null, state: 'not_started', evidenceIds: [],
+    }));
+    if (!tasks.length) throw new HttpsError('failed-precondition', 'The selected template has no tasks.');
+    tx.create(assignmentRef, {
+      periodId, userId, role, templateId, templateVersion: Number(template.version ?? 1),
+      templateSnapshot: tasks.map(({ id, title, description, mandatory, dueDay }) => ({ id, title, description, mandatory, dueDay })),
+      tasks, status: 'open', assignedByAdminUserId: admin.uid,
+      assignedAt: FieldValue.serverTimestamp(),
+    });
+    return { assigned: true, assignmentId: assignmentRef.id, periodId, role, taskCount: tasks.length };
+  });
+});
+
+export const getMyCommitments = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const snapshot = await db.collection('commitmentAssignments').where('userId', '==', identity.uid).limit(100).get();
+  const assignments = await Promise.all(snapshot.docs.map(async (doc) => {
+    const data = doc.data();
+    const period = await commitmentPeriodRef(String(data.periodId ?? '')).get();
+    return {
+      id: doc.id, periodId: data.periodId, role: data.role,
+      templateVersion: data.templateVersion, status: data.status,
+      tasks: Array.isArray(data.tasks) ? data.tasks : [],
+      periodStatus: period.data()?.status ?? 'missing',
+      startDate: period.data()?.startDate ?? null,
+      endDate: period.data()?.endDate ?? null,
+    };
+  }));
+  return { assignments: assignments.sort((a, b) => String(b.periodId).localeCompare(String(a.periodId))) };
+});
+
+export const submitCommitmentEvidence = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const assignmentId = cleanText(input.assignmentId, 180);
+  const taskId = cleanText(input.taskId, 60);
+  const note = cleanText(input.note, 2000);
+  const evidenceUrl = validPublicUrl(input.evidenceUrl);
+  if (!/^[A-Za-z0-9_-]{1,180}$/.test(assignmentId) || !/^[A-Za-z0-9_-]{1,60}$/.test(taskId) || (!note && !evidenceUrl)) {
+    throw new HttpsError('invalid-argument', 'Provide a task and either an evidence note or a public evidence link.');
+  }
+  const assignmentRef = commitmentAssignmentRef(assignmentId);
+  const evidenceRef = assignmentRef.collection('evidence').doc();
+  const eventRef = assignmentRef.collection('events').doc();
+  return db.runTransaction(async (tx) => {
+    const assignmentSnap = await tx.get(assignmentRef);
+    const assignment = assignmentSnap.data() ?? {};
+    if (!assignmentSnap.exists || assignment.userId !== identity.uid) throw new HttpsError('not-found', 'Commitment assignment not found.');
+    if (assignment.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment assignment is not open.');
+    const periodSnap = await tx.get(commitmentPeriodRef(String(assignment.periodId ?? '')));
+    if (!periodSnap.exists || periodSnap.data()?.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment period is closed.');
+    const tasks = Array.isArray(assignment.tasks) ? [...assignment.tasks] : [];
+    const index = tasks.findIndex((task: Record<string, any>) => task.id === taskId);
+    if (index < 0) throw new HttpsError('not-found', 'Commitment task not found.');
+    if (['approved', 'cancelled', 'excused'].includes(String(tasks[index].state))) {
+      throw new HttpsError('failed-precondition', 'This task no longer accepts evidence.');
+    }
+    const evidence = { note, evidenceUrl: evidenceUrl || null, submittedByUserId: identity.uid, submittedAt: FieldValue.serverTimestamp() };
+    tasks[index] = { ...tasks[index], state: 'submitted', evidenceIds: [...new Set([...(tasks[index].evidenceIds ?? []), evidenceRef.id])] };
+    tx.create(evidenceRef, evidence);
+    tx.create(eventRef, { type: 'evidence_submitted', taskId, actorUserId: identity.uid, at: FieldValue.serverTimestamp() });
+    tx.update(assignmentRef, { tasks, updatedAt: FieldValue.serverTimestamp() });
+    return { submitted: true, evidenceId: evidenceRef.id, taskState: 'submitted' };
+  });
+});
+
+export const adminReviewCommitmentTask = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const assignmentId = cleanText(input.assignmentId, 180);
+  const taskId = cleanText(input.taskId, 60);
+  const decision = input.decision;
+  const reason = cleanText(input.reason, 1000);
+  if (!/^[A-Za-z0-9_-]{1,180}$/.test(assignmentId) || !/^[A-Za-z0-9_-]{1,60}$/.test(taskId)
+    || !['approved', 'rejected', 'cancelled', 'excused'].includes(String(decision))) {
+    throw new HttpsError('invalid-argument', 'Choose a valid assignment, task and review decision.');
+  }
+  if (['cancelled', 'excused', 'rejected'].includes(String(decision)) && reason.length < 8) {
+    throw new HttpsError('invalid-argument', 'A reason of at least eight characters is required for this decision.');
+  }
+  const assignmentRef = commitmentAssignmentRef(assignmentId);
+  const eventRef = assignmentRef.collection('events').doc();
+  return db.runTransaction(async (tx) => {
+    const assignmentSnap = await tx.get(assignmentRef);
+    const assignment = assignmentSnap.data() ?? {};
+    if (!assignmentSnap.exists || assignment.status !== 'open') throw new HttpsError('not-found', 'Open commitment assignment not found.');
+    const periodSnap = await tx.get(commitmentPeriodRef(String(assignment.periodId ?? '')));
+    if (!periodSnap.exists || periodSnap.data()?.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment period is closed.');
+    const tasks = Array.isArray(assignment.tasks) ? [...assignment.tasks] : [];
+    const index = tasks.findIndex((task: Record<string, any>) => task.id === taskId);
+    if (index < 0) throw new HttpsError('not-found', 'Commitment task not found.');
+    if (decision === 'approved' && !(Array.isArray(tasks[index].evidenceIds) && tasks[index].evidenceIds.length)) {
+      throw new HttpsError('failed-precondition', 'Evidence must be submitted before approval.');
+    }
+    tasks[index] = { ...tasks[index], state: decision, reviewedByAdminUserId: admin.uid, reviewedAt: FieldValue.serverTimestamp(), reviewReason: reason || null };
+    tx.create(eventRef, { type: 'task_reviewed', taskId, decision, reason: reason || null, actorUserId: admin.uid, at: FieldValue.serverTimestamp() });
+    tx.update(assignmentRef, { tasks, updatedAt: FieldValue.serverTimestamp() });
+    return { reviewed: true, taskId, state: decision };
+  });
+});
+
+export const adminSetCommitmentException = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const assignmentId = cleanText(input.assignmentId, 180);
+  const reason = cleanText(input.reason, 1000);
+  if (!/^[A-Za-z0-9_-]{1,180}$/.test(assignmentId) || reason.length < 8) {
+    throw new HttpsError('invalid-argument', 'An assignment and a documented exception reason are required.');
+  }
+  const assignmentRef = commitmentAssignmentRef(assignmentId);
+  const eventRef = assignmentRef.collection('events').doc();
+  await db.runTransaction(async (tx) => {
+    const assignmentSnap = await tx.get(assignmentRef);
+    const assignment = assignmentSnap.data() ?? {};
+    if (!assignmentSnap.exists || assignment.status !== 'open') throw new HttpsError('not-found', 'Open commitment assignment not found.');
+    const periodSnap = await tx.get(commitmentPeriodRef(String(assignment.periodId ?? '')));
+    if (!periodSnap.exists || periodSnap.data()?.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment period is closed.');
+    tx.update(assignmentRef, { approvedException: true, exceptionReason: reason, exceptionApprovedByAdminUserId: admin.uid, exceptionApprovedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    tx.create(eventRef, { type: 'eligibility_exception_approved', reason, actorUserId: admin.uid, at: FieldValue.serverTimestamp() });
+  });
+  return { saved: true, assignmentId };
+});
+
+export const getMyCommitmentEligibility = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId === undefined ? null : input.periodId;
+  if (periodId !== null && !validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Invalid commitment period.');
+  const [accountSnap, assignmentSnap] = await Promise.all([
+    accountRef(identity.uid).get(),
+    db.collection('commitmentAssignments').where('userId', '==', identity.uid).limit(100).get(),
+  ]);
+  const account = accountSnap.data() ?? {};
+  const approvedRoles = professionalRolesForAccount(account);
+  const assignments = assignmentSnap.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .filter((item: any) => (!periodId || item.periodId === periodId) && approvedRoles.includes(item.role as AccountRole));
+  const assessments: RoleCommitmentAssessment[] = assignments.map((item: any) => ({
+    role: item.role,
+    assigned: true,
+    effective: true,
+    tasks: (Array.isArray(item.tasks) ? item.tasks : []).map((task: any) => ({
+      id: cleanText(task.id, 60), mandatory: task.mandatory === true, state: task.state,
+    })),
+    approvedException: item.approvedException === true,
+    exceptionReason: item.exceptionReason ?? null,
+  }));
+  const roleResults = assessments.map((assessment) => evaluateRoleCommitments(assessment));
+  const qualifyingRole = roleResults.find((result) => result.qualifies)?.role ?? null;
+  return { periodId, approvedRoles, roleResults, eligible: Boolean(qualifyingRole), qualifyingRole };
+});
+
+export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('commitmentAssignments').limit(1000).get();
+  const queue = snapshot.docs.flatMap((doc) => {
+    const data = doc.data();
+    const pendingTasks = (Array.isArray(data.tasks) ? data.tasks : [])
+      .filter((task: Record<string, any>) => task.state === 'submitted')
+      .map((task: Record<string, any>) => ({ id: task.id, title: task.title, evidenceIds: task.evidenceIds ?? [] }));
+    return pendingTasks.length ? [{ assignmentId: doc.id, userId: data.userId, periodId: data.periodId, role: data.role, pendingTasks }] : [];
+  });
+  return { queue };
+});
+
 
 const profileTagUsageCollection = () => db.collection('profileTagCreatorUsage');
 
