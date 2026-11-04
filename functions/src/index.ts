@@ -905,8 +905,9 @@ export const adminCreateCommitmentTemplate = onCall({ region: REGION }, async (r
     seen.add(id);
     return { id, title, description, mandatory, dueDay, state: 'not_started' as const };
   });
-  const latest = await db.collection('commitmentTemplates').where('role', '==', role).orderBy('version', 'desc').limit(1).get();
-  const version = Number(latest.docs[0]?.data()?.version ?? 0) + 1;
+  const existingTemplates = await db.collection('commitmentTemplates').where('role', '==', role).get();
+  const latestVersion = existingTemplates.docs.reduce((latest, doc) => Math.max(latest, Number(doc.data()?.version ?? 0)), 0);
+  const version = latestVersion + 1;
   const templateId = role + '__v' + version;
   const ref = commitmentTemplateRef(templateId);
   await ref.create({
@@ -1111,7 +1112,7 @@ export const getMyCommitmentEligibility = onCall({ region: REGION }, async (requ
     db.collection('commitmentAssignments').where('userId', '==', identity.uid).limit(100).get(),
   ]);
   const account = accountSnap.data() ?? {};
-  const approvedRoles = professionalRolesForAccount(account);
+  const approvedRoles = String(account.status ?? 'active') === 'active' ? professionalRolesForAccount(account) : [];
   const allAssignments = assignmentSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Array<Record<string, any>>;
   let selectedPeriodId = periodId as string | null;
   if (!selectedPeriodId) {
