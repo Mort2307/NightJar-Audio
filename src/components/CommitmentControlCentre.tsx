@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, FileCheck2, Lock, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Check, Lock, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
 import { nightjarAccount, type NightjarCommitmentRole, type NightjarCommitmentTask } from '../platform/firebase-account';
 
 type Template = { id: string; role: NightjarCommitmentRole; version: number; effectiveFrom: string; tasks: NightjarCommitmentTask[]; status: string };
