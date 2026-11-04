@@ -1112,9 +1112,19 @@ export const getMyCommitmentEligibility = onCall({ region: REGION }, async (requ
   ]);
   const account = accountSnap.data() ?? {};
   const approvedRoles = professionalRolesForAccount(account);
-  const assignments = assignmentSnap.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }))
-    .filter((item: any) => (!periodId || item.periodId === periodId) && approvedRoles.includes(item.role as AccountRole));
+  const allAssignments = assignmentSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Array<Record<string, any>>;
+  let selectedPeriodId = periodId as string | null;
+  if (!selectedPeriodId) {
+    const periodIds = [...new Set(allAssignments.map((item) => cleanText(item.periodId, 16)).filter(Boolean))];
+    const periodDocs = await Promise.all(periodIds.map((id) => commitmentPeriodRef(id).get()));
+    const availablePeriods = periodDocs
+      .filter((doc) => doc.exists)
+      .map((doc) => ({ id: doc.id, status: doc.data()?.status, startDate: String(doc.data()?.startDate ?? '') }))
+      .sort((a, b) => b.startDate.localeCompare(a.startDate));
+    selectedPeriodId = availablePeriods.find((period) => period.status === 'open')?.id ?? null;
+  }
+  const assignments = allAssignments
+    .filter((item) => selectedPeriodId && item.periodId === selectedPeriodId && approvedRoles.includes(item.role as AccountRole));
   const assessments: RoleCommitmentAssessment[] = assignments.map((item: any) => ({
     role: item.role,
     assigned: true,
@@ -1127,7 +1137,7 @@ export const getMyCommitmentEligibility = onCall({ region: REGION }, async (requ
   }));
   const roleResults = assessments.map((assessment) => evaluateRoleCommitments(assessment));
   const qualifyingRole = roleResults.find((result) => result.qualifies)?.role ?? null;
-  return { periodId, approvedRoles, roleResults, eligible: Boolean(qualifyingRole), qualifyingRole };
+  return { periodId: selectedPeriodId, approvedRoles, roleResults, eligible: Boolean(qualifyingRole), qualifyingRole };
 });
 
 export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (request) => {
