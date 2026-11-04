@@ -122,6 +122,8 @@ const adminListRevenueSettlementsCall = httpsCallable<{ periodId: string }, { se
   grossPence: number; refundPence: number; chargebackPence: number; processorFeePence: number; vatPence: number;
   otherDeductionsPence: number; eligibleNetRevenuePence: number; status: string;
 }> }>(functions, 'adminListRevenueSettlements');
+const adminRecordRevenueAdjustmentCall = httpsCallable<{ periodId: string; amountPence: number; reason: string; sourceReference: string }, { recorded: boolean; adjustmentId: string; amountPence: number }>(functions, 'adminRecordRevenueAdjustment');
+const adminListRevenueAdjustmentsCall = httpsCallable<{ periodId: string }, { adjustments: Array<{ id: string; amountPence: number; reason: string; sourceReference: string }> }>(functions, 'adminListRevenueAdjustments');
 const adminPrepareCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
   prepared: boolean; periodId: string; eligibleNetRevenuePence: number; creatorPoolPercent: number; creatorPoolPence: number;
   eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number;
@@ -224,6 +226,14 @@ export const nightjarAccount = {
 
   async adminListRevenueSettlements(periodId: string) {
     return (await adminListRevenueSettlementsCall({ periodId })).data;
+  },
+
+  async adminRecordRevenueAdjustment(input: { periodId: string; amountPence: number; reason: string; sourceReference: string }) {
+    return (await adminRecordRevenueAdjustmentCall(input)).data;
+  },
+
+  async adminListRevenueAdjustments(periodId: string) {
+    return (await adminListRevenueAdjustmentsCall({ periodId })).data;
   },
 
   async adminPrepareCreatorPayoutPeriod(periodId: string) {
