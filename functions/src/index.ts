@@ -18,6 +18,7 @@ import { buildNightjarQualityCallables } from './nightjar-quality';
 import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes, type NightjarProfileType } from './profile-types';
 import { evaluateRoleCommitments, type RoleCommitmentAssessment } from './commitment-eligibility';
 import { allocateCreatorPool, type CreatorPoolMember } from './creator-pool';
+import { calculateCreatorPoolPence, calculateEligibleNetRevenuePence } from './finance-settlement';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -1199,8 +1200,14 @@ export const adminRecordRevenueSettlement = onCall({ region: REGION }, async (re
   const processorFeePence = safePence(input.processorFeePence, 'Processor fees');
   const vatPence = safePence(input.vatPence, 'VAT');
   const otherDeductionsPence = safePence(input.otherDeductionsPence ?? 0, 'Other deductions');
-  const eligibleNetRevenuePence = grossPence - refundPence - chargebackPence - processorFeePence - vatPence - otherDeductionsPence;
-  if (eligibleNetRevenuePence < 0) throw new HttpsError('invalid-argument', 'Deductions cannot exceed gross receipts.');
+  let eligibleNetRevenuePence: number;
+  try {
+    eligibleNetRevenuePence = calculateEligibleNetRevenuePence({
+      grossPence, refundPence, chargebackPence, processorFeePence, vatPence, otherDeductionsPence,
+    });
+  } catch (error) {
+    throw new HttpsError('invalid-argument', error instanceof Error ? error.message : 'Invalid settlement deductions.');
+  }
   const settlementId = settlementDocumentId(provider, externalId);
   const ref = revenueSettlementRef(settlementId);
   await db.runTransaction(async (tx) => {
@@ -1270,7 +1277,7 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   }
   const eligibleNetRevenuePence = settlements.docs.reduce((sum, doc) => sum + safePence(doc.data().eligibleNetRevenuePence, 'Eligible net revenue'), 0);
   if (!Number.isSafeInteger(eligibleNetRevenuePence)) throw new HttpsError('failed-precondition', 'Reconciled revenue exceeds the safe calculation limit.');
-  const creatorPoolPence = Math.floor(eligibleNetRevenuePence * 50 / 100);
+  const creatorPoolPence = calculateCreatorPoolPence(eligibleNetRevenuePence, 50);
   const assignmentsByUser = new Map<string, Array<Record<string, any>>>();
   for (const doc of assignments.docs) {
     const data = doc.data();
