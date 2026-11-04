@@ -1160,6 +1160,10 @@ export const adminCloseCommitmentPeriod = onCall({ region: REGION }, async (requ
   const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
   if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid commitment period.');
   const ref = commitmentPeriodRef(periodId);
+  const assignments = await db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5000).get();
+  const pendingReviewCount = assignments.docs.reduce((count, doc) =>
+    count + (Array.isArray(doc.data().tasks) ? doc.data().tasks.filter((task: Record<string, any>) => task.state === 'submitted').length : 0), 0);
+  if (pendingReviewCount > 0) throw new HttpsError('failed-precondition', 'Review all submitted evidence before closing this assessment period.');
   return db.runTransaction(async (tx) => {
     const snapshot = await tx.get(ref);
     if (!snapshot.exists) throw new HttpsError('not-found', 'Commitment period not found.');
@@ -1543,6 +1547,8 @@ export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (
   const snapshot = await db.collection('commitmentAssignments').limit(1000).get();
   const queue = await Promise.all(snapshot.docs.map(async (doc) => {
     const data = doc.data();
+    const period = await commitmentPeriodRef(String(data.periodId ?? '')).get();
+    if (!period.exists || period.data()?.status !== 'open') return null;
     const pendingTasks = (Array.isArray(data.tasks) ? data.tasks : [])
       .filter((task: Record<string, any>) => task.state === 'submitted')
       .map((task: Record<string, any>) => ({ id: task.id, title: task.title, evidenceIds: task.evidenceIds ?? [] }));
