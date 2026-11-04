@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Banknote, CheckCircle2, CircleAlert, RefreshCw, ShieldCheck, WalletCards } from 'lucide-react';
 import { nightjarAccount, type NightjarCommitmentRole } from '../platform/firebase-account';
 
+type Adjustment = { id: string; amountPence: number; reason: string; sourceReference: string };
 type Settlement = {
   id: string; externalId: string; settledAt: string; sourceReference: string;
   grossPence: number; refundPence: number; chargebackPence: number; processorFeePence: number;
@@ -21,6 +22,10 @@ const roleName = (role: string | null) => role === 'creator' ? 'VA Creator' : ro
 export default function CompensationControlCentre() {
   const [periodId, setPeriodId] = useState(month);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
+  const [adjustmentAmount, setAdjustmentAmount] = useState('');
+  const [adjustmentReason, setAdjustmentReason] = useState('');
+  const [adjustmentReference, setAdjustmentReference] = useState('');
   const [payoutPeriod, setPayoutPeriod] = useState<PayoutPeriod | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
@@ -49,8 +54,12 @@ export default function CompensationControlCentre() {
   const refresh = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const result = await nightjarAccount.adminListRevenueSettlements(periodId);
+      const [result, adjustmentResult] = await Promise.all([
+        nightjarAccount.adminListRevenueSettlements(periodId),
+        nightjarAccount.adminListRevenueAdjustments(periodId),
+      ]);
       setSettlements(result.settlements as Settlement[]);
+      setAdjustments(adjustmentResult.adjustments as Adjustment[]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Revenue settlements could not be loaded.');
     }
@@ -95,6 +104,10 @@ export default function CompensationControlCentre() {
   }), 'Settlement reconciled.');
 
   const prepare = () => run('prepare', () => nightjarAccount.adminPrepareCreatorPayoutPeriod(periodId), 'Creator Pool calculation prepared as a draft.');
+  const recordAdjustment = () => run('adjustment', () => nightjarAccount.adminRecordRevenueAdjustment({
+    periodId, amountPence: pence(adjustmentAmount), reason: adjustmentReason.trim(), sourceReference: adjustmentReference.trim(),
+  }), 'Audited revenue adjustment recorded.');
+
   const approve = () => run('approve', () => nightjarAccount.adminApproveCreatorPayoutPeriod(periodId), 'Creator Pool draft approved. Payments remain manual.');
 
   const recordPayment = (payout: Payout) => run('pay-' + payout.userId, () => nightjarAccount.adminRecordCreatorPayment({
@@ -148,6 +161,18 @@ export default function CompensationControlCentre() {
       </div>
       <div className="nj-compensation-net-preview"><span>Calculated eligible net revenue for this entry</span><strong>{money(pence(gross) - pence(refunds) - pence(chargebacks) - pence(fees) - pence(vat) - pence(otherDeductions))}</strong></div>
       <button className="nj-compensation-primary" type="button" disabled={busy === 'settlement' || !externalId.trim() || !sourceReference.trim() || !gross || settledAt.slice(0, 7) !== periodId} onClick={() => void recordSettlement()}>{busy === 'settlement' ? 'Recording…' : 'Record settlement'}</button>
+    </article>
+
+    <article className="nj-compensation-card nj-revenue-adjustments">
+      <span className="mini-label">02 / AUDITED CORRECTIONS</span><h3>Revenue adjustment entries</h3>
+      <p>Use a separate signed adjustment to correct a reconciled source figure. Original settlement records are never silently overwritten. Adjustments lock when the Creator Pool is prepared.</p>
+      <div className="nj-compensation-form-grid">
+        <label>Adjustment (£, negative or positive)<input type="number" step="0.01" value={adjustmentAmount} onChange={(event) => setAdjustmentAmount(event.target.value)} placeholder="-12.50 or 12.50"/></label>
+        <label>Source reference<input value={adjustmentReference} onChange={(event) => setAdjustmentReference(event.target.value)} placeholder="Correction report reference"/></label>
+        <label className="wide">Reason<textarea rows={2} value={adjustmentReason} onChange={(event) => setAdjustmentReason(event.target.value)} placeholder="Explain why this adjustment is required…"/></label>
+      </div>
+      <button className="nj-compensation-primary" type="button" disabled={busy === 'adjustment' || !adjustmentAmount || !adjustmentReference.trim() || adjustmentReason.trim().length < 8 || pence(adjustmentAmount) === 0} onClick={() => void recordAdjustment()}>{busy === 'adjustment' ? 'Recording…' : 'Record audited adjustment'}</button>
+      {adjustments.map((item) => <div className="nj-adjustment-row" key={item.id}><div><strong>{item.sourceReference}</strong><small>{item.reason}</small></div><strong>{money(item.amountPence)}</strong></div>)}
     </article>
 
     <article className="nj-compensation-card">
