@@ -29,6 +29,21 @@ This section distinguishes implemented code from planned production behaviour. A
 - Meg and Mike's 50/50 ownership is not a mandate to distribute 50% of monthly receipts to the owners. Owner distributions must be a separate, effective-dated policy and subject to cash, tax and legal constraints.
 - No live Stripe price, customer billing agreement, payout, bank payment, production Firestore record or production deployment is changed by this branch.
 
+## Intelligence preservation contract
+
+These systems must preserve Nightjar's existing rule-driven behaviour and become more explainable, not less:
+
+- **One identity, multiple role contexts:** account identity, age assurance, legal acceptance and approved-role state remain canonical. A profile type is never an entitlement.
+- **Server-authoritative decisions:** clients can submit profile edits, evidence and requests; only trusted callables can approve roles, accept evidence, calculate eligibility, close periods or mark payments reconciled.
+- **Explainable eligibility:** retain the role-by-role result, template version, applicable mandatory task count, approved evidence references, exception reason and the single qualifying role used for that period. The UI should be able to explain exactly why someone qualifies or does not.
+- **No role-count inflation:** evaluate every approved role independently, then combine results with logical OR. Deduplicate by account UID before calculating one equal share.
+- **No popularity weighting:** follows, listens, downloads, social reach and profile visibility never alter a creator's base share.
+- **No silent defaults:** no assignment is not 100% completion; missing evidence is not approval; a profile badge is not role approval; a subscription status is not settled revenue; a reserve is not tax paid.
+- **Versioned policy:** commitment templates and finance policies are immutable once used by an open or closed period. New versions apply prospectively, with the exact policy version stored on each period.
+- **Deterministic accounting:** calculate in integer pence, preserve source references, make rounding visible and use idempotency keys/transactions to prevent duplicate payout or payment records.
+- **Reversible operations:** allow draft previews and dry-runs; corrections use separately audited adjustment entries. Do not rewrite closed periods or automatically send money.
+- **Failure behaviour:** if a source is unavailable, incomplete or inconsistent, stop the affected calculation and show the missing reconciliation item. Never silently fall back to an estimated MRR figure for a payout run.
+
 ## Screen and workflow design
 
 ### Member-facing
