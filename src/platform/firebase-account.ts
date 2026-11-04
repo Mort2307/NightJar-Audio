@@ -112,6 +112,33 @@ const adminListCommitmentReviewQueueCall = httpsCallable<void, { queue: Array<{ 
 const adminListCommitmentTemplatesCall = httpsCallable<void, { templates: Array<{ id: string; role: NightjarCommitmentRole; version: number; effectiveFrom: string; tasks: NightjarCommitmentTask[]; status: string }> }>(functions, 'adminListCommitmentTemplates');
 const adminListCommitmentPeriodsCall = httpsCallable<void, { periods: Array<{ id: string; startDate: string; endDate: string; status: string }> }>(functions, 'adminListCommitmentPeriods');
 const adminCloseCommitmentPeriodCall = httpsCallable<{ periodId: string }, { closed: boolean; periodId: string; alreadyClosed: boolean }>(functions, 'adminCloseCommitmentPeriod');
+const adminRecordRevenueSettlementCall = httpsCallable<{
+  periodId: string; provider: 'stripe'; externalId: string; settledAt: string; sourceReference: string;
+  grossPence: number; refundPence: number; chargebackPence: number; processorFeePence: number; vatPence: number; otherDeductionsPence?: number;
+}, { recorded: boolean; settlementId: string; eligibleNetRevenuePence: number; status: string }>(functions, 'adminRecordRevenueSettlement');
+const adminReconcileRevenueSettlementCall = httpsCallable<{ settlementId: string; reconciliationNote: string }, { reconciled: boolean; settlementId: string; eligibleNetRevenuePence: number }>(functions, 'adminReconcileRevenueSettlement');
+const adminListRevenueSettlementsCall = httpsCallable<{ periodId: string }, { settlements: Array<{
+  id: string; periodId: string; provider: string; externalId: string; settledAt: string; sourceReference: string;
+  grossPence: number; refundPence: number; chargebackPence: number; processorFeePence: number; vatPence: number;
+  otherDeductionsPence: number; eligibleNetRevenuePence: number; status: string;
+}> }>(functions, 'adminListRevenueSettlements');
+const adminPrepareCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
+  prepared: boolean; periodId: string; eligibleNetRevenuePence: number; creatorPoolPercent: number; creatorPoolPence: number;
+  eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number;
+  payouts: Array<{ userId: string; amountPence: number }>;
+}>(functions, 'adminPrepareCreatorPayoutPeriod');
+const adminGetCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
+  period: { periodId: string; status: string; eligibleNetRevenuePence: number; creatorPoolPercent: number; creatorPoolPence: number; eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number };
+  payouts: Array<{ userId: string; amountPence: number; paidPence: number; outstandingPence: number; qualifyingRole: NightjarCommitmentRole | null; status: string }>;
+}>(functions, 'adminGetCreatorPayoutPeriod');
+const adminApproveCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, { approved: boolean; periodId: string }>(functions, 'adminApproveCreatorPayoutPeriod');
+const adminRecordCreatorPaymentCall = httpsCallable<{ periodId: string; userId: string; amountPence: number; reference: string; paidAt: string }, { recorded: boolean; duplicate: boolean; paymentId: string; paidPence?: number; outstandingPence?: number }>(functions, 'adminRecordCreatorPayment');
+const getMyCreatorCompensationCall = httpsCallable<void, { compensation: Array<{
+  periodId: string; periodStatus: string; creatorPoolPercent: number; eligibleCreatorCount: number;
+  amountPence: number; paidPence: number; outstandingPence: number; status: string; qualifyingRole: string | null;
+  payments: Array<{ amountPence: number; reference: string; paidAt: string }>;
+}> }>(functions, 'getMyCreatorCompensation');
+
 export const nightjarAccount = {
   async registrationAccess(email: string) {
     return (await registrationStatusCall({ email: email.trim() })).data;
@@ -174,6 +201,41 @@ export const nightjarAccount = {
 
   async adminListCommitmentPeriods() {
     return (await adminListCommitmentPeriodsCall()).data;
+  },
+
+  async adminRecordRevenueSettlement(input: {
+    periodId: string; provider: 'stripe'; externalId: string; settledAt: string; sourceReference: string;
+    grossPence: number; refundPence: number; chargebackPence: number; processorFeePence: number; vatPence: number; otherDeductionsPence?: number;
+  }) {
+    return (await adminRecordRevenueSettlementCall(input)).data;
+  },
+
+  async adminReconcileRevenueSettlement(input: { settlementId: string; reconciliationNote: string }) {
+    return (await adminReconcileRevenueSettlementCall(input)).data;
+  },
+
+  async adminListRevenueSettlements(periodId: string) {
+    return (await adminListRevenueSettlementsCall({ periodId })).data;
+  },
+
+  async adminPrepareCreatorPayoutPeriod(periodId: string) {
+    return (await adminPrepareCreatorPayoutPeriodCall({ periodId })).data;
+  },
+
+  async adminGetCreatorPayoutPeriod(periodId: string) {
+    return (await adminGetCreatorPayoutPeriodCall({ periodId })).data;
+  },
+
+  async adminApproveCreatorPayoutPeriod(periodId: string) {
+    return (await adminApproveCreatorPayoutPeriodCall({ periodId })).data;
+  },
+
+  async adminRecordCreatorPayment(input: { periodId: string; userId: string; amountPence: number; reference: string; paidAt: string }) {
+    return (await adminRecordCreatorPaymentCall(input)).data;
+  },
+
+  async getMyCreatorCompensation() {
+    return (await getMyCreatorCompensationCall()).data;
   },
 
   async adminCloseCommitmentPeriod(periodId: string) {
