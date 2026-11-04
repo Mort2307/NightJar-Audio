@@ -12,7 +12,7 @@ This section distinguishes implemented code from planned production behaviour. A
 
 | Area | Implemented in this branch | Still required before production |
 |---|---|---|
-| Profile types | Allowlisted profile metadata contract and isolated preview | Authenticated read/write callables, account-owned persistence, validation, public-profile projection, visibility leak tests and profile editor integration |
+| Profile types | Allowlisted profile metadata contract and isolated preview | Integrate with the existing `profiles/{uid}.roleProfiles` model; add authenticated settings persistence, approved-role filtering, per-type public/unlisted/private projection and visibility leak tests |
 | Commitments | Pure role-completion evaluator and tests | Versioned template/assignment storage, admin configuration, member task UI, evidence submission/review, exception audit trail, period locking and server-side eligibility calculation |
 | Compensation | Integer-pence equal-share allocator and tests | Authoritative settlement/revenue inputs, refund/chargeback/fee/VAT reconciliation, monthly close, immutable payout ledger, manual payment reconciliation, tax ledger, admin settings and migration strategy |
 | Experience | Midnight Gold interactive preview in Admin Finance Lab | Full member/admin journeys, loading/error/empty states, keyboard/screen-reader checks and Android-width acceptance |
@@ -66,7 +66,7 @@ This section distinguishes implemented code from planned production behaviour. A
 
 ## Findings from the current main branch
 - Nightjar already has a multi-professional-role account model. `myProfessionalRoles`, `submitProfessionalApplication` and admin role management govern approval and workspace access.
-- `UserProfileStudio` and `RoleProfileExtension` already render shared identity and role-specific profile fields. The new profile-type layer must extend this model rather than duplicate identity or weaken professional approvals.
+- `UserProfileStudio`, `RoleProfileExtension` and `PublicProfile` already support shared identity, the `roleProfiles` map, role-specific presentation and a server-derived Credited Listener state. The new profile-type layer must extend this model rather than create a competing identity/profile store or weaken professional approvals.
 - Existing commercial settings are stored in `settings/commercial`, with callable endpoints `commercialOverview`, `saveCommercialSettings` and `creatorCompensationStatus`.
 - The current compensation implementation is `capped_equal_rate`: paid Creator slots, subscriber rate bands, monthly caps and capacity/stress checks. This conflicts with the agreed commitment-qualified equal-share pool and must not be silently mixed with it.
 - The current Finance Lab is a local-storage scenario simulator. It is not an authoritative ledger and must remain visibly separate from live financial records.
