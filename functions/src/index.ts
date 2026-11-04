@@ -2261,6 +2261,10 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
     .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).includes('creator'))
     .map((doc) => {
       const profileData = profileByUser.get(doc.id) ?? {};
+      const profileSettings = normaliseProfileTypeSettings(profileData.profileTypeSettings);
+      const hasExplicitSettings = Number(profileData.profileTypeSettingsRevision ?? 0) > 0;
+      const creatorSetting = profileSettings.creator;
+      if (hasExplicitSettings && !(creatorSetting?.enabled === true && creatorSetting.visibility === 'public')) return null;
       const base = publicProfilePayload(doc.id, doc.data() ?? {}, profileData);
       if (!base) return null;
       const seconds = verified.byCreator.get(doc.id) ?? 0;
