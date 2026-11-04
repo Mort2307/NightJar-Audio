@@ -1340,6 +1340,19 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   };
 });
 
+export const adminGetCreatorPayoutPeriod = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid payout period.');
+  const ref = creatorPayoutPeriodRef(periodId);
+  const [period, payouts] = await Promise.all([ref.get(), ref.collection('payouts').orderBy('userId').limit(500).get()]);
+  if (!period.exists) throw new HttpsError('not-found', 'Creator Pool calculation not found.');
+  return {
+    period: { periodId, ...period.data() },
+    payouts: payouts.docs.map((doc) => ({ userId: doc.id, ...doc.data() })),
+  };
+});
+
 export const adminApproveCreatorPayoutPeriod = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
