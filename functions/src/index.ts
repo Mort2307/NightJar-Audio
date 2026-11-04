@@ -17,6 +17,7 @@ import { buildVerifiedCreditCallables } from './verified-credits';
 import { buildNightjarQualityCallables } from './nightjar-quality';
 import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes, type NightjarProfileType } from './profile-types';
 import { evaluateRoleCommitments, type RoleCommitmentAssessment } from './commitment-eligibility';
+import { allocateCreatorPool, type CreatorPoolMember } from './creator-pool';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -1167,6 +1168,259 @@ export const adminCloseCommitmentPeriod = onCall({ region: REGION }, async (requ
   });
 });
 
+
+
+const revenueSettlementRef = (settlementId: string) => db.collection('financeRevenueSettlements').doc(settlementId);
+const creatorPayoutPeriodRef = (periodId: string) => db.collection('creatorPayoutPeriods').doc(periodId);
+const creatorPayoutRef = (periodId: string, userId: string) => creatorPayoutPeriodRef(periodId).collection('payouts').doc(userId);
+const safePence = (value: unknown, label: string) => {
+  const amount = Number(value);
+  if (!Number.isSafeInteger(amount) || amount < 0) throw new HttpsError('invalid-argument', label + ' must be a non-negative whole number of pence.');
+  return amount;
+};
+const settlementDocumentId = (provider: string, externalId: string) =>
+  createHash('sha256').update(provider + ':' + externalId).digest('hex');
+
+export const adminRecordRevenueSettlement = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const provider = input.provider === 'stripe' ? 'stripe' : null;
+  const externalId = cleanText(input.externalId, 160);
+  const settledAt = cleanText(input.settledAt, 10);
+  const sourceReference = cleanText(input.sourceReference, 500);
+  if (!validCommitmentPeriodId(periodId) || !provider || !/^[A-Za-z0-9_-]{1,160}$/.test(externalId)
+    || !/^\d{4}-\d{2}-\d{2}$/.test(settledAt) || settledAt.slice(0, 7) !== periodId || sourceReference.length < 4) {
+    throw new HttpsError('invalid-argument', 'Provide a period, Stripe payout or balance reference, settlement date and source report reference.');
+  }
+  const grossPence = safePence(input.grossPence, 'Gross amount');
+  const refundPence = safePence(input.refundPence, 'Refunds');
+  const chargebackPence = safePence(input.chargebackPence, 'Chargebacks');
+  const processorFeePence = safePence(input.processorFeePence, 'Processor fees');
+  const vatPence = safePence(input.vatPence, 'VAT');
+  const otherDeductionsPence = safePence(input.otherDeductionsPence ?? 0, 'Other deductions');
+  const eligibleNetRevenuePence = grossPence - refundPence - chargebackPence - processorFeePence - vatPence - otherDeductionsPence;
+  if (eligibleNetRevenuePence < 0) throw new HttpsError('invalid-argument', 'Deductions cannot exceed gross receipts.');
+  const settlementId = settlementDocumentId(provider, externalId);
+  const ref = revenueSettlementRef(settlementId);
+  await db.runTransaction(async (tx) => {
+    const existing = await tx.get(ref);
+    if (existing.exists) throw new HttpsError('already-exists', 'This Stripe settlement reference has already been recorded.');
+    tx.create(ref, {
+      settlementId, periodId, provider, externalId, settledAt, sourceReference,
+      grossPence, refundPence, chargebackPence, processorFeePence, vatPence,
+      otherDeductionsPence, eligibleNetRevenuePence,
+      status: 'pending_reconciliation',
+      recordedByAdminUserId: admin.uid,
+      recordedAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return { recorded: true, settlementId, eligibleNetRevenuePence, status: 'pending_reconciliation' };
+});
+
+export const adminReconcileRevenueSettlement = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const settlementId = cleanText(input.settlementId, 80);
+  const reconciliationNote = cleanText(input.reconciliationNote, 1000);
+  if (!/^[a-f0-9]{64}$/.test(settlementId) || reconciliationNote.length < 8) {
+    throw new HttpsError('invalid-argument', 'A settlement and a reconciliation note are required.');
+  }
+  const ref = revenueSettlementRef(settlementId);
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const data = snapshot.data() ?? {};
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Revenue settlement not found.');
+    if (data.status !== 'pending_reconciliation') throw new HttpsError('failed-precondition', 'Only pending settlements can be reconciled.');
+    tx.update(ref, {
+      status: 'reconciled', reconciliationNote,
+      reconciledByAdminUserId: admin.uid, reconciledAt: FieldValue.serverTimestamp(),
+    });
+    return { reconciled: true, settlementId, eligibleNetRevenuePence: data.eligibleNetRevenuePence };
+  });
+});
+
+export const adminListRevenueSettlements = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid finance period.');
+  const snapshot = await db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(500).get();
+  return { settlements: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
+export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid monthly period.');
+  const [commitmentPeriod, settlements, assignments, existingPayoutPeriod] = await Promise.all([
+    commitmentPeriodRef(periodId).get(),
+    db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(500).get(),
+    db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5000).get(),
+    creatorPayoutPeriodRef(periodId).get(),
+  ]);
+  if (!commitmentPeriod.exists || commitmentPeriod.data()?.status !== 'closed') {
+    throw new HttpsError('failed-precondition', 'Close the commitment assessment period after all reviews before preparing compensation.');
+  }
+  if (existingPayoutPeriod.exists) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
+  if (!settlements.size || settlements.docs.some((doc) => doc.data().status !== 'reconciled')) {
+    throw new HttpsError('failed-precondition', 'Every Stripe settlement must be recorded and reconciled before calculating payouts.');
+  }
+  const eligibleNetRevenuePence = settlements.docs.reduce((sum, doc) => sum + safePence(doc.data().eligibleNetRevenuePence, 'Eligible net revenue'), 0);
+  if (!Number.isSafeInteger(eligibleNetRevenuePence)) throw new HttpsError('failed-precondition', 'Reconciled revenue exceeds the safe calculation limit.');
+  const creatorPoolPence = Math.floor(eligibleNetRevenuePence * 50 / 100);
+  const assignmentsByUser = new Map<string, Array<Record<string, any>>>();
+  for (const doc of assignments.docs) {
+    const data = doc.data();
+    const userId = cleanText(data.userId, 160);
+    if (!userId) continue;
+    const rows = assignmentsByUser.get(userId) ?? [];
+    rows.push(data);
+    assignmentsByUser.set(userId, rows);
+  }
+  const userIds = [...assignmentsByUser.keys()];
+  if (userIds.length > 450) throw new HttpsError('resource-exhausted', 'This period exceeds the single-transaction payout preparation limit. Contact Nightjar engineering before closing this period.');
+  const accountDocs = userIds.length ? await db.getAll(...userIds.map((uid) => accountRef(uid))) : [];
+  const accountByUser = new Map(accountDocs.map((doc) => [doc.id, doc.data() ?? {}]));
+  const members: CreatorPoolMember[] = [];
+  const qualifyingRoleByUser = new Map<string, string>();
+  for (const userId of userIds) {
+    const account = accountByUser.get(userId) ?? {};
+    if (String(account.status ?? '') !== 'active') continue;
+    const approvedRoles = professionalRolesForAccount(account);
+    const userAssignments = assignmentsByUser.get(userId) ?? [];
+    const assessments: RoleCommitmentAssessment[] = userAssignments
+      .filter((assignment) => approvedRoles.includes(assignment.role as AccountRole) && isCommitmentRole(assignment.role))
+      .map((assignment) => ({
+        role: assignment.role,
+        assigned: true,
+        effective: true,
+        tasks: (Array.isArray(assignment.tasks) ? assignment.tasks : []).map((task: Record<string, any>) => ({
+          id: cleanText(task.id, 60), mandatory: task.mandatory === true, state: task.state,
+        })),
+        approvedException: assignment.approvedException === true,
+        exceptionReason: assignment.exceptionReason ?? null,
+      }));
+    const completedCommitmentRoles = assessments.filter((assessment) => evaluateRoleCommitments(assessment).qualifies).map((assessment) => assessment.role);
+    if (completedCommitmentRoles.length) qualifyingRoleByUser.set(userId, completedCommitmentRoles[0]);
+    members.push({
+      userId, accountStatus: 'active', approvedRoles, completedCommitmentRoles,
+    });
+  }
+  const allocation = allocateCreatorPool(creatorPoolPence, members);
+  const payoutPeriod = creatorPayoutPeriodRef(periodId);
+  const batch = db.batch();
+  batch.create(payoutPeriod, {
+    periodId, status: 'draft', currency: 'GBP',
+    eligibleNetRevenuePence, creatorPoolPercent: 50, creatorPoolPence,
+    eligibleCreatorCount: allocation.eligibleCreatorCount,
+    totalAllocatedPence: allocation.totalAllocatedPence,
+    unallocatedCreatorPoolPence: allocation.unallocatedPence,
+    nonCreatorRemainderPence: eligibleNetRevenuePence - creatorPoolPence,
+    settlementIds: settlements.docs.map((doc) => doc.id),
+    preparedByAdminUserId: admin.uid,
+    preparedAt: FieldValue.serverTimestamp(),
+    policyVersion: 1,
+  });
+  for (const payout of allocation.payouts) {
+    batch.create(creatorPayoutRef(periodId, payout.userId), {
+      periodId, userId: payout.userId, amountPence: payout.amountPence,
+      paidPence: 0, outstandingPence: payout.amountPence,
+      qualifyingRole: qualifyingRoleByUser.get(payout.userId) ?? null,
+      status: 'pending', createdAt: FieldValue.serverTimestamp(),
+    });
+  }
+  await batch.commit();
+  return {
+    prepared: true, periodId, eligibleNetRevenuePence, creatorPoolPercent: 50,
+    creatorPoolPence, eligibleCreatorCount: allocation.eligibleCreatorCount,
+    totalAllocatedPence: allocation.totalAllocatedPence,
+    unallocatedCreatorPoolPence: allocation.unallocatedPence,
+    nonCreatorRemainderPence: eligibleNetRevenuePence - creatorPoolPence,
+    payouts: allocation.payouts,
+  };
+});
+
+export const adminApproveCreatorPayoutPeriod = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid payout period.');
+  const ref = creatorPayoutPeriodRef(periodId);
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Creator Pool calculation not found.');
+    if (snapshot.data()?.status !== 'draft') throw new HttpsError('failed-precondition', 'Only a draft Creator Pool calculation can be approved.');
+    tx.update(ref, { status: 'approved', approvedByAdminUserId: admin.uid, approvedAt: FieldValue.serverTimestamp() });
+    return { approved: true, periodId };
+  });
+});
+
+export const adminRecordCreatorPayment = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const userId = cleanText(input.userId, 160);
+  const amountPence = safePence(input.amountPence, 'Payment amount');
+  const reference = cleanText(input.reference, 160);
+  const paidAt = cleanText(input.paidAt, 10);
+  if (!validCommitmentPeriodId(periodId) || !validCommitmentDocId(userId) || amountPence < 1
+    || reference.length < 4 || !/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) {
+    throw new HttpsError('invalid-argument', 'Provide a period, member, positive payment amount, payment reference and payment date.');
+  }
+  const periodRef = creatorPayoutPeriodRef(periodId);
+  const payoutRef = creatorPayoutRef(periodId, userId);
+  const paymentId = createHash('sha256').update(periodId + ':' + userId + ':' + reference).digest('hex');
+  const paymentRef = periodRef.collection('payments').doc(paymentId);
+  return db.runTransaction(async (tx) => {
+    const [periodSnap, payoutSnap, paymentSnap] = await Promise.all([tx.get(periodRef), tx.get(payoutRef), tx.get(paymentRef)]);
+    const period = periodSnap.data() ?? {};
+    const payout = payoutSnap.data() ?? {};
+    if (!periodSnap.exists || period.status !== 'approved') throw new HttpsError('failed-precondition', 'Approve the payout period before recording payments.');
+    if (!payoutSnap.exists) throw new HttpsError('not-found', 'Creator payout not found.');
+    if (paymentSnap.exists) return { recorded: true, duplicate: true, paymentId };
+    const outstanding = safePence(payout.outstandingPence, 'Outstanding amount');
+    if (amountPence > outstanding) throw new HttpsError('failed-precondition', 'Payment exceeds the outstanding balance.');
+    const nextPaid = safePence(payout.paidPence, 'Paid amount') + amountPence;
+    const nextOutstanding = outstanding - amountPence;
+    tx.create(paymentRef, {
+      paymentId, periodId, userId, amountPence, reference, paidAt,
+      recordedByAdminUserId: admin.uid, recordedAt: FieldValue.serverTimestamp(),
+    });
+    tx.update(payoutRef, {
+      paidPence: nextPaid, outstandingPence: nextOutstanding,
+      status: nextOutstanding === 0 ? 'paid' : 'part_paid',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { recorded: true, duplicate: false, paymentId, paidPence: nextPaid, outstandingPence: nextOutstanding };
+  });
+});
+
+export const getMyCreatorCompensation = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const periods = await db.collection('creatorPayoutPeriods').orderBy('preparedAt', 'desc').limit(24).get();
+  const records = await Promise.all(periods.docs.map(async (doc) => {
+    const period = doc.data();
+    const payout = await creatorPayoutRef(doc.id, identity.uid).get();
+    if (!payout.exists) return null;
+    const payments = await doc.ref.collection('payments').where('userId', '==', identity.uid).limit(50).get();
+    return {
+      periodId: doc.id, periodStatus: period.status,
+      creatorPoolPercent: period.creatorPoolPercent,
+      eligibleCreatorCount: period.eligibleCreatorCount,
+      amountPence: payout.data()?.amountPence ?? 0,
+      paidPence: payout.data()?.paidPence ?? 0,
+      outstandingPence: payout.data()?.outstandingPence ?? 0,
+      status: payout.data()?.status ?? 'pending',
+      qualifyingRole: payout.data()?.qualifyingRole ?? null,
+      payments: payments.docs.map((payment) => ({
+        amountPence: payment.data().amountPence,
+        reference: payment.data().reference,
+        paidAt: payment.data().paidAt,
+      })),
+    };
+  }));
+  return { compensation: records.filter(Boolean) };
+});
 export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('commitmentAssignments').limit(1000).get();
