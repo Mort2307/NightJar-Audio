@@ -37,7 +37,9 @@ export const evaluateRoleCommitments = (assessment: RoleCommitmentAssessment): C
   if (!assessment.effective) {
     return { role: assessment.role, assigned: true, applicableMandatoryCount: 0, completedMandatoryCount: 0, completionPercent: null, qualifies: false, state: 'not_effective' };
   }
-  if (assessment.approvedException) {
+  // An exception is not a shortcut that can silently grant eligibility.
+  // It must have an explicit, auditable reason supplied by an authorised reviewer.
+  if (assessment.approvedException && String(assessment.exceptionReason ?? '').trim().length >= 8) {
     return { role: assessment.role, assigned: true, applicableMandatoryCount: 0, completedMandatoryCount: 0, completionPercent: 100, qualifies: true, state: 'excused' };
   }
 
