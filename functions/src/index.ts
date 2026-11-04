@@ -2128,15 +2128,33 @@ const publicProfilePayload = (
 ) => {
   const nightjarTeam = accountData.role === 'admin';
   if (!data || (nightjarTeam ? data.adminCommunityVisible !== true : data.publicProfile === false)) return null;
-  const roles = professionalRolesForAccount(accountData);
+  const approvedRoles = professionalRolesForAccount(accountData);
+  const settings = normaliseProfileTypeSettings(data.profileTypeSettings);
+  const hasExplicitSettings = Number(data.profileTypeSettingsRevision ?? 0) > 0;
+  // Directory results include public profiles only. Unlisted profiles remain
+  // reachable by direct profile URL through getPublicProfile, not discovery.
+  const publicTypes = NIGHTJAR_PROFILE_TYPES.filter((type) => {
+    if (type !== 'listener' && !approvedRoles.includes(type as AccountRole)) return false;
+    if (!hasExplicitSettings) return true;
+    const setting = settings[type];
+    return setting?.enabled === true && setting.visibility === 'public';
+  });
+  const publicProfessionalRoles = publicTypes.filter((type) => type !== 'listener') as AccountRole[];
   const activeRole = cleanText(accountData.role, 30);
-  const publicRole = activeRole === 'listener' || roles.includes(activeRole as AccountRole)
+  const publicRole = publicTypes.includes(activeRole as NightjarProfileType)
     ? activeRole
-    : (roles[0] ?? 'listener');
+    : (publicTypes.find((type) => type !== 'listener') ?? 'listener');
+  const storedRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+  const publicRoleProfiles = Object.fromEntries(
+    publicTypes.filter((type) => type !== 'listener')
+      .map((type) => [type, storedRoleProfiles[type]])
+      .filter(([, value]) => value && typeof value === 'object'),
+  );
   return {
     userId,
     role: publicRole,
-    roles: nightjarTeam ? ['listener'] : ['listener', ...roles],
+    roles: nightjarTeam ? ['listener'] : publicTypes,
+    profileTypes: publicTypes,
     nightjarTeam,
     displayName: data.displayName ?? 'Nightjar member',
     name: data.displayName ?? 'Nightjar member',
@@ -2146,8 +2164,8 @@ const publicProfilePayload = (
     welcomeMessage: data.welcomeMessage ?? null,
     pronouns: data.pronouns ?? null,
     avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
-      bannerUrl: data.bannerStatus === 'approved' ? data.bannerUrl ?? null : null,
-      ...publicProfileImageFrames(data),
+    bannerUrl: data.bannerStatus === 'approved' ? data.bannerUrl ?? null : null,
+    ...publicProfileImageFrames(data),
     avatarStatus: data.avatarStatus ?? null,
     avatarInitials: data.avatarInitials ?? null,
     initials: data.avatarInitials ?? null,
@@ -2156,8 +2174,11 @@ const publicProfilePayload = (
     favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
     favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
     favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
-    roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
+    roleProfiles: publicRoleProfiles,
     ...roleProfileSlice(data, publicRole),
+    ...(publicProfessionalRoles.includes(publicRole as AccountRole) ? {} : {
+      roleAvailability: null, roleDetailOne: null, roleDetailTwo: null, portfolioNote: null,
+    }),
   };
 };
 
