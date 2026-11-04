@@ -1262,13 +1262,47 @@ export const adminListRevenueSettlements = onCall({ region: REGION }, async (req
   return { settlements: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
 });
 
+export const adminRecordRevenueAdjustment = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const amountPence = Number(input.amountPence);
+  const reason = cleanText(input.reason, 1000);
+  const sourceReference = cleanText(input.sourceReference, 500);
+  if (!validCommitmentPeriodId(periodId) || !Number.isSafeInteger(amountPence) || amountPence === 0
+    || reason.length < 8 || sourceReference.length < 4) {
+    throw new HttpsError('invalid-argument', 'Provide a non-zero signed pence adjustment, reason and source reference.');
+  }
+  const adjustmentId = createHash('sha256').update(periodId + ':adjustment:' + sourceReference).digest('hex');
+  const ref = db.collection('financeRevenueAdjustments').doc(adjustmentId);
+  await db.runTransaction(async (tx) => {
+    const [existing, payoutPeriod] = await Promise.all([tx.get(ref), tx.get(creatorPayoutPeriodRef(periodId))]);
+    if (payoutPeriod.exists) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
+    if (existing.exists) throw new HttpsError('already-exists', 'This adjustment source reference has already been recorded.');
+    tx.create(ref, {
+      adjustmentId, periodId, amountPence, reason, sourceReference,
+      createdByAdminUserId: admin.uid, createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return { recorded: true, adjustmentId, amountPence };
+});
+
+export const adminListRevenueAdjustments = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid finance period.');
+  const snapshot = await db.collection('financeRevenueAdjustments').where('periodId', '==', periodId).limit(500).get();
+  return { adjustments: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
 export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
   if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid monthly period.');
-  const [commitmentPeriod, settlements, assignments, existingPayoutPeriod] = await Promise.all([
+  const [commitmentPeriod, settlements, adjustments, assignments, existingPayoutPeriod] = await Promise.all([
     commitmentPeriodRef(periodId).get(),
     db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(500).get(),
+    db.collection('financeRevenueAdjustments').where('periodId', '==', periodId).limit(500).get(),
     db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5000).get(),
     creatorPayoutPeriodRef(periodId).get(),
   ]);
@@ -1279,8 +1313,16 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   if (!settlements.size || settlements.docs.some((doc) => doc.data().status !== 'reconciled')) {
     throw new HttpsError('failed-precondition', 'Every Stripe settlement must be recorded and reconciled before calculating payouts.');
   }
-  const eligibleNetRevenuePence = settlements.docs.reduce((sum, doc) => sum + safePence(doc.data().eligibleNetRevenuePence, 'Eligible net revenue'), 0);
-  if (!Number.isSafeInteger(eligibleNetRevenuePence)) throw new HttpsError('failed-precondition', 'Reconciled revenue exceeds the safe calculation limit.');
+  const settlementNetPence = settlements.docs.reduce((sum, doc) => sum + safePence(doc.data().eligibleNetRevenuePence, 'Eligible net revenue'), 0);
+  const adjustmentNetPence = adjustments.docs.reduce((sum, doc) => {
+    const amount = Number(doc.data().amountPence ?? 0);
+    if (!Number.isSafeInteger(amount)) throw new HttpsError('failed-precondition', 'A revenue adjustment is invalid.');
+    return sum + amount;
+  }, 0);
+  const eligibleNetRevenuePence = settlementNetPence + adjustmentNetPence;
+  if (!Number.isSafeInteger(eligibleNetRevenuePence) || eligibleNetRevenuePence < 0) {
+    throw new HttpsError('failed-precondition', 'Reconciled revenue and adjustments must produce a non-negative safe total.');
+  }
   const creatorPoolPence = calculateCreatorPoolPence(eligibleNetRevenuePence, 50);
   const assignmentsByUser = new Map<string, Array<Record<string, any>>>();
   for (const doc of assignments.docs) {
@@ -1333,6 +1375,7 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
       unallocatedCreatorPoolPence: allocation.unallocatedPence,
       nonCreatorRemainderPence: eligibleNetRevenuePence - creatorPoolPence,
       settlementIds: settlements.docs.map((doc) => doc.id),
+      adjustmentIds: adjustments.docs.map((doc) => doc.id),
       preparedByAdminUserId: admin.uid,
       preparedAt: FieldValue.serverTimestamp(),
       policyVersion: 1,
