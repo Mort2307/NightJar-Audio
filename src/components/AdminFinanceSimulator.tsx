@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Calculator, Coins, RefreshCw, Save, ShieldCheck, SlidersHorizontal, Trash2, UsersRound, WalletCards } from 'lucide-react';
 import type { CommercialSettings } from '../platform/firebase-commercial';
+import AdminSystemsPreview from './AdminSystemsPreview';
 
 type Props = {
   settings: CommercialSettings;
@@ -461,5 +462,6 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
         <div><span>VAT / sales tax</span><strong>{gbp(model.vatCollected)}</strong><small>{gbp(model.vatCollected * 12)} annualised statutory sales-tax component</small></div>
       </div>
     </section>
+    <AdminSystemsPreview />
   </section>;
 }
