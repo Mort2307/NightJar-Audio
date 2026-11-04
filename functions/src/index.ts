@@ -2467,7 +2467,7 @@ const publicProfilePayload = (
     : (publicTypes.find((type) => type !== 'listener') ?? 'listener');
   const storedRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
   const publicRoleProfiles = Object.fromEntries(
-    publicTypes.filter((type) => type !== 'listener')
+    publicTypes
       .map((type) => [type, storedRoleProfiles[type]])
       .filter(([, value]) => value && typeof value === 'object'),
   );
