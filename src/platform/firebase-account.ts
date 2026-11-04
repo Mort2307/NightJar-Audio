@@ -27,6 +27,22 @@ const roleCall = httpsCallable<{ role: 'creator' | 'listener' | 'writer' | 'edit
 
 export type NightjarProfessionalRole = 'creator' | 'writer' | 'editor' | 'artist';
 
+export type NightjarProfileType = 'listener' | NightjarProfessionalRole;
+export type NightjarProfileVisibility = 'public' | 'private' | 'unlisted';
+export type NightjarProfileTypeSetting = {
+  type: NightjarProfileType;
+  enabled: boolean;
+  visibility: NightjarProfileVisibility;
+  schemaVersion: 1;
+};
+export type NightjarProfileTypeSettings = Partial<Record<NightjarProfileType, NightjarProfileTypeSetting>>;
+export type NightjarProfileTypeSettingsResult = {
+  revision: number;
+  settings: NightjarProfileTypeSettings;
+};
+const getProfileTypeSettingsCall = httpsCallable<void, NightjarProfileTypeSettingsResult>(functions, 'getMyProfileTypeSettings');
+const saveProfileTypeSettingsCall = httpsCallable<{ expectedRevision: number; settings: NightjarProfileTypeSettings }, ({ saved: true; revision: number; settings: NightjarProfileTypeSettings } | { saved: false; revision: number; settings: NightjarProfileTypeSettings })>(functions, 'saveMyProfileTypeSettings');
+
 export type ProfessionalRoleState = {
   listener: true;
   approvedProfessionalRoles: NightjarProfessionalRole[];
@@ -91,6 +107,14 @@ export const nightjarAccount = {
     const roles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles];
     const result = await stageRoleCall({ roles, legalAcceptances, ...(referralCode ? { referralCode } : {}) });
     return result.data;
+  },
+
+  async getProfileTypeSettings() {
+    return (await getProfileTypeSettingsCall()).data;
+  },
+
+  async saveProfileTypeSettings(settings: NightjarProfileTypeSettings, expectedRevision: number) {
+    return (await saveProfileTypeSettingsCall({ settings, expectedRevision })).data;
   },
 
   async professionalRoles() {
