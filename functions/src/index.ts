@@ -874,6 +874,10 @@ const commitmentTemplateRef = (templateId: string) => db.collection('commitmentT
 const commitmentAssignmentRef = (assignmentId: string) => db.collection('commitmentAssignments').doc(assignmentId);
 const validCommitmentPeriodId = (value: unknown): value is string =>
   typeof value === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+const validIsoCalendarDate = (value: unknown): value is string =>
+  typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && !Number.isNaN(Date.parse(value))
+  && new Date(value + 'T00:00:00.000Z').toISOString().slice(0, 10) === value;
 const validCommitmentDocId = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(value);
 const commitmentAssignmentId = (periodId: string, userId: string, role: CommitmentRole) =>
@@ -884,7 +888,7 @@ export const adminCreateCommitmentTemplate = onCall({ region: REGION }, async (r
   const input = (request.data ?? {}) as Record<string, unknown>;
   const role = input.role;
   const effectiveFrom = cleanText(input.effectiveFrom, 10);
-  if (!isCommitmentRole(role) || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom) || Number.isNaN(Date.parse(effectiveFrom))) {
+  if (!isCommitmentRole(role) || !validIsoCalendarDate(effectiveFrom)) {
     throw new HttpsError('invalid-argument', 'Choose a valid creative role and effective date.');
   }
   if (!Array.isArray(input.tasks) || input.tasks.length < 1 || input.tasks.length > 40) {
@@ -927,10 +931,8 @@ export const adminCreateCommitmentPeriod = onCall({ region: REGION }, async (req
   const periodId = input.periodId;
   const startDate = cleanText(input.startDate, 10);
   const endDate = cleanText(input.endDate, 10);
-  if (!validCommitmentPeriodId(periodId) || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)
-    || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
-    || startDate.slice(0, 7) !== periodId || endDate.slice(0, 7) !== periodId
-    || Number.isNaN(Date.parse(startDate)) || Number.isNaN(Date.parse(endDate)) || startDate > endDate) {
+  if (!validCommitmentPeriodId(periodId) || !validIsoCalendarDate(startDate) || !validIsoCalendarDate(endDate)
+    || startDate.slice(0, 7) !== periodId || endDate.slice(0, 7) !== periodId || startDate > endDate) {
     throw new HttpsError('invalid-argument', 'Choose a valid monthly commitment period and date range.');
   }
   const ref = commitmentPeriodRef(periodId);
@@ -1204,7 +1206,7 @@ export const adminRecordRevenueSettlement = onCall({ region: REGION }, async (re
   const settledAt = cleanText(input.settledAt, 10);
   const sourceReference = cleanText(input.sourceReference, 500);
   if (!validCommitmentPeriodId(periodId) || !provider || !/^[A-Za-z0-9_-]{1,160}$/.test(externalId)
-    || !/^\d{4}-\d{2}-\d{2}$/.test(settledAt) || settledAt.slice(0, 7) !== periodId || sourceReference.length < 4) {
+    || !validIsoCalendarDate(settledAt) || settledAt.slice(0, 7) !== periodId || sourceReference.length < 4) {
     throw new HttpsError('invalid-argument', 'Provide a period, Stripe payout or balance reference, settlement date and source report reference.');
   }
   const grossPence = safePence(input.grossPence, 'Gross amount');
@@ -1444,7 +1446,7 @@ export const adminRecordCreatorPayment = onCall({ region: REGION }, async (reque
   const reference = cleanText(input.reference, 160);
   const paidAt = cleanText(input.paidAt, 10);
   if (!validCommitmentPeriodId(periodId) || !validCommitmentDocId(userId) || amountPence < 1
-    || reference.length < 4 || !/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) {
+    || reference.length < 4 || !validIsoCalendarDate(paidAt)) {
     throw new HttpsError('invalid-argument', 'Provide a period, member, positive payment amount, payment reference and payment date.');
   }
   const periodRef = creatorPayoutPeriodRef(periodId);
