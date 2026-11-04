@@ -77,6 +77,7 @@ export default function MyCommitmentsPanel() {
                 return <div className="nj-commitment-task" key={task.id}>
                   <div className="nj-commitment-task-title"><span><strong>{task.title}</strong>{task.mandatory && <em>Mandatory</em>}</span><small data-state={task.state}>{taskStateLabel(task.state)}</small></div>
                   {task.description && <p>{task.description}</p>}
+                  {task.dueAt && <small className="nj-commitment-due-date">Due {task.dueAt}</small>}
                   {task.reviewReason && <p className="nj-commitment-review-note">Reviewer note: {task.reviewReason}</p>}
                   {canSubmit && <div className="nj-commitment-evidence-form">
                     <textarea aria-label={'Evidence note for ' + task.title} rows={2} maxLength={2000} value={draft.note} placeholder="Describe the work completed or evidence supplied…" onChange={(event) => setDrafts((current) => ({ ...current, [key]: { ...draft, note: event.target.value } }))}/>
