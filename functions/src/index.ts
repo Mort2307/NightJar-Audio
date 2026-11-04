@@ -1412,6 +1412,93 @@ export const adminRecordCreatorPayment = onCall({ region: REGION }, async (reque
   });
 });
 
+
+const taxLedgerRef = (periodId: string) => db.collection('taxLedger').doc(periodId);
+
+export const adminSetTaxReserve = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const reservePence = safePence(input.reservePence, 'Tax reserve');
+  const note = cleanText(input.note, 1000);
+  if (!validCommitmentPeriodId(periodId) || note.length < 8) {
+    throw new HttpsError('invalid-argument', 'Choose a period and document the reason for the cash reserve.');
+  }
+  const ref = taxLedgerRef(periodId);
+  await ref.set({
+    periodId, reservePence, reserveNote: note,
+    reserveSetByAdminUserId: admin.uid, reserveUpdatedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { saved: true, periodId, reservePence };
+});
+
+export const adminSetConfirmedTaxLiability = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const liabilityPence = safePence(input.liabilityPence, 'Confirmed tax liability');
+  const accountantReference = cleanText(input.accountantReference, 500);
+  if (!validCommitmentPeriodId(periodId) || accountantReference.length < 4) {
+    throw new HttpsError('invalid-argument', 'Provide the period and an accountant or HMRC source reference.');
+  }
+  const ref = taxLedgerRef(periodId);
+  await ref.set({
+    periodId, confirmedLiabilityPence: liabilityPence,
+    accountantReference, liabilityConfirmedByAdminUserId: admin.uid,
+    liabilityConfirmedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { saved: true, periodId, liabilityPence };
+});
+
+export const adminRecordTaxPayment = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const amountPence = safePence(input.amountPence, 'Tax payment');
+  const reference = cleanText(input.reference, 160);
+  const paidAt = cleanText(input.paidAt, 10);
+  if (!validCommitmentPeriodId(periodId) || amountPence < 1 || reference.length < 4
+    || !/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) {
+    throw new HttpsError('invalid-argument', 'Provide a period, positive payment, reference and payment date.');
+  }
+  const ledgerRef = taxLedgerRef(periodId);
+  const paymentId = createHash('sha256').update(periodId + ':tax:' + reference).digest('hex');
+  const paymentRef = ledgerRef.collection('payments').doc(paymentId);
+  return db.runTransaction(async (tx) => {
+    const [ledgerSnap, paymentSnap] = await Promise.all([tx.get(ledgerRef), tx.get(paymentRef)]);
+    const ledger = ledgerSnap.data() ?? {};
+    if (!ledgerSnap.exists || !Number.isSafeInteger(ledger.confirmedLiabilityPence)) {
+      throw new HttpsError('failed-precondition', 'An accountant-confirmed tax liability must be recorded before tax payments are reconciled.');
+    }
+    if (paymentSnap.exists) return { recorded: true, duplicate: true, paymentId };
+    const paidPence = safePence(ledger.paidPence ?? 0, 'Tax paid');
+    const liabilityPence = safePence(ledger.confirmedLiabilityPence, 'Confirmed tax liability');
+    if (amountPence > liabilityPence - paidPence) throw new HttpsError('failed-precondition', 'Tax payment exceeds the outstanding confirmed liability.');
+    tx.create(paymentRef, {
+      paymentId, periodId, amountPence, reference, paidAt,
+      recordedByAdminUserId: admin.uid, recordedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(ledgerRef, {
+      paidPence: paidPence + amountPence,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { recorded: true, duplicate: false, paymentId, paidPence: paidPence + amountPence };
+  });
+});
+
+export const adminGetTaxLedger = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid tax period.');
+  const ref = taxLedgerRef(periodId);
+  const [ledger, payments] = await Promise.all([ref.get(), ref.collection('payments').orderBy('recordedAt', 'desc').limit(100).get()]);
+  return {
+    ledger: ledger.exists ? { periodId, ...ledger.data() } : null,
+    payments: payments.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+  };
+});
+
 export const getMyCreatorCompensation = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
