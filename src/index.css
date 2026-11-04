@@ -11838,3 +11838,44 @@ textarea:focus-visible,
 .nj-profile-type-actions button{min-height:42px;white-space:nowrap}
 .nj-profile-type-error{color:#ffb5a9;font-size:12px}
 @media(max-width:620px){.nj-profile-type-setting{grid-template-columns:minmax(0,1fr) auto;gap:9px}.nj-profile-type-visibility{grid-column:1/-1}.nj-profile-type-actions{align-items:stretch;flex-direction:column}.nj-profile-type-actions button{width:100%}}
+
+/* Contributor commitment tracker */
+.nj-my-commitments{margin:18px 0;padding:clamp(15px,2.4vw,24px);border:1px solid rgba(214,179,117,.2);border-radius:16px;background:linear-gradient(145deg,rgba(30,25,27,.96),rgba(17,15,17,.98));color:var(--ivory)}
+.nj-my-commitments>header{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.nj-my-commitments>header h2{margin:5px 0;font-size:clamp(19px,2.4vw,24px)}
+.nj-my-commitments>header p{max-width:720px;margin:6px 0 14px;color:var(--muted);font-size:13px;line-height:1.55}
+.nj-commitment-loading{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.nj-commitment-period{display:flex;justify-content:space-between;padding:10px 13px;border:1px solid rgba(214,179,117,.15);border-radius:10px;margin:10px 0;color:var(--muted);font-size:12px}
+.nj-commitment-period strong{color:#e8d3b2}
+.nj-commitment-eligibility{display:flex;align-items:flex-start;gap:10px;padding:13px;border:1px solid rgba(214,179,117,.18);border-radius:12px;background:rgba(255,255,255,.02);color:#e8cba4;margin:12px 0}
+.nj-commitment-eligibility.eligible{border-color:rgba(105,177,139,.4);color:#a7d8b8;background:rgba(68,135,92,.08)}
+.nj-commitment-eligibility span{display:grid;gap:4px}
+.nj-commitment-eligibility strong{font-size:13px}
+.nj-commitment-eligibility small{font-size:12px;line-height:1.5;color:var(--muted)}
+.nj-commitment-role-card{padding:15px;margin:12px 0;border:1px solid rgba(214,179,117,.16);border-radius:13px;background:rgba(255,255,255,.018)}
+.nj-commitment-role-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.nj-commitment-role-head h3{margin:4px 0;font-size:17px}
+.nj-commitment-role-head>strong{font-size:20px;color:#e8cba4}
+.nj-commitment-progress{height:6px;margin:10px 0 6px;border-radius:9px;background:#302a2b;overflow:hidden}
+.nj-commitment-progress span{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#9a7447,#dfc18e)}
+.nj-commitment-progress-copy{font-size:11px;color:var(--muted)}
+.nj-commitment-task-list{display:grid;gap:10px;margin-top:14px}
+.nj-commitment-task{padding:12px;border:1px solid rgba(214,179,117,.12);border-radius:10px;background:rgba(0,0,0,.12)}
+.nj-commitment-task-title{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.nj-commitment-task-title>span{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.nj-commitment-task-title strong{font-size:13px}
+.nj-commitment-task-title em{font-style:normal;font-size:10px;color:#e5c99e}
+.nj-commitment-task-title small{font-size:11px;color:var(--muted);white-space:nowrap}
+.nj-commitment-task-title small[data-state="approved"]{color:#a7d8b8}
+.nj-commitment-task p{margin:7px 0;color:var(--muted);font-size:12px;line-height:1.5}
+.nj-commitment-task .nj-commitment-review-note{color:#e6c38d}
+.nj-commitment-evidence-form{display:grid;gap:8px;margin-top:10px}
+.nj-commitment-evidence-form textarea,.nj-commitment-evidence-form input{width:100%;padding:10px 11px;border:1px solid rgba(214,179,117,.2);border-radius:9px;background:#211c20;color:var(--ivory);font:inherit;font-size:12px}
+.nj-commitment-evidence-form button,.nj-commitment-refresh{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:8px 13px;border:1px solid rgba(214,179,117,.3);border-radius:9px;background:rgba(188,143,82,.08);color:#e8d0aa;font:inherit;font-size:12px}
+.nj-commitment-evidence-form button:disabled{opacity:.5}
+.nj-commitment-empty{display:grid;gap:5px;padding:18px;border:1px dashed rgba(214,179,117,.2);border-radius:12px}
+.nj-commitment-empty strong{font-size:13px}
+.nj-commitment-empty small{font-size:12px;color:var(--muted);line-height:1.5}
+.nj-commitment-error{font-size:12px;color:#ffb5a9}
+.nj-commitment-refresh{margin-top:10px}
+@media(max-width:520px){.nj-commitment-task-title{align-items:flex-start;flex-direction:column}.nj-commitment-evidence-form button,.nj-commitment-refresh{width:100%}}
