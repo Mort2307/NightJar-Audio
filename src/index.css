@@ -11986,3 +11986,8 @@ textarea:focus-visible,
 .nj-member-compensation-row small{font-size:10px;color:var(--muted);line-height:1.45}
 .nj-member-payment-reference{grid-column:1/-1;overflow-wrap:anywhere}
 @media(max-width:520px){.nj-member-compensation-row{grid-template-columns:1fr}}
+
+.nj-adjustment-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:10px 0;border-top:1px solid rgba(214,179,117,.1)}
+.nj-adjustment-row>div{display:grid;gap:4px;min-width:0}
+.nj-adjustment-row strong{font-size:11px;overflow-wrap:anywhere}
+.nj-adjustment-row small{font-size:10px;color:var(--muted);line-height:1.45}
