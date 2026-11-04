@@ -1443,11 +1443,16 @@ export const adminSetConfirmedTaxLiability = onCall({ region: REGION }, async (r
     throw new HttpsError('invalid-argument', 'Provide the period and an accountant or HMRC source reference.');
   }
   const ref = taxLedgerRef(periodId);
-  await ref.set({
-    periodId, confirmedLiabilityPence: liabilityPence,
-    accountantReference, liabilityConfirmedByAdminUserId: admin.uid,
-    liabilityConfirmedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  await db.runTransaction(async (tx) => {
+    const existing = await tx.get(ref);
+    const paidPence = safePence(existing.data()?.paidPence ?? 0, 'Tax paid');
+    if (liabilityPence < paidPence) throw new HttpsError('failed-precondition', 'Confirmed liability cannot be lower than tax payments already recorded.');
+    tx.set(ref, {
+      periodId, confirmedLiabilityPence: liabilityPence,
+      accountantReference, liabilityConfirmedByAdminUserId: admin.uid,
+      liabilityConfirmedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
   return { saved: true, periodId, liabilityPence };
 });
 
