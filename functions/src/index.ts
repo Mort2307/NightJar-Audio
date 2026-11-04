@@ -2656,11 +2656,20 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       const nightjarTeam = accountData.role === 'admin';
       if (!data || (nightjarTeam ? data.adminCommunityVisible !== true : data.publicProfile === false)) return null;
       const professionalRoles = professionalRolesForAccount(accountData);
+      const profileSettings = normaliseProfileTypeSettings(data.profileTypeSettings);
+      const hasExplicitSettings = Number(data.profileTypeSettingsRevision ?? 0) > 0;
+      const publicProfileTypes = resolveVisibleProfileTypes(professionalRoles, profileSettings, hasExplicitSettings, { directory: true });
       const activeRole = cleanText(accountData.role, 30);
-      const role = activeRole === 'listener' || professionalRoles.includes(activeRole as AccountRole)
+      const role = publicProfileTypes.includes(activeRole as NightjarProfileType)
         ? activeRole
-        : (professionalRoles[0] ?? 'listener');
-      const roleSlice = roleProfileSlice(data, role);
+        : (publicProfileTypes.find((type) => type !== 'listener') ?? 'listener');
+      const storedRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+      const publicRoleProfiles = Object.fromEntries(publicProfileTypes.map((type) => [type, storedRoleProfiles[type]]).filter(([, value]) => value && typeof value === 'object'));
+      const roleSlice = roleProfileSlice({
+        ...data,
+        roleProfiles: publicRoleProfiles,
+        ...(role === 'listener' ? { roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: null, roleDetailOne: null, roleDetailTwo: null, portfolioNote: null } : {}),
+      }, role);
       const releaseCount = releaseCountByCreator.get(doc.id) ?? 0;
       const publishedWorkCount = publishedScriptsByWriter.get(doc.id) ?? 0;
       const creditedReleaseCount = creditCountByUser.get(doc.id) ?? 0;
@@ -2815,7 +2824,6 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
   const storedRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
   const publicRoleProfiles = Object.fromEntries(
     publicProfileTypes
-      .filter((type) => type !== 'listener')
       .map((type) => [type, storedRoleProfiles[type]])
       .filter(([, value]) => value && typeof value === 'object'),
   );
