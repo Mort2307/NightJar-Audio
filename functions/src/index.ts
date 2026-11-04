@@ -2897,6 +2897,19 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   };
 });
 
+const profileTypePublicToAudience = (
+  accountData: Record<string, any>,
+  profileData: Record<string, any> | undefined,
+  type: NightjarProfileType,
+  directory = false,
+) => {
+  if (!profileData || profileData.publicProfile === false) return false;
+  const approvedRoles = professionalRolesForAccount(accountData);
+  const settings = normaliseProfileTypeSettings(profileData.profileTypeSettings);
+  const hasExplicitSettings = Number(profileData.profileTypeSettingsRevision ?? 0) > 0;
+  return resolveVisibleProfileTypes(approvedRoles, settings, hasExplicitSettings, { directory }).includes(type);
+};
+
 const publicProfilePayload = (
   userId: string,
   accountData: Record<string, any>,
@@ -3426,7 +3439,7 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
 
   const profile = await profileRef(creatorUserId).get();
   const data = profile.data();
-  if (!data || data.publicProfile === false) throw new HttpsError('not-found', 'Creator profile not found.');
+  if (!profileTypePublicToAudience(account.data() ?? {}, data, 'creator', false)) throw new HttpsError('not-found', 'Creator profile not found.');
   const [viewerSubscription, betaTester] = await Promise.all([
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
     betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
@@ -3439,7 +3452,10 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
     .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
 
   const completedCollaborations = await completedCollaborationCountFor(creatorUserId);
-  const creatorRoleProfile = roleProfileSlice(data, 'creator');
+  const creatorSettings = normaliseProfileTypeSettings(data.profileTypeSettings);
+  const creatorVisibleTypes = resolveVisibleProfileTypes(professionalRolesForAccount(account.data() ?? {}), creatorSettings, Number(data.profileTypeSettingsRevision ?? 0) > 0, {});
+  const creatorRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+  const creatorRoleProfile = roleProfileSlice({ ...data, roleProfiles: Object.fromEntries(creatorVisibleTypes.map((type) => [type, creatorRoleProfiles[type]]).filter(([, value]) => value && typeof value === 'object')) }, 'creator');
 
   return {
     creator: {
@@ -5740,7 +5756,7 @@ const spotlightForRole = async (role: 'creator' | 'writer' | 'editor' | 'artist'
       .map(async (doc) => {
         const profile = await profileRef(doc.id).get();
         const data = profile.data();
-        if (!data || data.publicProfile === false) return null;
+        if (!profileTypePublicToAudience(doc.data() ?? {}, data, role, true)) return null;
         return {
           kind: role,
           name: data.displayName ?? (role === 'editor' ? 'Nightjar Audio Editor' : role === 'artist' ? 'Nightjar Artist' : 'Nightjar member'),
@@ -12084,8 +12100,19 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
       const profile = await profileRef(doc.id).get();
       const data = profile.data();
       if (!data || data.publicProfile === false) return null;
-      const roles = professionalRolesForAccount(doc.data() ?? {});
+      const approvedRoles = professionalRolesForAccount(doc.data() ?? {});
+      const visibleTypes = resolveVisibleProfileTypes(
+        approvedRoles,
+        normaliseProfileTypeSettings(data.profileTypeSettings),
+        Number(data.profileTypeSettingsRevision ?? 0) > 0,
+        { directory: true },
+      );
+      const roles = visibleTypes.filter((type) => type !== 'listener');
+      if (!roles.length) return null;
       const role = roles[0] ?? null;
+      const storedRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+      const visibleRoleProfiles = Object.fromEntries(roles.map((type) => [type, storedRoleProfiles[type]]).filter(([, value]) => value && typeof value === 'object'));
+      const roleSlice = roleProfileSlice({ ...data, roleProfiles: visibleRoleProfiles }, role);
       return {
         userId: doc.id,
         role,
@@ -12097,10 +12124,10 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
       bannerUrl: data.bannerStatus === 'approved' ? data.bannerUrl ?? null : null,
         favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
         favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
-        roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
-        roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
-        roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
-        roleAvailability: data.roleAvailability ?? null,
+        roleFocus: Array.isArray(roleSlice.roleFocus) ? roleSlice.roleFocus : [],
+        roleSpecialties: Array.isArray(roleSlice.roleSpecialties) ? roleSlice.roleSpecialties : [],
+        roleSecondary: Array.isArray(roleSlice.roleSecondary) ? roleSlice.roleSecondary : [],
+        roleAvailability: roleSlice.roleAvailability ?? null,
         completedCollaborations: completedByUser.get(doc.id) ?? 0,
         activityBadges: publicActivityBadges(String(role ?? ''), {
           releases: releaseCountByCreator.get(doc.id) ?? 0,
