@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings } from './profile-types';
+import { isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes } from './profile-types';
 
 test('profile type allowlist accepts only the five supported profile types', () => {
   assert.equal(isNightjarProfileType('listener'), true);
@@ -32,4 +32,37 @@ test('settings normalisation ignores unknown roles and malformed entries', () =>
   });
   assert.deepEqual(Object.keys(settings), ['writer']);
   assert.equal(settings.writer?.enabled, true);
+});
+
+
+test('legacy accounts retain existing approved public profile visibility', () => {
+  const visible = resolveVisibleProfileTypes(['creator', 'writer'], {}, false);
+  assert.deepEqual(visible, ['listener', 'creator', 'writer']);
+});
+
+test('unapproved professional profile types are never exposed', () => {
+  const settings = normaliseProfileTypeSettings({
+    creator: { enabled: true, visibility: 'public' },
+    writer: { enabled: true, visibility: 'public' },
+  });
+  const visible = resolveVisibleProfileTypes(['writer'], settings, true);
+  assert.deepEqual(visible, ['writer']);
+});
+
+test('private profiles are excluded, unlisted profiles are direct-link only', () => {
+  const settings = normaliseProfileTypeSettings({
+    listener: { enabled: true, visibility: 'private' },
+    creator: { enabled: true, visibility: 'unlisted' },
+    writer: { enabled: true, visibility: 'public' },
+  });
+  assert.deepEqual(resolveVisibleProfileTypes(['creator', 'writer'], settings, true), ['creator', 'writer']);
+  assert.deepEqual(resolveVisibleProfileTypes(['creator', 'writer'], settings, true, { directory: true }), ['writer']);
+});
+
+test('owner preview can inspect hidden approved profiles but never unapproved roles', () => {
+  const settings = normaliseProfileTypeSettings({
+    creator: { enabled: false, visibility: 'private' },
+    writer: { enabled: false, visibility: 'private' },
+  });
+  assert.deepEqual(resolveVisibleProfileTypes(['creator'], settings, true, { ownerPreview: true }), ['listener', 'creator']);
 });
