@@ -321,9 +321,9 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
   return <section className="admin-finance-simulator">
     <div className="admin-finance-simulator-hero">
       <div>
-        <span className="mini-label">ADMIN / FINANCE LAB</span>
+        <span className="mini-label">ADMIN / FINANCE LAB · LEGACY SCENARIO</span>
         <h3>Model the fairest Nightjar baseline before committing to it.</h3>
-        <p>Change subscribers, price, VAT, payment costs, the three main revenue pots and the share paid to each professional role. Every output recalculates immediately; nothing here changes live billing or payout policy.</p>
+        <p>This retained sandbox models the earlier role-weighted/capped scenario. It is not the new commitment-qualified equal-share policy and is not an authoritative ledger. Change subscribers, price, VAT and cost assumptions to compare scenarios; nothing here changes live billing or payouts.</p>
       </div>
       <div className="admin-finance-simulator-actions">
         <button className="secondary-button" onClick={loadCommercialAssumptions}><WalletCards size={14}/> Load current Nightjar assumptions</button>
@@ -333,7 +333,7 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
       </div>
     </div>
 
-    <div className="finance-sim-status-row">
+    <div className="demo-warning admin-note"><ShieldCheck size={17}/><div><strong>LEGACY PLANNING MODEL — NOT LIVE COMPENSATION POLICY</strong><span>The role caps, 50/20/30 scenario split and corporation-tax controls below are historical planning assumptions only. They do not define the new 50% Creator Pool or Nightjar/Meg & Mike allocation. Do not use the tax output as a Nightjar tax estimate; the legal structure and accountant-approved treatment are still to be confirmed.</span></div></div>\n\n    <div className="finance-sim-status-row">
       <span className={splitsValid ? 'status-pill' : 'status-pill muted'}>{splitsValid ? 'Main pots = 100%' : 'Main pots = ' + model.primaryPercentTotal.toFixed(2) + '%'}</span>
       <span className={rolesValid ? 'status-pill' : 'status-pill muted'}>{rolesValid ? 'Contributor roles = 100%' : 'Contributor roles = ' + model.rolePercentTotal.toFixed(2) + '%'}</span>
       <span className="status-pill muted">{model.subscriberConversion.toFixed(1)}% user → paid conversion</span>
