@@ -907,6 +907,7 @@ export const adminCreateCommitmentTemplate = onCall({ region: REGION }, async (r
     seen.add(id);
     return { id, title, description, mandatory, dueDay, state: 'not_started' as const };
   });
+  if (!tasks.some((task) => task.mandatory)) throw new HttpsError('invalid-argument', 'A role template needs at least one mandatory task.');
   const existingTemplates = await db.collection('commitmentTemplates').where('role', '==', role).get();
   const latestVersion = existingTemplates.docs.reduce((latest, doc) => Math.max(latest, Number(doc.data()?.version ?? 0)), 0);
   const version = latestVersion + 1;
@@ -928,6 +929,7 @@ export const adminCreateCommitmentPeriod = onCall({ region: REGION }, async (req
   const endDate = cleanText(input.endDate, 10);
   if (!validCommitmentPeriodId(periodId) || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)
     || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
+    || startDate.slice(0, 7) !== periodId || endDate.slice(0, 7) !== periodId
     || Number.isNaN(Date.parse(startDate)) || Number.isNaN(Date.parse(endDate)) || startDate > endDate) {
     throw new HttpsError('invalid-argument', 'Choose a valid monthly commitment period and date range.');
   }
@@ -975,11 +977,18 @@ export const adminAssignCommitmentTemplate = onCall({ region: REGION }, async (r
       throw new HttpsError('failed-precondition', 'This member does not have an active approved role for this assignment.');
     }
     if (assignmentSnap.exists) throw new HttpsError('already-exists', 'This member already has an assignment for this role and period.');
-    const tasks = (Array.isArray(template.tasks) ? template.tasks : []).map((task: Record<string, any>) => ({
-      id: cleanText(task.id, 60), title: cleanText(task.title, 120),
-      description: cleanText(task.description, 500), mandatory: task.mandatory === true,
-      dueDay: task.dueDay ?? null, state: 'not_started', evidenceIds: [],
-    }));
+    const periodStart = String(period.startDate ?? '');
+    const [periodYear, periodMonth] = periodStart.split('-').map(Number);
+    const daysInPeriod = new Date(Date.UTC(periodYear, periodMonth, 0)).getUTCDate();
+    const tasks = (Array.isArray(template.tasks) ? template.tasks : []).map((task: Record<string, any>) => {
+      const dueDay = task.dueDay === null || task.dueDay === undefined ? null : Math.min(daysInPeriod, Math.max(1, Number(task.dueDay)));
+      const dueAt = dueDay ? new Date(Date.UTC(periodYear, periodMonth - 1, dueDay)).toISOString().slice(0, 10) : null;
+      return {
+        id: cleanText(task.id, 60), title: cleanText(task.title, 120),
+        description: cleanText(task.description, 500), mandatory: task.mandatory === true,
+        dueDay, dueAt, state: 'not_started', evidenceIds: [],
+      };
+    });
     if (!tasks.length) throw new HttpsError('failed-precondition', 'The selected template has no tasks.');
     tx.create(assignmentRef, {
       periodId, userId, role, templateId, templateVersion: Number(template.version ?? 1),
