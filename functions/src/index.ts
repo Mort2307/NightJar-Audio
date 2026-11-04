@@ -1187,6 +1187,7 @@ export const adminCloseCommitmentPeriod = onCall({ region: REGION }, async (requ
 
 
 const revenueSettlementRef = (settlementId: string) => db.collection('financeRevenueSettlements').doc(settlementId);
+const financePeriodControlRef = (periodId: string) => db.collection('financePeriodControls').doc(periodId);
 const creatorPayoutPeriodRef = (periodId: string) => db.collection('creatorPayoutPeriods').doc(periodId);
 const creatorPayoutRef = (periodId: string, userId: string) => creatorPayoutPeriodRef(periodId).collection('payouts').doc(userId);
 const safePence = (value: unknown, label: string) => {
@@ -1226,8 +1227,10 @@ export const adminRecordRevenueSettlement = onCall({ region: REGION }, async (re
   const settlementId = settlementDocumentId(provider, externalId);
   const ref = revenueSettlementRef(settlementId);
   await db.runTransaction(async (tx) => {
-    const [existing, payoutPeriod] = await Promise.all([tx.get(ref), tx.get(creatorPayoutPeriodRef(periodId))]);
-    if (payoutPeriod.exists) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
+    const [existing, payoutPeriod, control] = await Promise.all([
+      tx.get(ref), tx.get(creatorPayoutPeriodRef(periodId)), tx.get(financePeriodControlRef(periodId)),
+    ]);
+    if (payoutPeriod.exists || control.data()?.payoutPrepared === true) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
     if (existing.exists) throw new HttpsError('already-exists', 'This Stripe settlement reference has already been recorded.');
     tx.create(ref, {
       settlementId, periodId, provider, externalId, settledAt, sourceReference,
@@ -1237,6 +1240,7 @@ export const adminRecordRevenueSettlement = onCall({ region: REGION }, async (re
       recordedByAdminUserId: admin.uid,
       recordedAt: FieldValue.serverTimestamp(),
     });
+    tx.set(financePeriodControlRef(periodId), { revision: Number(control.data()?.revision ?? 0) + 1, payoutPrepared: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   });
   return { recorded: true, settlementId, eligibleNetRevenuePence, status: 'pending_reconciliation' };
 });
@@ -1254,13 +1258,17 @@ export const adminReconcileRevenueSettlement = onCall({ region: REGION }, async 
     const snapshot = await tx.get(ref);
     const data = snapshot.data() ?? {};
     if (!snapshot.exists) throw new HttpsError('not-found', 'Revenue settlement not found.');
-    const payoutPeriod = await tx.get(creatorPayoutPeriodRef(String(data.periodId ?? '')));
-    if (payoutPeriod.exists) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
+    const periodId = String(data.periodId ?? '');
+    const [payoutPeriod, control] = await Promise.all([
+      tx.get(creatorPayoutPeriodRef(periodId)), tx.get(financePeriodControlRef(periodId)),
+    ]);
+    if (payoutPeriod.exists || control.data()?.payoutPrepared === true) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
     if (data.status !== 'pending_reconciliation') throw new HttpsError('failed-precondition', 'Only pending settlements can be reconciled.');
     tx.update(ref, {
       status: 'reconciled', reconciliationNote,
       reconciledByAdminUserId: admin.uid, reconciledAt: FieldValue.serverTimestamp(),
     });
+    tx.set(financePeriodControlRef(periodId), { revision: Number(control.data()?.revision ?? 0) + 1, payoutPrepared: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     return { reconciled: true, settlementId, eligibleNetRevenuePence: data.eligibleNetRevenuePence };
   });
 });
@@ -1287,13 +1295,16 @@ export const adminRecordRevenueAdjustment = onCall({ region: REGION }, async (re
   const adjustmentId = createHash('sha256').update(periodId + ':adjustment:' + sourceReference).digest('hex');
   const ref = db.collection('financeRevenueAdjustments').doc(adjustmentId);
   await db.runTransaction(async (tx) => {
-    const [existing, payoutPeriod] = await Promise.all([tx.get(ref), tx.get(creatorPayoutPeriodRef(periodId))]);
-    if (payoutPeriod.exists) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
+    const [existing, payoutPeriod, control] = await Promise.all([
+      tx.get(ref), tx.get(creatorPayoutPeriodRef(periodId)), tx.get(financePeriodControlRef(periodId)),
+    ]);
+    if (payoutPeriod.exists || control.data()?.payoutPrepared === true) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
     if (existing.exists) throw new HttpsError('already-exists', 'This adjustment source reference has already been recorded.');
     tx.create(ref, {
       adjustmentId, periodId, amountPence, reason, sourceReference,
       createdByAdminUserId: admin.uid, createdAt: FieldValue.serverTimestamp(),
     });
+    tx.set(financePeriodControlRef(periodId), { revision: Number(control.data()?.revision ?? 0) + 1, payoutPrepared: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   });
   return { recorded: true, adjustmentId, amountPence };
 });
