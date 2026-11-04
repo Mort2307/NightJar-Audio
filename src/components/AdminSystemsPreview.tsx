@@ -75,7 +75,7 @@ export default function AdminSystemsPreview() {
         <button type="button" className="nj-icon-action" aria-label={(visible[id] ? 'Hide ' : 'Show ') + label + ' profile'} onClick={() => setVisible((current) => ({ ...current, [id]: !current[id] }))}>{visible[id] ? <EyeOff size={17}/> : <Eye size={17}/>}</button>
         <ChevronRight size={17} className="nj-muted-chevron"/>
       </article>)}</div>
-      <div className="nj-preview-note"><ShieldCheck size={17}/><span><strong>Approval boundary stays intact.</strong> Adding a profile does not grant a professional workspace, creator badge, marketplace access or compensation eligibility.</span></div>
+      <div className="nj-preview-note"><ShieldCheck size={17}/><span><strong>Approval boundary stays intact.</strong> Adding or showing a profile does not grant a professional workspace, official badge, marketplace access or compensation eligibility. Credited Listener remains a server-derived status from verified credits; it is not a professional role.</span></div>
     </div>}
 
     {tab === 'commitments' && <div className="nj-systems-body">
