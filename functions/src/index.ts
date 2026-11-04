@@ -2519,6 +2519,9 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     6,
   );
   const selectedPortfolioIds = rolePortfolioIds(role);
+  const selectedPublicRoleProfile = (publicRoleProfiles[role] && typeof publicRoleProfiles[role] === 'object')
+    ? publicRoleProfiles[role]
+    : (role === 'listener' ? {} : data);
   const orderForRole = <T extends { id: string }>(items: T[], targetRole: string) => {
     const ids = rolePortfolioIds(targetRole);
     if (!ids.length) return items.slice(0, 3);
@@ -2585,13 +2588,13 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
       favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
       favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
-      roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
-      roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
-      roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
-      roleAvailability: publicProfessionalRoles.includes(role as AccountRole) ? data.roleAvailability ?? null : null,
-      roleDetailOne: publicProfessionalRoles.includes(role as AccountRole) ? data.roleDetailOne ?? null : null,
-      roleDetailTwo: publicProfessionalRoles.includes(role as AccountRole) ? data.roleDetailTwo ?? null : null,
-      portfolioNote: publicProfessionalRoles.includes(role as AccountRole) ? data.portfolioNote ?? null : null,
+      roleFocus: Array.isArray(selectedPublicRoleProfile.roleFocus) ? selectedPublicRoleProfile.roleFocus : [],
+      roleSpecialties: Array.isArray(selectedPublicRoleProfile.roleSpecialties) ? selectedPublicRoleProfile.roleSpecialties : [],
+      roleSecondary: Array.isArray(selectedPublicRoleProfile.roleSecondary) ? selectedPublicRoleProfile.roleSecondary : [],
+      roleAvailability: selectedPublicRoleProfile.roleAvailability ?? null,
+      roleDetailOne: selectedPublicRoleProfile.roleDetailOne ?? null,
+      roleDetailTwo: selectedPublicRoleProfile.roleDetailTwo ?? null,
+      portfolioNote: selectedPublicRoleProfile.portfolioNote ?? null,
       roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
       featuredPortfolioIds: selectedPortfolioIds,
       featuredWork,
