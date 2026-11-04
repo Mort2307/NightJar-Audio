@@ -2317,7 +2317,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       return {
         userId: doc.id,
         role,
-        roles: nightjarTeam ? ['listener'] : ['listener', ...professionalRoles],
+        roles: nightjarTeam ? ['listener'] : publicProfileTypes,
         approvedProfessionalRoles: nightjarTeam ? [] : professionalRoles,
         nightjarTeam,
         displayName: data.displayName ?? 'Nightjar member',
@@ -2338,7 +2338,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
         favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
         favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
         favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
-        roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
+        roleProfiles: publicRoleProfiles,
         ...roleSlice,
         releaseCount,
         publishedWorkCount,
@@ -2408,10 +2408,21 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     })
     .map(doc => ({ id:doc.id, releaseId:doc.data().releaseId, releaseRole:doc.data().releaseRole }));
   const professionalRoles = professionalRolesForAccount(accountData ?? {});
+  const storedProfileSettings = normaliseProfileTypeSettings(data.profileTypeSettings);
+  const hasExplicitProfileSettings = Number(data.profileTypeSettingsRevision ?? 0) > 0;
+  const publicProfileTypes = NIGHTJAR_PROFILE_TYPES.filter((type) => {
+    const isApproved = type === 'listener' || professionalRoles.includes(type as AccountRole);
+    if (!isApproved) return false;
+    if (ownerPreview) return true;
+    if (!hasExplicitProfileSettings) return true; // Backwards-compatible legacy profile visibility.
+    const setting = storedProfileSettings[type];
+    return setting?.enabled === true && setting.visibility !== 'private';
+  });
+  const publicProfessionalRoles = publicProfileTypes.filter((type) => type !== 'listener') as AccountRole[];
   const activePublicRole = cleanText(accountData?.role, 30);
-  const role = activePublicRole === 'listener' || professionalRoles.includes(activePublicRole as AccountRole)
+  const role = publicProfileTypes.includes(activePublicRole as NightjarProfileType)
     ? activePublicRole
-    : (professionalRoles[0] ?? 'listener');
+    : (publicProfileTypes.find((type) => type !== 'listener') ?? 'listener');
   const linksSnapshot = await socialLinkCollection(userId).limit(100).get();
   const publicSocialLinks = linksSnapshot.docs.filter(doc=>!doc.data().deleted).slice(0,12).map((doc)=>{
     const link=socialLinkPayload(doc.id,doc.data());
@@ -2452,7 +2463,13 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       .sort((a,b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
 
-  const publicRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+  const storedRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+  const publicRoleProfiles = Object.fromEntries(
+    publicProfileTypes
+      .filter((type) => type !== 'listener')
+      .map((type) => [type, storedRoleProfiles[type]])
+      .filter(([, value]) => value && typeof value === 'object'),
+  );
   const listenerFeaturedIds = cleanStringList(
     publicRoleProfiles.listener?.featuredPortfolioIds ?? (!professionalRoles.length ? data.featuredPortfolioIds : []),
     6,
@@ -2534,6 +2551,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       // Professional approval originates from account privileges, never
       // release credits or self-authored profile fields. Applies to ALL tabs.
       approvedProfessionalRoles: professionalRoles,
+      profileTypes: publicProfileTypes.map((type) => ({ type, visibility: ownerPreview ? (storedProfileSettings[type]?.visibility ?? 'private') : (storedProfileSettings[type]?.visibility ?? 'public') })),
       verifiedCredits,
       bio: data.bio ?? null,
       welcomeMessage: data.welcomeMessage ?? null,
@@ -2552,10 +2570,10 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
       roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
       roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
-      roleAvailability: data.roleAvailability ?? null,
-      roleDetailOne: data.roleDetailOne ?? null,
-      roleDetailTwo: data.roleDetailTwo ?? null,
-      portfolioNote: data.portfolioNote ?? null,
+      roleAvailability: publicProfessionalRoles.includes(role as AccountRole) ? data.roleAvailability ?? null : null,
+      roleDetailOne: publicProfessionalRoles.includes(role as AccountRole) ? data.roleDetailOne ?? null : null,
+      roleDetailTwo: publicProfessionalRoles.includes(role as AccountRole) ? data.roleDetailTwo ?? null : null,
+      portfolioNote: publicProfessionalRoles.includes(role as AccountRole) ? data.portfolioNote ?? null : null,
       roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
       featuredPortfolioIds: selectedPortfolioIds,
       featuredWork,
