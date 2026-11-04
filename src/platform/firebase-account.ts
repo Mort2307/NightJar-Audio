@@ -133,6 +133,14 @@ const adminGetCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
 }>(functions, 'adminGetCreatorPayoutPeriod');
 const adminApproveCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, { approved: boolean; periodId: string }>(functions, 'adminApproveCreatorPayoutPeriod');
 const adminRecordCreatorPaymentCall = httpsCallable<{ periodId: string; userId: string; amountPence: number; reference: string; paidAt: string }, { recorded: boolean; duplicate: boolean; paymentId: string; paidPence?: number; outstandingPence?: number }>(functions, 'adminRecordCreatorPayment');
+
+const adminSetTaxReserveCall = httpsCallable<{ periodId: string; reservePence: number; note: string }, { saved: boolean; periodId: string; reservePence: number }>(functions, 'adminSetTaxReserve');
+const adminSetConfirmedTaxLiabilityCall = httpsCallable<{ periodId: string; liabilityPence: number; accountantReference: string }, { saved: boolean; periodId: string; liabilityPence: number }>(functions, 'adminSetConfirmedTaxLiability');
+const adminRecordTaxPaymentCall = httpsCallable<{ periodId: string; amountPence: number; reference: string; paidAt: string }, { recorded: boolean; duplicate: boolean; paymentId: string; paidPence?: number }>(functions, 'adminRecordTaxPayment');
+const adminGetTaxLedgerCall = httpsCallable<{ periodId: string }, {
+  ledger: null | { periodId: string; reservePence?: number; reserveNote?: string; confirmedLiabilityPence?: number; accountantReference?: string; paidPence?: number };
+  payments: Array<{ id: string; amountPence: number; reference: string; paidAt: string }>;
+}>(functions, 'adminGetTaxLedger');
 const getMyCreatorCompensationCall = httpsCallable<void, { compensation: Array<{
   periodId: string; periodStatus: string; creatorPoolPercent: number; eligibleCreatorCount: number;
   amountPence: number; paidPence: number; outstandingPence: number; status: string; qualifyingRole: string | null;
@@ -232,6 +240,22 @@ export const nightjarAccount = {
 
   async adminRecordCreatorPayment(input: { periodId: string; userId: string; amountPence: number; reference: string; paidAt: string }) {
     return (await adminRecordCreatorPaymentCall(input)).data;
+  },
+
+  async adminSetTaxReserve(input: { periodId: string; reservePence: number; note: string }) {
+    return (await adminSetTaxReserveCall(input)).data;
+  },
+
+  async adminSetConfirmedTaxLiability(input: { periodId: string; liabilityPence: number; accountantReference: string }) {
+    return (await adminSetConfirmedTaxLiabilityCall(input)).data;
+  },
+
+  async adminRecordTaxPayment(input: { periodId: string; amountPence: number; reference: string; paidAt: string }) {
+    return (await adminRecordTaxPaymentCall(input)).data;
+  },
+
+  async adminGetTaxLedger(periodId: string) {
+    return (await adminGetTaxLedgerCall({ periodId })).data;
   },
 
   async getMyCreatorCompensation() {
