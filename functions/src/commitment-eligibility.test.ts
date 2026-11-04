@@ -37,3 +37,21 @@ test('optional tasks do not prevent full mandatory completion', () => {
   });
   assert.equal(result.qualifies, true);
 });
+
+
+test('an approved exception without a documented reason cannot qualify', () => {
+  const result = evaluateRoleCommitments({
+    role: 'artist', assigned: true, effective: true, tasks: [],
+    approvedException: true, exceptionReason: '',
+  });
+  assert.equal(result.qualifies, false);
+});
+
+test('an approved exception with an audit reason can qualify', () => {
+  const result = evaluateRoleCommitments({
+    role: 'artist', assigned: true, effective: true, tasks: [],
+    approvedException: true, exceptionReason: 'Nightjar cancelled all assigned work',
+  });
+  assert.equal(result.qualifies, true);
+  assert.equal(result.state, 'excused');
+});
