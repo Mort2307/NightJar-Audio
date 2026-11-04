@@ -24,3 +24,35 @@ test('inactive or unapproved members are not eligible', () => {
   ]);
   assert.equal(result.unallocatedPence, 500);
 });
+
+
+test('duplicate eligibility rows never create duplicate payouts', () => {
+  const eligible = {
+    userId: 'same-person',
+    accountStatus: 'active' as const,
+    approvedRoles: ['creator', 'writer'],
+    completedCommitmentRoles: ['writer'],
+  };
+  const result = allocateCreatorPool(101, [eligible, eligible]);
+  assert.equal(result.eligibleCreatorCount, 1);
+  assert.deepEqual(result.payouts, [{ userId: 'same-person', amountPence: 101 }]);
+});
+
+test('zero eligible people retain the entire pool without creating payouts', () => {
+  const result = allocateCreatorPool(1234, []);
+  assert.equal(result.eligibleCreatorCount, 0);
+  assert.equal(result.totalAllocatedPence, 0);
+  assert.equal(result.unallocatedPence, 1234);
+  assert.deepEqual(result.payouts, []);
+});
+
+test('zero-value pool creates no zero-value payout records', () => {
+  const result = allocateCreatorPool(0, [{
+    userId: 'eligible-person',
+    accountStatus: 'active',
+    approvedRoles: ['artist'],
+    completedCommitmentRoles: ['artist'],
+  }]);
+  assert.equal(result.eligibleCreatorCount, 1);
+  assert.deepEqual(result.payouts, []);
+});
