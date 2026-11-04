@@ -1140,18 +1140,51 @@ export const getMyCommitmentEligibility = onCall({ region: REGION }, async (requ
   return { periodId: selectedPeriodId, approvedRoles, roleResults, eligible: Boolean(qualifyingRole), qualifyingRole };
 });
 
+export const adminListCommitmentTemplates = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('commitmentTemplates').orderBy('createdAt', 'desc').limit(100).get();
+  return { templates: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
+export const adminListCommitmentPeriods = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('commitmentPeriods').orderBy('startDate', 'desc').limit(36).get();
+  return { periods: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
+export const adminCloseCommitmentPeriod = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid commitment period.');
+  const ref = commitmentPeriodRef(periodId);
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Commitment period not found.');
+    if (snapshot.data()?.status === 'closed') return { closed: true, periodId, alreadyClosed: true };
+    tx.update(ref, { status: 'closed', closedByAdminUserId: admin.uid, closedAt: FieldValue.serverTimestamp() });
+    return { closed: true, periodId, alreadyClosed: false };
+  });
+});
+
 export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
   const snapshot = await db.collection('commitmentAssignments').limit(1000).get();
-  const queue = snapshot.docs.flatMap((doc) => {
+  const queue = await Promise.all(snapshot.docs.map(async (doc) => {
     const data = doc.data();
     const pendingTasks = (Array.isArray(data.tasks) ? data.tasks : [])
       .filter((task: Record<string, any>) => task.state === 'submitted')
       .map((task: Record<string, any>) => ({ id: task.id, title: task.title, evidenceIds: task.evidenceIds ?? [] }));
-    return pendingTasks.length ? [{ assignmentId: doc.id, userId: data.userId, periodId: data.periodId, role: data.role, pendingTasks }] : [];
-  });
+    if (!pendingTasks.length) return null;
+    const evidence = await Promise.all(pendingTasks.flatMap((task) => task.evidenceIds.map(async (evidenceId: string) => {
+      const evidenceDoc = await doc.ref.collection('evidence').doc(evidenceId).get();
+      const item = evidenceDoc.data() ?? {};
+      return { taskId: task.id, evidenceId, note: cleanText(item.note, 2000), evidenceUrl: cleanText(item.evidenceUrl, 500) || null, submittedAt: toIso(item.submittedAt) };
+    })));
+    return { assignmentId: doc.id, userId: data.userId, periodId: data.periodId, role: data.role, pendingTasks, evidence };
+  })).then((items) => items.filter(Boolean));
   return { queue };
-});
+});;
+
 
 
 const profileTagUsageCollection = () => db.collection('profileTagCreatorUsage');
