@@ -11928,3 +11928,51 @@ textarea:focus-visible,
 .nj-commitment-admin-error{color:#ffb5a9;font-size:12px}
 .nj-commitment-admin-message{color:#a7d8b8;font-size:12px}
 @media(max-width:760px){.nj-commitment-admin-grid{grid-template-columns:1fr}.nj-commitment-review-head{flex-direction:column}}
+
+/* Revenue reconciliation and Creator Pool administration */
+.nj-compensation-admin{margin:22px 0;padding:clamp(15px,2.4vw,24px);border:1px solid rgba(214,179,117,.22);border-radius:17px;background:linear-gradient(145deg,rgba(28,24,26,.98),rgba(15,14,16,.98));color:var(--ivory)}
+.nj-compensation-admin>header{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.nj-compensation-admin>header h2{margin:5px 0;font-size:clamp(20px,2.6vw,26px)}
+.nj-compensation-admin>header p,.nj-compensation-card>p{margin:6px 0 14px;color:var(--muted);font-size:12px;line-height:1.55}
+.nj-compensation-toolbar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin:12px 0}
+.nj-compensation-toolbar label{display:grid;gap:5px;color:#e4cda9;font-size:11px}
+.nj-compensation-toolbar input{max-width:150px;min-height:38px;padding:8px 10px;border:1px solid rgba(214,179,117,.2);border-radius:8px;background:#211c20;color:var(--ivory);font:inherit}
+.nj-compensation-toolbar button{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:7px 10px;border:1px solid rgba(214,179,117,.22);border-radius:8px;background:rgba(188,143,82,.06);color:#e7d0ac;font:inherit;font-size:11px}
+.nj-compensation-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:12px 0}
+.nj-compensation-stats>div{display:grid;gap:6px;padding:12px;border:1px solid rgba(214,179,117,.14);border-radius:10px;background:rgba(255,255,255,.018)}
+.nj-compensation-stats span{font-size:10px;color:var(--muted)}
+.nj-compensation-stats strong{font-size:18px;color:#e9d2ad;overflow-wrap:anywhere}
+.nj-compensation-card{padding:15px;margin:13px 0;border:1px solid rgba(214,179,117,.15);border-radius:13px;background:rgba(255,255,255,.018)}
+.nj-compensation-card h3{margin:5px 0;font-size:17px}
+.nj-compensation-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.nj-compensation-form-grid label{display:grid;gap:5px;color:#dfc9aa;font-size:11px}
+.nj-compensation-form-grid label.wide{grid-column:1/-1}
+.nj-compensation-form-grid input,.nj-settlement-reconcile textarea,.nj-payout-payment-form input{width:100%;min-width:0;min-height:38px;padding:8px 10px;border:1px solid rgba(214,179,117,.2);border-radius:8px;background:#211c20;color:var(--ivory);font:inherit;font-size:12px}
+.nj-compensation-net-preview{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 12px;margin:12px 0;border:1px solid rgba(214,179,117,.15);border-radius:9px;background:rgba(0,0,0,.12);font-size:11px;color:var(--muted)}
+.nj-compensation-net-preview strong{font-size:17px;color:#e9d2ad}
+.nj-compensation-primary{display:flex;align-items:center;justify-content:center;width:100%;min-height:42px;padding:9px 12px;border:1px solid rgba(214,179,117,.38);border-radius:9px;background:linear-gradient(120deg,rgba(173,132,77,.22),rgba(105,77,48,.2));color:#f1dcb8;font:inherit;font-size:12px}
+.nj-compensation-primary:disabled{opacity:.45}
+.nj-settlement-row{padding:12px 0;border-top:1px solid rgba(214,179,117,.11)}
+.nj-settlement-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.nj-settlement-head strong{font-size:12px;overflow-wrap:anywhere}
+.nj-settlement-head span{font-size:10px;color:#e5c99e;text-transform:uppercase}
+.nj-settlement-head span[data-status="reconciled"]{color:#a7d8b8}
+.nj-settlement-row>small{display:block;margin:5px 0;color:var(--muted);font-size:10px;overflow-wrap:anywhere}
+.nj-settlement-amounts{display:flex;gap:7px 13px;flex-wrap:wrap;margin:8px 0;font-size:10px;color:var(--muted)}
+.nj-settlement-amounts strong{color:#e9d2ad}
+.nj-settlement-reconcile{display:grid;gap:8px;margin-top:9px}
+.nj-settlement-reconcile textarea{resize:vertical}
+.nj-settlement-reconcile button,.nj-payout-payment-form button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:7px 10px;border:1px solid rgba(214,179,117,.24);border-radius:8px;background:rgba(188,143,82,.07);color:#e8d0aa;font:inherit;font-size:11px}
+.nj-payout-period-status{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 0;color:#e8d0aa;font-size:12px}
+.nj-payout-period-status span{color:var(--muted);font-size:11px}
+.nj-compensation-unallocated{display:flex;align-items:flex-start;gap:9px;padding:12px;margin:12px 0;border:1px solid rgba(214,179,117,.18);border-radius:10px;background:rgba(188,143,82,.05);color:#e4c99e;font-size:11px;line-height:1.55}
+.nj-compensation-empty{display:flex;align-items:flex-start;gap:9px;padding:13px;color:var(--muted);font-size:11px;line-height:1.5}
+.nj-payout-row{display:grid;grid-template-columns:minmax(120px,1fr) minmax(120px,auto);gap:10px;padding:12px 0;border-top:1px solid rgba(214,179,117,.11)}
+.nj-payout-row>div{display:grid;gap:4px;min-width:0}
+.nj-payout-row strong{font-size:12px;overflow-wrap:anywhere}
+.nj-payout-row small{font-size:10px;color:var(--muted)}
+.nj-payout-payment-form{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) 110px auto;gap:7px}
+.nj-compensation-footnote{font-size:10px;line-height:1.55;color:var(--muted);margin:12px 2px}
+.nj-compensation-error{color:#ffb5a9;font-size:12px}
+.nj-compensation-success{color:#a7d8b8;font-size:12px}
+@media(max-width:650px){.nj-compensation-stats{grid-template-columns:1fr}.nj-compensation-form-grid{grid-template-columns:1fr}.nj-compensation-form-grid label.wide{grid-column:auto}.nj-payout-payment-form{grid-template-columns:1fr}.nj-payout-row{grid-template-columns:1fr}}
