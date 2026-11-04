@@ -70,6 +70,47 @@ These systems must preserve Nightjar's existing rule-driven behaviour and become
 | Admin records a payment | Admin; payout exists; positive amount; reference/date supplied | Append payment record and reconcile balance | Status becomes paid only when fully reconciled |
 | Admin records a tax payment | Admin; tax ledger liability exists; reference/date/amount supplied | Append payment against liability | Reserve is not mistaken for tax paid |
 
+## Implementation progress — backend and screen integration
+
+The branch now includes the following implementation beyond the original preview:
+
+### Profile Types
+- Authenticated `getMyProfileTypeSettings` and `saveMyProfileTypeSettings` callables with optimistic revision checks.
+- The canonical role-specific profile content remains `profiles/{uid}.roleProfiles`; the new `profileTypeSettings` map stores only enabled/visibility settings, not duplicate biography or portfolio content.
+- Member-facing controls are mounted in the existing profile studio.
+- The direct public-profile callable and public directory projections filter role content using approved account roles and profile visibility.
+- Legacy accounts without explicit settings retain their previous approved-role visibility until they save settings.
+- Visibility policy is covered by unit tests for legacy behaviour, unapproved roles, private/unlisted profiles and owner preview.
+
+### Commitment Tracking
+- Versioned role templates, monthly period creation, individual assignments, member evidence submission, admin review decisions, documented eligibility exceptions and period closure are implemented as authenticated callable workflows.
+- Member-facing progress and evidence submission are mounted in the profile workspace.
+- The administrator Commitment Control Centre is mounted in the Finance Lab and supports template creation, period creation, manual assignment by account UID, evidence review and exceptions.
+- Eligibility is calculated server-side from approved roles and reviewed task states. With no assignment, no evidence approval or no completed approved role, the member does not qualify.
+- Period-specific evaluation now selects the latest open assessment period by default; a closed period can still be queried for historical eligibility.
+- Current limitation: assignment is an administrator-directed workflow, not yet a scheduled bulk monthly assignment process. Evidence is a note and/or external HTTPS reference; Nightjar-hosted evidence-file upload is not yet wired into this workflow.
+
+### Compensation Control Centre
+- Manual Stripe settlement import records gross receipts, refunds, chargebacks, processor fees, VAT and other deductions in integer pence.
+- Eligible net revenue is calculated as gross less those recorded deductions. Each source entry requires a Stripe external reference, settlement date and report reference, then a separate reconciliation note.
+- A Creator Pool calculation is blocked until the commitment period is closed and all settlement entries for that period are reconciled.
+- The backend allocates exactly 50% of eligible net revenue to one equal share per eligible individual, using the server-derived approved-role and commitment records.
+- Revenue is locked once the payout period is prepared. The payout ledger is immutable in its calculation; manual payment records are appended separately and duplicate references are idempotent.
+- The admin UI displays the remaining 50% as unallocated. It does not assume the split between Nightjar operations, founders or reserves.
+- Member-facing compensation history shows only that member's own share, payment records and outstanding amount.
+- A separate manual tax ledger records a cash reserve, accountant-confirmed liability and actual tax payments. It does not calculate a tax rate or infer a legal entity.
+- No bank transfer or Stripe Connect payout is initiated.
+
+### Financial integration boundary
+The current revenue intake is a controlled manual Stripe payout/balance-report import. It is deliberately not described as a live Stripe webhook integration. Automatic ingestion of signed Stripe events, processor balance transactions and app-store billing streams remains future work. Until that is built and independently reconciled, the admin must source and reconcile each settlement from Stripe reports; MRR, trial status or unpaid invoices must never be used as cash received.
+
+### Current test coverage
+- Profile type allowlist and visibility projection tests.
+- Commitment eligibility tests including multiple roles, mandatory/optional tasks and audited exceptions.
+- Equal-share allocator tests including duplicate identities, deterministic remainder and zero eligible members.
+- Revenue settlement arithmetic tests including deductions, invalid values and 50% rounding.
+- The unified Functions test command is `npm run test:systems`, wired into PR preflight.
+
 ## Release sequence
 
 1. **Foundation and contracts:** finalise schemas, callable request/response contracts, role allowlists, period keys, audit event shape and migration/backfill rules.
