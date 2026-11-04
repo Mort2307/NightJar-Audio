@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Calculator, Coins, RefreshCw, Save, ShieldCheck, SlidersHorizontal, Trash2, UsersRound, WalletCards } from 'lucide-react';
 import type { CommercialSettings } from '../platform/firebase-commercial';
 import AdminSystemsPreview from './AdminSystemsPreview';
+import CommitmentControlCentre from './CommitmentControlCentre';
 
 type Props = {
   settings: CommercialSettings;
@@ -465,5 +466,6 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
       </div>
     </section>
     <AdminSystemsPreview />
+    <CommitmentControlCentre />
   </section>;
 }
