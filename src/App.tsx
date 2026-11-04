@@ -170,6 +170,7 @@ const UserProfileStudio = lazy(() => import('./components/UserProfileStudio'));
 const RoleProfileExtension = lazy(() => import('./components/RoleProfileExtension'));
 const EditorStudio = lazy(() => import('./components/EditorStudio'));
 const AdminFinanceSimulator = lazy(() => import('./components/AdminFinanceSimulator'));
+const AdminSystemsPreview = lazy(() => import('./components/AdminSystemsPreview'));
 const AdminReleaseReadiness = lazy(() => import('./components/AdminReleaseReadiness'));
 const AdminQualityCentre = lazy(() => import('./components/AdminQualityCentre'));
 const ManualTranscriptSync = lazy(() => import('./components/ManualTranscriptSync'));
@@ -6867,6 +6868,9 @@ function App() {
       currentPaidSubscribers={commercialOverview?.activePaidSubscribers ?? 0}
       currentUsers={(adminOverview?.people?.accounts?.length ?? 0) + (adminOverview?.people?.administrators?.length ?? 0)}
     />
+  </Suspense>
+  <Suspense fallback={<div className="people-empty">Loading systems preview…</div>}>
+    <AdminSystemsPreview />
   </Suspense>
   <div className="admin-economics-existing-model">
   <div className="subscription-finance-heading"><div><span className="mini-label">CURRENT LIVE PLANNING MODEL</span><h3>Existing Creator-capacity assumptions</h3></div><span className="status-pill muted">Separate from simulator</span></div>
