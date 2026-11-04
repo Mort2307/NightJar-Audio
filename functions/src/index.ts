@@ -1204,7 +1204,8 @@ export const adminRecordRevenueSettlement = onCall({ region: REGION }, async (re
   const settlementId = settlementDocumentId(provider, externalId);
   const ref = revenueSettlementRef(settlementId);
   await db.runTransaction(async (tx) => {
-    const existing = await tx.get(ref);
+    const [existing, payoutPeriod] = await Promise.all([tx.get(ref), tx.get(creatorPayoutPeriodRef(periodId))]);
+    if (payoutPeriod.exists) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
     if (existing.exists) throw new HttpsError('already-exists', 'This Stripe settlement reference has already been recorded.');
     tx.create(ref, {
       settlementId, periodId, provider, externalId, settledAt, sourceReference,
@@ -1231,6 +1232,8 @@ export const adminReconcileRevenueSettlement = onCall({ region: REGION }, async 
     const snapshot = await tx.get(ref);
     const data = snapshot.data() ?? {};
     if (!snapshot.exists) throw new HttpsError('not-found', 'Revenue settlement not found.');
+    const payoutPeriod = await tx.get(creatorPayoutPeriodRef(String(data.periodId ?? '')));
+    if (payoutPeriod.exists) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
     if (data.status !== 'pending_reconciliation') throw new HttpsError('failed-precondition', 'Only pending settlements can be reconciled.');
     tx.update(ref, {
       status: 'reconciled', reconciliationNote,
@@ -1308,28 +1311,30 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   }
   const allocation = allocateCreatorPool(creatorPoolPence, members);
   const payoutPeriod = creatorPayoutPeriodRef(periodId);
-  const batch = db.batch();
-  batch.create(payoutPeriod, {
-    periodId, status: 'draft', currency: 'GBP',
-    eligibleNetRevenuePence, creatorPoolPercent: 50, creatorPoolPence,
-    eligibleCreatorCount: allocation.eligibleCreatorCount,
-    totalAllocatedPence: allocation.totalAllocatedPence,
-    unallocatedCreatorPoolPence: allocation.unallocatedPence,
-    nonCreatorRemainderPence: eligibleNetRevenuePence - creatorPoolPence,
-    settlementIds: settlements.docs.map((doc) => doc.id),
-    preparedByAdminUserId: admin.uid,
-    preparedAt: FieldValue.serverTimestamp(),
-    policyVersion: 1,
-  });
-  for (const payout of allocation.payouts) {
-    batch.create(creatorPayoutRef(periodId, payout.userId), {
-      periodId, userId: payout.userId, amountPence: payout.amountPence,
-      paidPence: 0, outstandingPence: payout.amountPence,
-      qualifyingRole: qualifyingRoleByUser.get(payout.userId) ?? null,
-      status: 'pending', createdAt: FieldValue.serverTimestamp(),
+  await db.runTransaction(async (tx) => {
+    const existing = await tx.get(payoutPeriod);
+    if (existing.exists) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
+    tx.create(payoutPeriod, {
+      periodId, status: 'draft', currency: 'GBP',
+      eligibleNetRevenuePence, creatorPoolPercent: 50, creatorPoolPence,
+      eligibleCreatorCount: allocation.eligibleCreatorCount,
+      totalAllocatedPence: allocation.totalAllocatedPence,
+      unallocatedCreatorPoolPence: allocation.unallocatedPence,
+      nonCreatorRemainderPence: eligibleNetRevenuePence - creatorPoolPence,
+      settlementIds: settlements.docs.map((doc) => doc.id),
+      preparedByAdminUserId: admin.uid,
+      preparedAt: FieldValue.serverTimestamp(),
+      policyVersion: 1,
     });
-  }
-  await batch.commit();
+    for (const payout of allocation.payouts) {
+      tx.create(creatorPayoutRef(periodId, payout.userId), {
+        periodId, userId: payout.userId, amountPence: payout.amountPence,
+        paidPence: 0, outstandingPence: payout.amountPence,
+        qualifyingRole: qualifyingRoleByUser.get(payout.userId) ?? null,
+        status: 'pending', createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+  });
   return {
     prepared: true, periodId, eligibleNetRevenuePence, creatorPoolPercent: 50,
     creatorPoolPence, eligibleCreatorCount: allocation.eligibleCreatorCount,
