@@ -3,6 +3,7 @@ import { Calculator, Coins, RefreshCw, Save, ShieldCheck, SlidersHorizontal, Tra
 import type { CommercialSettings } from '../platform/firebase-commercial';
 import AdminSystemsPreview from './AdminSystemsPreview';
 import CommitmentControlCentre from './CommitmentControlCentre';
+import CompensationControlCentre from './CompensationControlCentre';
 
 type Props = {
   settings: CommercialSettings;
@@ -467,5 +468,6 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
     </section>
     <AdminSystemsPreview />
     <CommitmentControlCentre />
+    <CompensationControlCentre />
   </section>;
 }
