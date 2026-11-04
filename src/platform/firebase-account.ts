@@ -85,6 +85,30 @@ const setActiveRoleCall = httpsCallable<{ role: 'listener' | NightjarProfessiona
 
 const stageRoleCall = httpsCallable<{ role?: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; roles?: ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[]; referralCode?: string; legalAcceptances?: Array<{ id: string; version: string; accepted: true }> }, { role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; roles: ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[]; professionalRoles: NightjarProfessionalRole[]; staged: boolean }>(functions, 'stageRegistrationIntent');
 
+
+export type NightjarCommitmentRole = NightjarProfessionalRole;
+export type NightjarCommitmentTaskState = 'not_started' | 'in_progress' | 'submitted' | 'approved' | 'rejected' | 'excused' | 'cancelled';
+export type NightjarCommitmentTask = {
+  id: string; title: string; description?: string; mandatory: boolean; dueDay?: number | null;
+  state: NightjarCommitmentTaskState; evidenceIds?: string[]; reviewReason?: string | null;
+};
+export type NightjarCommitmentAssignment = {
+  id: string; periodId: string; role: NightjarCommitmentRole; templateVersion: number;
+  status: string; tasks: NightjarCommitmentTask[]; periodStatus: string; startDate: string | null; endDate: string | null;
+};
+const getMyCommitmentsCall = httpsCallable<void, { assignments: NightjarCommitmentAssignment[] }>(functions, 'getMyCommitments');
+const getMyCommitmentEligibilityCall = httpsCallable<{ periodId?: string }, {
+  periodId: string | null; approvedRoles: NightjarCommitmentRole[];
+  roleResults: Array<{ role: NightjarCommitmentRole; assigned: boolean; applicableMandatoryCount: number; completedMandatoryCount: number; completionPercent: number | null; qualifies: boolean; state: string }>;
+  eligible: boolean; qualifyingRole: NightjarCommitmentRole | null;
+}>(functions, 'getMyCommitmentEligibility');
+const submitCommitmentEvidenceCall = httpsCallable<{ assignmentId: string; taskId: string; note?: string; evidenceUrl?: string }, { submitted: boolean; evidenceId: string; taskState: string }>(functions, 'submitCommitmentEvidence');
+const adminCreateCommitmentTemplateCall = httpsCallable<{ role: NightjarCommitmentRole; effectiveFrom: string; tasks: Array<{ id: string; title: string; description?: string; mandatory: boolean; dueDay?: number | null }> }, { templateId: string; role: NightjarCommitmentRole; version: number; effectiveFrom: string }>(functions, 'adminCreateCommitmentTemplate');
+const adminCreateCommitmentPeriodCall = httpsCallable<{ periodId: string; startDate: string; endDate: string }, { created: boolean; periodId: string; startDate: string; endDate: string; status: string }>(functions, 'adminCreateCommitmentPeriod');
+const adminAssignCommitmentTemplateCall = httpsCallable<{ periodId: string; userId: string; role: NightjarCommitmentRole; templateId: string }, { assigned: boolean; assignmentId: string; periodId: string; role: NightjarCommitmentRole; taskCount: number }>(functions, 'adminAssignCommitmentTemplate');
+const adminReviewCommitmentTaskCall = httpsCallable<{ assignmentId: string; taskId: string; decision: 'approved' | 'rejected' | 'cancelled' | 'excused'; reason?: string }, { reviewed: boolean; taskId: string; state: string }>(functions, 'adminReviewCommitmentTask');
+const adminSetCommitmentExceptionCall = httpsCallable<{ assignmentId: string; reason: string }, { saved: boolean; assignmentId: string }>(functions, 'adminSetCommitmentException');
+const adminListCommitmentReviewQueueCall = httpsCallable<void, { queue: Array<{ assignmentId: string; userId: string; periodId: string; role: NightjarCommitmentRole; pendingTasks: Array<{ id: string; title: string; evidenceIds: string[] }> }> }>(functions, 'adminListCommitmentReviewQueue');
 export const nightjarAccount = {
   async registrationAccess(email: string) {
     return (await registrationStatusCall({ email: email.trim() })).data;
@@ -107,6 +131,42 @@ export const nightjarAccount = {
     const roles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles];
     const result = await stageRoleCall({ roles, legalAcceptances, ...(referralCode ? { referralCode } : {}) });
     return result.data;
+  },
+
+  async getMyCommitments() {
+    return (await getMyCommitmentsCall()).data;
+  },
+
+  async getMyCommitmentEligibility(periodId?: string) {
+    return (await getMyCommitmentEligibilityCall(periodId ? { periodId } : {})).data;
+  },
+
+  async submitCommitmentEvidence(input: { assignmentId: string; taskId: string; note?: string; evidenceUrl?: string }) {
+    return (await submitCommitmentEvidenceCall(input)).data;
+  },
+
+  async adminCreateCommitmentTemplate(input: { role: NightjarCommitmentRole; effectiveFrom: string; tasks: Array<{ id: string; title: string; description?: string; mandatory: boolean; dueDay?: number | null }> }) {
+    return (await adminCreateCommitmentTemplateCall(input)).data;
+  },
+
+  async adminCreateCommitmentPeriod(input: { periodId: string; startDate: string; endDate: string }) {
+    return (await adminCreateCommitmentPeriodCall(input)).data;
+  },
+
+  async adminAssignCommitmentTemplate(input: { periodId: string; userId: string; role: NightjarCommitmentRole; templateId: string }) {
+    return (await adminAssignCommitmentTemplateCall(input)).data;
+  },
+
+  async adminReviewCommitmentTask(input: { assignmentId: string; taskId: string; decision: 'approved' | 'rejected' | 'cancelled' | 'excused'; reason?: string }) {
+    return (await adminReviewCommitmentTaskCall(input)).data;
+  },
+
+  async adminSetCommitmentException(input: { assignmentId: string; reason: string }) {
+    return (await adminSetCommitmentExceptionCall(input)).data;
+  },
+
+  async adminListCommitmentReviewQueue() {
+    return (await adminListCommitmentReviewQueueCall()).data;
   },
 
   async getProfileTypeSettings() {
