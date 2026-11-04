@@ -333,7 +333,9 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
       </div>
     </div>
 
-    <div className="demo-warning admin-note"><ShieldCheck size={17}/><div><strong>LEGACY PLANNING MODEL — NOT LIVE COMPENSATION POLICY</strong><span>The role caps, 50/20/30 scenario split and corporation-tax controls below are historical planning assumptions only. They do not define the new 50% Creator Pool or Nightjar/Meg & Mike allocation. Do not use the tax output as a Nightjar tax estimate; the legal structure and accountant-approved treatment are still to be confirmed.</span></div></div>\n\n    <div className="finance-sim-status-row">
+    <div className="demo-warning admin-note"><ShieldCheck size={17}/><div><strong>LEGACY PLANNING MODEL — NOT LIVE COMPENSATION POLICY</strong><span>The role caps, 50/20/30 scenario split and corporation-tax controls below are historical planning assumptions only. They do not define the new 50% Creator Pool or Nightjar/Meg & Mike allocation. Do not use the tax output as a Nightjar tax estimate; the legal structure and accountant-approved treatment are still to be confirmed.</span></div></div>
+
+    <div className="finance-sim-status-row">
       <span className={splitsValid ? 'status-pill' : 'status-pill muted'}>{splitsValid ? 'Main pots = 100%' : 'Main pots = ' + model.primaryPercentTotal.toFixed(2) + '%'}</span>
       <span className={rolesValid ? 'status-pill' : 'status-pill muted'}>{rolesValid ? 'Contributor roles = 100%' : 'Contributor roles = ' + model.rolePercentTotal.toFixed(2) + '%'}</span>
       <span className="status-pill muted">{model.subscriberConversion.toFixed(1)}% user → paid conversion</span>
