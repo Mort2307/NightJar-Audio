@@ -95,6 +95,7 @@ export type NightjarCommitmentTask = {
 export type NightjarCommitmentAssignment = {
   id: string; periodId: string; role: NightjarCommitmentRole; templateVersion: number;
   status: string; tasks: NightjarCommitmentTask[]; periodStatus: string; startDate: string | null; endDate: string | null;
+  approvedException: boolean; exceptionReason: string | null;
 };
 const getMyCommitmentsCall = httpsCallable<void, { assignments: NightjarCommitmentAssignment[] }>(functions, 'getMyCommitments');
 const getMyCommitmentEligibilityCall = httpsCallable<{ periodId?: string }, {
