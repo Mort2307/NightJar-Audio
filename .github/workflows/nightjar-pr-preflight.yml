@@ -54,7 +54,7 @@ jobs:
       - run: npm ci --no-fund
       - run: npm run check
       - run: npm run build
-      - name: Run profile, commitment and equal-share contract tests
+      - name: Run profile, commitment, equal-share and finance policy contract tests
         run: npm run test:systems
       - name: Determine backend change scope
         id: scope
