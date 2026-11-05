@@ -3238,7 +3238,8 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       return credit.state === 'approved' && Boolean(credit.approvedByAdminUserId && credit.approvedAt);
     })
     .map(doc => ({ id:doc.id, releaseId:doc.data().releaseId, releaseRole:doc.data().releaseRole }));
-  const professionalRoles = nightjarTeam ? [] : professionalRolesForAccount(accountData ?? {});
+  const professionalRoles = professionalRolesForAccount(accountData ?? {});
+  if (nightjarTeam) professionalRoles.splice(0, professionalRoles.length);
   const storedProfileSettings = normaliseProfileTypeSettings(data.profileTypeSettings);
   const hasExplicitProfileSettings = Number(data.profileTypeSettingsRevision ?? 0) > 0;
   const publicProfileTypes = resolveVisibleProfileTypes(
