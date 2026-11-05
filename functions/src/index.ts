@@ -3381,7 +3381,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       headerImageMode: ['cinematic','portrait','custom'].includes(String(data.headerImageMode)) ? data.headerImageMode : 'portrait',
       // Professional approval originates from account privileges, never
       // release credits or self-authored profile fields. Applies to ALL tabs.
-      approvedProfessionalRoles: ownerPreview ? professionalRoles : publicProfessionalRoles,
+      approvedProfessionalRoles: professionalRoles,
       profileTypes: publicProfileTypes.map((type) => ({ type, visibility: ownerPreview ? (storedProfileSettings[type]?.visibility ?? 'private') : (storedProfileSettings[type]?.visibility ?? 'public') })),
       verifiedCredits,
       bio: data.bio ?? null,
