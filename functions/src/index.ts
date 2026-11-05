@@ -1247,6 +1247,7 @@ export const adminRecordRevenueSettlement = onCall({ region: REGION }, async (re
     throw new HttpsError('invalid-argument', 'Provide a period, Stripe payout or balance reference, settlement date and source report reference.');
   }
   const grossPence = safePence(input.grossPence, 'Gross amount');
+  if (grossPence < 1) throw new HttpsError('invalid-argument', 'A settled Stripe entry must contain positive gross receipts.');
   const refundPence = safePence(input.refundPence, 'Refunds');
   const chargebackPence = safePence(input.chargebackPence, 'Chargebacks');
   const processorFeePence = safePence(input.processorFeePence, 'Processor fees');
