@@ -11993,3 +11993,6 @@ textarea:focus-visible,
 .nj-adjustment-row small{font-size:10px;color:var(--muted);line-height:1.45}
 
 .nj-commitment-due-date{display:block;margin:6px 0;color:#d8b989;font-size:10px}
+
+.nj-contributor-systems-workspace{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
+.nj-contributor-systems-workspace>.panel{min-width:0}
