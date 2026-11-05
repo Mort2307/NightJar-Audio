@@ -3,12 +3,14 @@ export type FinanceAllocationPolicy = {
   creatorPoolPercent: number;
   nightjarPoolPercent: number;
   ownerPoolPercent: number;
+  taxReservePercent: number;
 };
 
 export type FinancePoolAllocation = {
   creatorPoolPence: number;
   nightjarPoolPence: number;
   ownerPoolPence: number;
+  taxReservePoolPence: number;
   roundingPence: number;
 };
 
@@ -23,27 +25,27 @@ export const validateFinanceAllocationPolicy = (
 ): FinanceAllocationPolicy => {
   assertSafePence(input.subscriptionPricePence, 'Subscription price');
   if (input.subscriptionPricePence < 1) throw new Error('Subscription price must be greater than zero.');
-  const percentages = [input.creatorPoolPercent, input.nightjarPoolPercent, input.ownerPoolPercent];
+  const percentages = [input.creatorPoolPercent, input.nightjarPoolPercent, input.ownerPoolPercent, input.taxReservePercent];
   if (percentages.some((value) => !Number.isInteger(value) || value < 0 || value > 100)) {
     throw new Error('Each allocation must be a whole percentage between 0 and 100.');
   }
   if (percentages.reduce((sum, value) => sum + value, 0) !== 100) {
-    throw new Error('Creator, Nightjar and owner allocations must total exactly 100%.');
+    throw new Error('Creator, Nightjar, owner and optional tax reserve allocations must total exactly 100%.');
   }
   return { ...input };
 };
 
 /**
- * Splits the reconciled net revenue into the three configured pools. Uses
+ * Splits reconciled net revenue into the three operating pools and optional tax reserve. Uses
  * integer pence and largest-remainder rounding, with a fixed tie-break order,
  * so every penny is accounted for exactly once.
  */
 export const allocateFinanceRevenuePoolsPence = (
   eligibleNetRevenuePence: number,
-  policy: Pick<FinanceAllocationPolicy, 'creatorPoolPercent' | 'nightjarPoolPercent' | 'ownerPoolPercent'>,
+  policy: Pick<FinanceAllocationPolicy, 'creatorPoolPercent' | 'nightjarPoolPercent' | 'ownerPoolPercent' | 'taxReservePercent'>,
 ): FinancePoolAllocation => {
   assertSafePence(eligibleNetRevenuePence, 'Eligible net revenue');
-  const percentages = [policy.creatorPoolPercent, policy.nightjarPoolPercent, policy.ownerPoolPercent];
+  const percentages = [policy.creatorPoolPercent, policy.nightjarPoolPercent, policy.ownerPoolPercent, policy.taxReservePercent];
   if (percentages.some((value) => !Number.isInteger(value) || value < 0 || value > 100)
     || percentages.reduce((sum, value) => sum + value, 0) !== 100) {
     throw new Error('Finance allocation percentages must be whole numbers totalling 100%.');
@@ -73,6 +75,7 @@ export const allocateFinanceRevenuePoolsPence = (
     creatorPoolPence: rows[0].amountPence,
     nightjarPoolPence: rows[1].amountPence,
     ownerPoolPence: rows[2].amountPence,
+    taxReservePoolPence: rows[3].amountPence,
     roundingPence: 0,
   };
 };
