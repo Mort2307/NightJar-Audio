@@ -3018,7 +3018,24 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   if (!Number.isSafeInteger(eligibleNetRevenuePence) || eligibleNetRevenuePence < 0) {
     throw new HttpsError('failed-precondition', 'Reconciled revenue and adjustments must produce a non-negative safe total.');
   }
-  const creatorPoolPence = calculateCreatorPoolPence(eligibleNetRevenuePence, 50);
+  const financePolicySnapshot = await db.collection('financePolicies')
+    .where('effectiveFrom', '<=', periodId + '-01').orderBy('effectiveFrom', 'desc').limit(1).get();
+  const policyDocument = financePolicySnapshot.docs[0];
+  if (!policyDocument) throw new HttpsError('failed-precondition', 'No finance allocation policy is effective for this period. Save a complete 100% allocation policy before preparing compensation.');
+  let financePolicy;
+  try {
+    const data = policyDocument.data();
+    financePolicy = validateFinanceAllocationPolicy({
+      subscriptionPricePence: safePence(data.subscriptionPricePence, 'Planning subscription price'),
+      creatorPoolPercent: Number(data.creatorPoolPercent),
+      nightjarPoolPercent: Number(data.nightjarPoolPercent),
+      ownerPoolPercent: Number(data.ownerPoolPercent),
+    });
+  } catch (error) {
+    throw new HttpsError('failed-precondition', error instanceof Error ? error.message : 'The effective finance policy is invalid.');
+  }
+  const financePoolAllocation = allocateFinanceRevenuePoolsPence(eligibleNetRevenuePence, financePolicy);
+  const creatorPoolPence = financePoolAllocation.creatorPoolPence;
   const assignmentsByUser = new Map<string, Array<Record<string, any>>>();
   for (const doc of assignments.docs) {
     const data = doc.data();
@@ -3068,7 +3085,14 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
     const calculated = allocateCreatorPool(creatorPoolPence, members);
     tx.create(payoutPeriod, {
       periodId, status: 'draft', currency: 'GBP',
-      eligibleNetRevenuePence, creatorPoolPercent: 50, creatorPoolPence,
+      eligibleNetRevenuePence, creatorPoolPercent: financePolicy.creatorPoolPercent, creatorPoolPence,
+      nightjarPoolPercent: financePolicy.nightjarPoolPercent,
+      nightjarPoolPence: financePoolAllocation.nightjarPoolPence,
+      ownerPoolPercent: financePolicy.ownerPoolPercent,
+      ownerPoolPence: financePoolAllocation.ownerPoolPence,
+      subscriptionPricePence: financePolicy.subscriptionPricePence,
+      policyVersion: Number(policyDocument.data()?.version ?? 1),
+      policyEffectiveFrom: String(policyDocument.data()?.effectiveFrom ?? ''),
       eligibleCreatorCount: calculated.eligibleCreatorCount,
       totalAllocatedPence: calculated.totalAllocatedPence,
       unallocatedCreatorPoolPence: calculated.unallocatedPence,
@@ -3077,7 +3101,7 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
       adjustmentIds: adjustments.docs.map((doc) => doc.id),
       preparedByAdminUserId: admin.uid,
       preparedAt: FieldValue.serverTimestamp(),
-      policyVersion: 1,
+      policyVersion: Number(policyDocument.data()?.version ?? 1),
     });
     tx.set(financeControlRef, { revision: controlRevision + 1, payoutPrepared: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     for (const payout of calculated.payouts) {
