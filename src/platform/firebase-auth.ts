@@ -16,13 +16,13 @@ import {
 } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyBHgKqK9SRYJoWWrKH0DeMX4I35AVIoMJs',
-  authDomain: 'nightjar-audio.firebaseapp.com',
-  projectId: 'nightjar-audio',
-  storageBucket: 'nightjar-audio.firebasestorage.app',
-  messagingSenderId: '981039114349',
-  appId: '1:981039114349:web:80defbb59c7a56889af764',
-  measurementId: 'G-QRMGT02JRD',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? 'AIzaSyBHgKqK9SRYoWWrKH0DeMX4I35AVIoMJs',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? 'nightjar-audio.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? 'nightjar-audio',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? 'nightjar-audio.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? '981039114349',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? '1:981039114349:web:80defbb59c7a56889af764',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID ?? 'G-QRMGT02JRD',
 };
 
 export const firebaseApp = getApps()[0] ?? initializeApp(firebaseConfig);
