@@ -948,7 +948,7 @@ export const adminCreateCommitmentPeriod = onCall({ region: REGION }, async (req
     const existing = await tx.get(ref);
     if (existing.exists) throw new HttpsError('already-exists', 'This commitment period already exists.');
     tx.create(ref, {
-      periodId, startDate, endDate, status: 'open',
+      periodId, startDate, endDate, status: 'open', activityRevision: 0,
       createdByAdminUserId: admin.uid,
       createdAt: FieldValue.serverTimestamp(),
     });
@@ -1000,6 +1000,7 @@ export const adminAssignCommitmentTemplate = onCall({ region: REGION }, async (r
       };
     });
     if (!tasks.length) throw new HttpsError('failed-precondition', 'The selected template has no tasks.');
+    tx.update(periodRef, { activityRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
     tx.create(assignmentRef, {
       periodId, userId, role, templateId, templateVersion: Number(template.version ?? 1),
       templateSnapshot: tasks.map(({ id, title, description, mandatory, dueDay }) => ({ id, title, description, mandatory, dueDay })),
@@ -1061,6 +1062,7 @@ export const submitCommitmentEvidence = onCall({ region: REGION }, async (reques
     tx.create(evidenceRef, evidence);
     tx.create(eventRef, { type: 'evidence_submitted', taskId, actorUserId: identity.uid, at: FieldValue.serverTimestamp() });
     tx.update(assignmentRef, { tasks, updatedAt: FieldValue.serverTimestamp() });
+    tx.update(periodSnap.ref, { activityRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
     return { submitted: true, evidenceId: evidenceRef.id, taskState: 'submitted' };
   });
 });
@@ -1090,12 +1092,16 @@ export const adminReviewCommitmentTask = onCall({ region: REGION }, async (reque
     const tasks = Array.isArray(assignment.tasks) ? [...assignment.tasks] : [];
     const index = tasks.findIndex((task: Record<string, any>) => task.id === taskId);
     if (index < 0) throw new HttpsError('not-found', 'Commitment task not found.');
+    if (tasks[index].state !== 'submitted') {
+      throw new HttpsError('failed-precondition', 'Only evidence currently awaiting review can be reviewed. Ask the member to resubmit after a rejection.');
+    }
     if (decision === 'approved' && !(Array.isArray(tasks[index].evidenceIds) && tasks[index].evidenceIds.length)) {
       throw new HttpsError('failed-precondition', 'Evidence must be submitted before approval.');
     }
     tasks[index] = { ...tasks[index], state: decision, reviewedByAdminUserId: admin.uid, reviewedAt: FieldValue.serverTimestamp(), reviewReason: reason || null };
     tx.create(eventRef, { type: 'task_reviewed', taskId, decision, reason: reason || null, actorUserId: admin.uid, at: FieldValue.serverTimestamp() });
     tx.update(assignmentRef, { tasks, updatedAt: FieldValue.serverTimestamp() });
+    tx.update(periodSnap.ref, { activityRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
     return { reviewed: true, taskId, state: decision };
   });
 });
@@ -1117,6 +1123,7 @@ export const adminSetCommitmentException = onCall({ region: REGION }, async (req
     const periodSnap = await tx.get(commitmentPeriodRef(String(assignment.periodId ?? '')));
     if (!periodSnap.exists || periodSnap.data()?.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment period is closed.');
     tx.update(assignmentRef, { approvedException: true, exceptionReason: reason, exceptionApprovedByAdminUserId: admin.uid, exceptionApprovedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    tx.update(periodSnap.ref, { activityRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
     tx.create(eventRef, { type: 'eligibility_exception_approved', reason, actorUserId: admin.uid, at: FieldValue.serverTimestamp() });
   });
   return { saved: true, assignmentId };
@@ -1179,7 +1186,12 @@ export const adminCloseCommitmentPeriod = onCall({ region: REGION }, async (requ
   const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
   if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid commitment period.');
   const ref = commitmentPeriodRef(periodId);
-  const assignments = await db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5000).get();
+  const before = await ref.get();
+  if (!before.exists) throw new HttpsError('not-found', 'Commitment period not found.');
+  if (before.data()?.status === 'closed') return { closed: true, periodId, alreadyClosed: true };
+  const activityRevision = Number(before.data()?.activityRevision ?? 0);
+  const assignments = await db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5001).get();
+  if (assignments.size > 5000) throw new HttpsError('resource-exhausted', 'This period exceeds the 5,000-assignment closure limit. Contact Nightjar engineering before closing it.');
   const pendingReviewCount = assignments.docs.reduce((count, doc) =>
     count + (Array.isArray(doc.data().tasks) ? doc.data().tasks.filter((task: Record<string, any>) => task.state === 'submitted').length : 0), 0);
   if (pendingReviewCount > 0) throw new HttpsError('failed-precondition', 'Review all submitted evidence before closing this assessment period.');
@@ -1187,7 +1199,10 @@ export const adminCloseCommitmentPeriod = onCall({ region: REGION }, async (requ
     const snapshot = await tx.get(ref);
     if (!snapshot.exists) throw new HttpsError('not-found', 'Commitment period not found.');
     if (snapshot.data()?.status === 'closed') return { closed: true, periodId, alreadyClosed: true };
-    tx.update(ref, { status: 'closed', closedByAdminUserId: admin.uid, closedAt: FieldValue.serverTimestamp() });
+    if (Number(snapshot.data()?.activityRevision ?? 0) !== activityRevision) {
+      throw new HttpsError('aborted', 'Commitment activity changed while the period was being checked. Refresh and close it again.');
+    }
+    tx.update(ref, { status: 'closed', activityRevision: activityRevision + 1, closedByAdminUserId: admin.uid, closedAt: FieldValue.serverTimestamp() });
     return { closed: true, periodId, alreadyClosed: false };
   });
 });
@@ -1335,23 +1350,32 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   if (controlSnapshot.data()?.payoutPrepared === true) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
   const [commitmentPeriod, settlements, adjustments, assignments, existingPayoutPeriod] = await Promise.all([
     commitmentPeriodRef(periodId).get(),
-    db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(500).get(),
-    db.collection('financeRevenueAdjustments').where('periodId', '==', periodId).limit(500).get(),
-    db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5000).get(),
+    db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(501).get(),
+    db.collection('financeRevenueAdjustments').where('periodId', '==', periodId).limit(501).get(),
+    db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5001).get(),
     creatorPayoutPeriodRef(periodId).get(),
   ]);
   if (!commitmentPeriod.exists || commitmentPeriod.data()?.status !== 'closed') {
     throw new HttpsError('failed-precondition', 'Close the commitment assessment period after all reviews before preparing compensation.');
   }
   if (existingPayoutPeriod.exists) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
+  if (settlements.size > 500 || adjustments.size > 500 || assignments.size > 5000) {
+    throw new HttpsError('resource-exhausted', 'This period exceeds the safe finance preparation limits. Contact Nightjar engineering before preparing compensation.');
+  }
   if (!settlements.size || settlements.docs.some((doc) => doc.data().status !== 'reconciled')) {
     throw new HttpsError('failed-precondition', 'Every Stripe settlement must be recorded and reconciled before calculating payouts.');
   }
-  const settlementNetPence = settlements.docs.reduce((sum, doc) => sum + safePence(doc.data().eligibleNetRevenuePence, 'Eligible net revenue'), 0);
+  const settlementNetPence = settlements.docs.reduce((sum, doc) => {
+    const next = sum + safePence(doc.data().eligibleNetRevenuePence, 'Eligible net revenue');
+    if (!Number.isSafeInteger(next)) throw new HttpsError('failed-precondition', 'Reconciled settlement totals exceed the safe calculation range.');
+    return next;
+  }, 0);
   const adjustmentNetPence = adjustments.docs.reduce((sum, doc) => {
     const amount = Number(doc.data().amountPence ?? 0);
     if (!Number.isSafeInteger(amount)) throw new HttpsError('failed-precondition', 'A revenue adjustment is invalid.');
-    return sum + amount;
+    const next = sum + amount;
+    if (!Number.isSafeInteger(next)) throw new HttpsError('failed-precondition', 'Revenue adjustment totals exceed the safe calculation range.');
+    return next;
   }, 0);
   const eligibleNetRevenuePence = settlementNetPence + adjustmentNetPence;
   if (!Number.isSafeInteger(eligibleNetRevenuePence) || eligibleNetRevenuePence < 0) {
@@ -1489,7 +1513,7 @@ export const adminRecordCreatorPayment = onCall({ region: REGION }, async (reque
     if (paymentSnap.exists) return { recorded: true, duplicate: true, paymentId };
     const outstanding = safePence(payout.outstandingPence, 'Outstanding amount');
     if (amountPence > outstanding) throw new HttpsError('failed-precondition', 'Payment exceeds the outstanding balance.');
-    const nextPaid = safePence(payout.paidPence, 'Paid amount') + amountPence;
+    const nextPaid = safePence(safePence(payout.paidPence, 'Paid amount') + amountPence, 'Updated paid amount');
     const nextOutstanding = outstanding - amountPence;
     tx.create(paymentRef, {
       paymentId, periodId, userId, amountPence, reference, paidAt,
@@ -1556,7 +1580,7 @@ export const adminRecordTaxPayment = onCall({ region: REGION }, async (request) 
   const reference = cleanText(input.reference, 160);
   const paidAt = cleanText(input.paidAt, 10);
   if (!validCommitmentPeriodId(periodId) || amountPence < 1 || reference.length < 4
-    || !/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) {
+    || !validIsoCalendarDate(paidAt)) {
     throw new HttpsError('invalid-argument', 'Provide a period, positive payment, reference and payment date.');
   }
   const ledgerRef = taxLedgerRef(periodId);
@@ -1576,11 +1600,12 @@ export const adminRecordTaxPayment = onCall({ region: REGION }, async (request) 
       paymentId, periodId, amountPence, reference, paidAt,
       recordedByAdminUserId: admin.uid, recordedAt: FieldValue.serverTimestamp(),
     });
+    const nextPaidPence = safePence(paidPence + amountPence, 'Updated tax paid amount');
     tx.set(ledgerRef, {
-      paidPence: paidPence + amountPence,
+      paidPence: nextPaidPence,
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    return { recorded: true, duplicate: false, paymentId, paidPence: paidPence + amountPence };
+    return { recorded: true, duplicate: false, paymentId, paidPence: nextPaidPence };
   });
 });
 
@@ -1625,7 +1650,8 @@ export const getMyCreatorCompensation = onCall({ region: REGION }, async (reques
 });
 export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
-  const snapshot = await db.collection('commitmentAssignments').limit(1000).get();
+  const snapshot = await db.collection('commitmentAssignments').limit(1001).get();
+  if (snapshot.size > 1000) throw new HttpsError('resource-exhausted', 'The commitment review queue exceeds the safe 1,000-assignment view. Contact Nightjar engineering for a paginated review queue.');
   const queue = await Promise.all(snapshot.docs.map(async (doc) => {
     const data = doc.data();
     const period = await commitmentPeriodRef(String(data.periodId ?? '')).get();
