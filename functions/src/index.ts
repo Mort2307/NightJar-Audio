@@ -1028,6 +1028,8 @@ export const getMyCommitments = onCall({ region: REGION }, async (request) => {
     return {
       id: doc.id, periodId: data.periodId, role: data.role,
       templateVersion: data.templateVersion, status: data.status,
+      approvedException: data.approvedException === true,
+      exceptionReason: cleanText(data.exceptionReason, 1000) || null,
       tasks: Array.isArray(data.tasks) ? data.tasks : [],
       periodStatus: period.data()?.status ?? 'missing',
       startDate: period.data()?.startDate ?? null,
