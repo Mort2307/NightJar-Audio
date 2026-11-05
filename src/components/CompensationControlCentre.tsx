@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Banknote, CheckCircle2, CircleAlert, RefreshCw, ShieldCheck, WalletCards } from 'lucide-react';
 import { nightjarAccount, type NightjarCommitmentRole } from '../platform/firebase-account';
 
@@ -51,8 +51,11 @@ export default function CompensationControlCentre() {
   const [accountantReference, setAccountantReference] = useState('');
   const [taxPaymentAmount, setTaxPaymentAmount] = useState('');
   const [taxPaymentReference, setTaxPaymentReference] = useState('');
+  const refreshRequestId = useRef(0);
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
 
   const refresh = useCallback(async () => {
+    const requestId = ++refreshRequestId.current;
     setLoading(true); setError('');
     try {
       const [result, adjustmentResult, commitmentPeriods] = await Promise.all([
@@ -60,17 +63,21 @@ export default function CompensationControlCentre() {
         nightjarAccount.adminListRevenueAdjustments(periodId),
         nightjarAccount.adminListCommitmentPeriods(),
       ]);
+      if (requestId !== refreshRequestId.current) return;
       setSettlements(result.settlements as Settlement[]);
       setAdjustments(adjustmentResult.adjustments as Adjustment[]);
       setCommitmentPeriodStatus(commitmentPeriods.periods.find((item) => item.id === periodId)?.status ?? 'missing');
     } catch (cause) {
+      if (requestId !== refreshRequestId.current) return;
       setSettlements([]); setAdjustments([]); setCommitmentPeriodStatus('unavailable');
       setError(cause instanceof Error ? cause.message : 'Revenue settlements could not be loaded.');
     }
     try {
       const payout = await nightjarAccount.adminGetCreatorPayoutPeriod(periodId);
+      if (requestId !== refreshRequestId.current) return;
       setPayoutPeriod(payout as PayoutPeriod);
     } catch (cause) {
+      if (requestId !== refreshRequestId.current) return;
       setPayoutPeriod(null);
       const code = cause && typeof cause === 'object' && 'code' in cause ? String((cause as { code: unknown }).code) : '';
       if (code !== 'functions/not-found' && code !== 'not-found') {
@@ -79,6 +86,7 @@ export default function CompensationControlCentre() {
     }
     try {
       const tax = await nightjarAccount.adminGetTaxLedger(periodId);
+      if (requestId !== refreshRequestId.current) return;
       setTaxLedger(tax);
       if (tax.ledger) {
         setTaxReserve((tax.ledger.reservePence === undefined ? '' : (tax.ledger.reservePence / 100).toFixed(2)));
@@ -89,10 +97,12 @@ export default function CompensationControlCentre() {
         setTaxReserve(''); setTaxLiability(''); setTaxReserveNote(''); setAccountantReference('');
       }
     } catch (cause) {
+      if (requestId !== refreshRequestId.current) return;
       setTaxLedger({ ledger: null, payments: [] });
       setError(cause instanceof Error ? cause.message : 'The tax ledger could not be loaded.');
-    } finally { setLoading(false); }
+    } finally { if (requestId === refreshRequestId.current) setLoading(false); }
   }, [periodId]);
+  useEffect(() => { refreshRef.current = refresh; }, [refresh]);
   useEffect(() => {
     setSettlements([]); setAdjustments([]); setPayoutPeriod(null); setCommitmentPeriodStatus('missing');
     setExternalId(''); setSettledAt(periodId + '-01'); setSourceReference(''); setGross('');
@@ -105,7 +115,7 @@ export default function CompensationControlCentre() {
 
   const run = async (key: string, action: () => Promise<unknown>, success: string) => {
     setBusy(key); setError(''); setMessage('');
-    try { await action(); setMessage(success); await refresh(); }
+    try { await action(); setMessage(success); await refreshRef.current(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'The finance action could not be completed.'); }
     finally { setBusy(''); }
   };
