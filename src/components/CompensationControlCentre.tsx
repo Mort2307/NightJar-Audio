@@ -60,7 +60,16 @@ export default function CompensationControlCentre() {
   const [reconciliationNotes, setReconciliationNotes] = useState<Record<string, string>>({});
   const [paymentRefs, setPaymentRefs] = useState<Record<string, string>>({});
   const [paymentAmounts, setPaymentAmounts] = useState<Record<string, string>>({});
-  const [taxLedger, setTaxLedger] = useState<{ ledger: { periodId: string; reservePence?: number; reserveNote?: string; confirmedLiabilityPence?: number; accountantReference?: string; paidPence?: number } | null; payments: Array<{ id: string; amountPence: number; reference: string; paidAt: string }> }>({ ledger: null, payments: [] });
+  const [taxLedger, setTaxLedger] = useState<{
+    ledger: { periodId: string; reservePence?: number; reserveNote?: string; confirmedLiabilityPence?: number; accountantReference?: string; paidPence?: number } | null;
+    payments: Array<{ id: string; amountPence: number; reference: string; paidAt: string }>;
+    estimates: Array<{ id: string; category: string; taxableBasePence: number; rateBasisPoints: number; estimatedTaxPence: number; sourceReference: string; note: string; recordedAt: unknown }>;
+  }>({ ledger: null, payments: [], estimates: [] });
+  const [taxEstimateCategory, setTaxEstimateCategory] = useState<'corporation_tax' | 'income_tax' | 'vat' | 'paye_ni' | 'other'>('other');
+  const [taxEstimateBase, setTaxEstimateBase] = useState('');
+  const [taxEstimateRate, setTaxEstimateRate] = useState('');
+  const [taxEstimateSource, setTaxEstimateSource] = useState('');
+  const [taxEstimateNote, setTaxEstimateNote] = useState('');
   const [taxReserve, setTaxReserve] = useState('');
   const [taxReserveNote, setTaxReserveNote] = useState('');
   const [taxLiability, setTaxLiability] = useState('');
@@ -106,6 +115,18 @@ export default function CompensationControlCentre() {
       const tax = await nightjarAccount.adminGetTaxLedger(periodId);
       if (requestId !== refreshRequestId.current) return;
       setTaxLedger(tax);
+      const latestEstimate = tax.estimates?.[0];
+      if (latestEstimate) {
+        const category = latestEstimate.category;
+        setTaxEstimateCategory((['corporation_tax', 'income_tax', 'vat', 'paye_ni', 'other'] as string[]).includes(category)
+          ? category as 'corporation_tax' | 'income_tax' | 'vat' | 'paye_ni' | 'other' : 'other');
+        setTaxEstimateBase((latestEstimate.taxableBasePence / 100).toFixed(2));
+        setTaxEstimateRate((latestEstimate.rateBasisPoints / 100).toString());
+        setTaxEstimateSource('');
+        setTaxEstimateNote('');
+      } else {
+        setTaxEstimateBase(''); setTaxEstimateRate(''); setTaxEstimateSource(''); setTaxEstimateNote('');
+      }
       if (tax.ledger) {
         setTaxReserve((tax.ledger.reservePence === undefined ? '' : (tax.ledger.reservePence / 100).toFixed(2)));
         setTaxLiability((tax.ledger.confirmedLiabilityPence === undefined ? '' : (tax.ledger.confirmedLiabilityPence / 100).toFixed(2)));
@@ -116,7 +137,7 @@ export default function CompensationControlCentre() {
       }
     } catch (cause) {
       if (requestId !== refreshRequestId.current) return;
-      setTaxLedger({ ledger: null, payments: [] });
+      setTaxLedger({ ledger: null, payments: [], estimates: [] });
       setError(cause instanceof Error ? cause.message : 'The tax ledger could not be loaded.');
     } finally { if (requestId === refreshRequestId.current) setLoading(false); }
   }, [periodId]);
@@ -126,7 +147,8 @@ export default function CompensationControlCentre() {
     setExternalId(''); setSettledAt(periodId + '-01'); setSourceReference(''); setGross('');
     setRefunds('0'); setChargebacks('0'); setFees('0'); setVat('0'); setOtherDeductions('0');
     setReconciliationNotes({}); setPaymentRefs({}); setPaymentAmounts({});
-    setTaxLedger({ ledger: null, payments: [] }); setTaxReserve(''); setTaxReserveNote('');
+    setTaxLedger({ ledger: null, payments: [], estimates: [] }); setTaxReserve(''); setTaxReserveNote('');
+    setTaxEstimateCategory('other'); setTaxEstimateBase(''); setTaxEstimateRate(''); setTaxEstimateSource(''); setTaxEstimateNote('');
     setTaxLiability(''); setAccountantReference(''); setTaxPaymentAmount(''); setTaxPaymentReference('');
   }, [periodId]);
   useEffect(() => { void refresh(); }, [refresh]);
@@ -170,6 +192,20 @@ export default function CompensationControlCentre() {
     periodId, userId: payout.userId, amountPence: pence(paymentAmounts[payout.userId] ?? (payout.outstandingPence / 100).toFixed(2)),
     reference: paymentRefs[payout.userId] ?? '', paidAt: today,
   }), 'Manual payment record added.');
+
+  const taxEstimateRateBasisPoints = (() => {
+    const rate = Number(taxEstimateRate);
+    if (!taxEstimateRate.trim() || !Number.isFinite(rate) || rate < 0 || rate > 100 || Math.round(rate * 100) !== rate * 100) return Number.NaN;
+    return Math.round(rate * 100);
+  })();
+  const taxEstimateValid = positiveMoney(taxEstimateBase)
+    && Number.isInteger(taxEstimateRateBasisPoints) && taxEstimateRateBasisPoints >= 0 && taxEstimateRateBasisPoints <= 10000
+    && taxEstimateSource.trim().length >= 4 && taxEstimateNote.trim().length >= 8;
+
+  const saveTaxEstimate = () => run('tax-estimate', () => nightjarAccount.adminSetTaxEstimate({
+    periodId, category: taxEstimateCategory, taxableBasePence: pence(taxEstimateBase),
+    rateBasisPoints: taxEstimateRateBasisPoints, sourceReference: taxEstimateSource.trim(), note: taxEstimateNote.trim(),
+  }), 'Explicit-assumption tax estimate saved. No confirmed liability or tax payment was changed.');
 
   const saveTaxReserve = () => run('tax-reserve', () => nightjarAccount.adminSetTaxReserve({
     periodId, reservePence: pence(taxReserve), note: taxReserveNote.trim(),
@@ -318,6 +354,28 @@ export default function CompensationControlCentre() {
     <article className="nj-compensation-card nj-tax-ledger">
       <span className="mini-label">04 / TAX RESERVE & LIABILITY LEDGER</span><h3>Keep reserves separate from tax actually due</h3>
       <p>No tax rate is assumed. The Tax Reserve percentage above is a policy allocation only. Record cash here only after it has actually been set aside; then record an accountant-confirmed liability separately and actual tax payments against that liability.</p>
+      <div className="nj-tax-estimate-panel">
+        <h4>Transparent tax estimate</h4>
+        <p>Enter the taxable base and rate supplied by your accountant or chosen planning assumption. NightJar performs the arithmetic only; it does not choose a tax regime, rate or deductible base.</p>
+        <div className="nj-compensation-form-grid">
+          <label>Estimate category<select value={taxEstimateCategory} onChange={(event) => setTaxEstimateCategory(event.target.value as typeof taxEstimateCategory)}>
+            <option value="corporation_tax">Corporation tax</option><option value="income_tax">Income tax</option><option value="vat">VAT</option><option value="paye_ni">PAYE / National Insurance</option><option value="other">Other / planning estimate</option>
+          </select></label>
+          <label>Taxable base (£)<input type="number" min="0.01" step="0.01" value={taxEstimateBase} onChange={(event) => setTaxEstimateBase(event.target.value)} placeholder="Enter the base"/></label>
+          <label>Assumed rate (%)<input type="number" min="0" max="100" step="0.01" value={taxEstimateRate} onChange={(event) => setTaxEstimateRate(event.target.value)} placeholder="No rate assumed"/></label>
+          <label>Source reference<input value={taxEstimateSource} onChange={(event) => setTaxEstimateSource(event.target.value)} placeholder="Accountant note / planning source"/></label>
+          <label className="wide">Assumption note<textarea rows={2} maxLength={1000} value={taxEstimateNote} onChange={(event) => setTaxEstimateNote(event.target.value)} placeholder="Record the period, tax basis and why this assumption is being used…"/></label>
+        </div>
+        <button className="nj-compensation-primary" type="button" disabled={busy === 'tax-estimate' || !taxEstimateValid} onClick={() => void saveTaxEstimate()}>{busy === 'tax-estimate' ? 'Calculating…' : 'Save tax estimate'}</button>
+        {!!taxLedger.estimates.length && <div className="nj-tax-estimate-history">
+          <h4>Saved estimates for {periodId}</h4>
+          {taxLedger.estimates.map((estimate) => <div className="nj-settlement-row" key={estimate.id}>
+            <div className="nj-settlement-head"><strong>{estimate.category.replaceAll('_', ' ')}</strong><span>{money(estimate.estimatedTaxPence)} estimate</span></div>
+            <div className="nj-settlement-amounts"><span>Base {money(estimate.taxableBasePence)}</span><span>Assumed rate {(estimate.rateBasisPoints / 100).toFixed(2)}%</span><strong>{estimate.sourceReference}</strong></div>
+            <small>{estimate.note}</small>
+          </div>)}
+        </div>}
+      </div>
       <div className="nj-compensation-stats">
         <div><span>Cash reserve</span><strong>{money(taxLedger.ledger?.reservePence ?? 0)}</strong></div>
         <div><span>Confirmed liability</span><strong>{money(taxLedger.ledger?.confirmedLiabilityPence ?? 0)}</strong></div>
