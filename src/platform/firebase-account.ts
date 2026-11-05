@@ -123,6 +123,7 @@ export type NightjarFinancePolicy = {
   creatorPoolPercent: number;
   nightjarPoolPercent: number;
   ownerPoolPercent: number;
+  taxReservePercent: number;
   priceScope: 'planning_only_new_subscribers';
   status: string;
 };
@@ -133,9 +134,10 @@ const adminCreateFinancePolicyCall = httpsCallable<{
   creatorPoolPercent: number;
   nightjarPoolPercent: number;
   ownerPoolPercent: number;
+  taxReservePercent: number;
 }, {
   saved: boolean; policyId: string; effectiveFrom: string; version: number;
-  subscriptionPricePence: number; creatorPoolPercent: number; nightjarPoolPercent: number; ownerPoolPercent: number;
+  subscriptionPricePence: number; creatorPoolPercent: number; nightjarPoolPercent: number; ownerPoolPercent: number; taxReservePercent: number;
   priceScope: 'planning_only_new_subscribers';
 }>(functions, 'adminCreateFinancePolicy');
 const adminListFinancePoliciesCall = httpsCallable<void, { policies: NightjarFinancePolicy[] }>(functions, 'adminListFinancePolicies');
@@ -154,7 +156,8 @@ const adminListRevenueAdjustmentsCall = httpsCallable<{ periodId: string }, { ad
 const adminPrepareCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
   prepared: boolean; periodId: string; eligibleNetRevenuePence: number;
   creatorPoolPercent: number; creatorPoolPence: number; nightjarPoolPercent: number; nightjarPoolPence: number;
-  ownerPoolPercent: number; ownerPoolPence: number; subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string;
+  ownerPoolPercent: number; ownerPoolPence: number; taxReservePercent: number; taxReservePoolPence: number;
+  subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string;
   eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number;
   payouts: Array<{ userId: string; amountPence: number }>;
 }>(functions, 'adminPrepareCreatorPayoutPeriod');
@@ -162,7 +165,8 @@ const adminGetCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
   period: {
     periodId: string; status: string; eligibleNetRevenuePence: number;
     creatorPoolPercent: number; creatorPoolPence: number; nightjarPoolPercent: number; nightjarPoolPence: number;
-    ownerPoolPercent: number; ownerPoolPence: number; subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string;
+    ownerPoolPercent: number; ownerPoolPence: number; taxReservePercent: number; taxReservePoolPence: number;
+  subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string;
     eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number;
   };
   payouts: Array<{ userId: string; displayName: string; amountPence: number; paidPence: number; outstandingPence: number; qualifyingRole: NightjarCommitmentRole | null; status: string }>;
@@ -249,7 +253,7 @@ export const nightjarAccount = {
 
   async adminCreateFinancePolicy(input: {
     effectiveFrom: string; subscriptionPricePence: number; creatorPoolPercent: number;
-    nightjarPoolPercent: number; ownerPoolPercent: number;
+    nightjarPoolPercent: number; ownerPoolPercent: number; taxReservePercent: number;
   }) {
     return (await adminCreateFinancePolicyCall(input)).data;
   },
