@@ -960,12 +960,19 @@ export const adminAssignCommitmentTemplate = onCall({ region: REGION }, async (r
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const periodId = input.periodId;
-  const userId = cleanText(input.userId, 160);
+  const requestedUserId = cleanText(input.userId, 160);
+  const email = cleanEmail(input.email);
   const role = input.role;
   const templateId = cleanText(input.templateId, 100);
-  if (!validCommitmentPeriodId(periodId) || !validCommitmentDocId(userId)
+  if (!validCommitmentPeriodId(periodId) || (!validCommitmentDocId(requestedUserId) && !validEmailAddress(email))
     || !isCommitmentRole(role) || !/^(creator|writer|editor|artist)__v\d+$/.test(templateId)) {
-    throw new HttpsError('invalid-argument', 'Period, member, role and template are required.');
+    throw new HttpsError('invalid-argument', 'Period, member email or account UID, role and template are required.');
+  }
+  let userId = requestedUserId;
+  if (!userId) {
+    const matches = await db.collection('accounts').where('email', '==', email).limit(2).get();
+    if (matches.size !== 1) throw new HttpsError('not-found', 'No unique Nightjar account matched that email address. Check the address or use the account UID.');
+    userId = matches.docs[0].id;
   }
   const periodRef = commitmentPeriodRef(periodId);
   const templateRef = commitmentTemplateRef(templateId);
