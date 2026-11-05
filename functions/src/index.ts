@@ -1477,7 +1477,7 @@ export const adminGetCreatorPayoutPeriod = onCall({ region: REGION }, async (req
   if (!period.exists) throw new HttpsError('not-found', 'Creator Pool calculation not found.');
   return {
     period: { periodId, ...period.data() },
-    payouts: payouts.docs.map((doc) => ({ userId: doc.id, ...doc.data() })),
+    payouts: await Promise.all(payouts.docs.map(async (doc) => ({ userId: doc.id, displayName: (await accountPresentation(doc.id)).displayName, ...doc.data() }))),
   };
 });
 
@@ -1678,7 +1678,8 @@ export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (
       const item = evidenceDoc.data() ?? {};
       return { taskId: task.id, evidenceId, note: cleanText(item.note, 2000), evidenceUrl: cleanText(item.evidenceUrl, 500) || null, submittedAt: toIso(item.submittedAt) };
     })));
-    return { assignmentId: doc.id, userId: data.userId, periodId: data.periodId, role: data.role, pendingTasks, evidence };
+    const presenter = await accountPresentation(String(data.userId ?? ''));
+    return { assignmentId: doc.id, userId: data.userId, displayName: presenter.displayName, periodId: data.periodId, role: data.role, pendingTasks, evidence };
   })).then((items) => items.filter(Boolean));
   return { queue };
 });;
