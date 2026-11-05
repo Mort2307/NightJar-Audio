@@ -238,7 +238,7 @@ export default function CompensationControlCentre() {
         <div className="nj-compensation-net-preview"><span>Allocation total</span><strong>{policyPercentTotal === null ? 'Enter whole percentages from 0 to 100.' : policyPercentTotal + '% / 100%'}</strong></div>
       </div>
       <p className="nj-compensation-footnote">The £ price is a planning value for new subscriptions only. Saving this policy does not create or change Stripe prices, update existing customer agreements or collect payment. The Meg & Mike pool is an accounting allocation, not an automatic founder payout. A non-zero tax reserve allocates cash to a bookkeeping bucket only; it is not a tax estimate, confirmed liability or payment.</p>
-      <button className="nj-compensation-primary" type="button" disabled={busy === 'policy' || !policyPriceValid || !policyPercentagesValid || policyPercentTotal !== 100 || !/^\d{4}-\\d{2}$/.test(policyEffectiveMonth)} onClick={() => void saveFinancePolicy()}>{busy === 'policy' ? 'Saving policy…' : 'Save immutable finance policy'}</button>
+      <button className="nj-compensation-primary" type="button" disabled={busy === 'policy' || !policyPriceValid || !policyPercentagesValid || policyPercentTotal !== 100 || !/^\d{4}-\d{2}$/.test(policyEffectiveMonth)} onClick={() => void saveFinancePolicy()}>{busy === 'policy' ? 'Saving policy…' : 'Save immutable finance policy'}</button>
       {!!financePolicies.length && <div className="nj-finance-policy-history">
         <h4>Saved policy versions</h4>
         {financePolicies.map((policy) => <div className="nj-settlement-row" key={policy.id}>
