@@ -301,7 +301,7 @@ export default function CompensationControlCentre() {
           <div><span>Tax reserve allocation ({payoutPeriod.period.taxReservePercent}%)</span><strong>{money(payoutPeriod.period.taxReservePoolPence)}</strong></div>
           <div><span>Unallocated Creator Pool</span><strong>{money(payoutPeriod.period.unallocatedCreatorPoolPence)}</strong></div>
         </div>
-        <div className="nj-compensation-unallocated"><CircleAlert size={16}/><span>The NightJar and Meg & Mike pools are saved accounting allocations. They are not automatic transfers or founder distributions; any later payment requires a separate approved process.</span></div>
+        <div className="nj-compensation-unallocated"><CircleAlert size={16}/><span>These are policy allocations in the draft ledger, not bank movements. NightJar and Meg & Mike amounts are not automatic transfers or founder distributions. The Tax Reserve amount is not yet cash segregated or tax paid; record only an actual cash reserve in the separate tax ledger below.</span></div>
         {payoutPeriod.period.status === 'draft' && <button className="nj-compensation-primary" type="button" disabled={busy === 'approve'} onClick={() => void approve()}>{busy === 'approve' ? 'Approving…' : 'Approve payout ledger'}</button>}
         {payoutPeriod.payouts.map((payout) => <div className="nj-payout-row" key={payout.userId}>
           <div><strong>{payout.displayName || payout.userId}</strong><small>{roleName(payout.qualifyingRole)} · {payout.status} · Account {payout.userId}</small></div>
@@ -317,14 +317,14 @@ export default function CompensationControlCentre() {
     </article>
     <article className="nj-compensation-card nj-tax-ledger">
       <span className="mini-label">04 / TAX RESERVE & LIABILITY LEDGER</span><h3>Keep reserves separate from tax actually due</h3>
-      <p>No tax rate is assumed. Record a cash reserve separately from an accountant-confirmed liability, then record actual tax payments against that liability.</p>
+      <p>No tax rate is assumed. The Tax Reserve percentage above is a policy allocation only. Record cash here only after it has actually been set aside; then record an accountant-confirmed liability separately and actual tax payments against that liability.</p>
       <div className="nj-compensation-stats">
         <div><span>Cash reserve</span><strong>{money(taxLedger.ledger?.reservePence ?? 0)}</strong></div>
         <div><span>Confirmed liability</span><strong>{money(taxLedger.ledger?.confirmedLiabilityPence ?? 0)}</strong></div>
         <div><span>Recorded as paid</span><strong>{money(taxLedger.ledger?.paidPence ?? 0)}</strong></div>
       </div>
       <div className="nj-compensation-form-grid">
-        <label>Cash reserve (£)<input type="number" min="0" step="0.01" value={taxReserve} onChange={(event) => setTaxReserve(event.target.value)} placeholder="Set manually"/></label>
+        <label>Actual cash set aside (£)<input type="number" min="0" step="0.01" value={taxReserve} onChange={(event) => setTaxReserve(event.target.value)} placeholder="Amount already reserved"/></label>
         <label className="wide">Reserve note<input value={taxReserveNote} onChange={(event) => setTaxReserveNote(event.target.value)} placeholder="Why this cash amount is being reserved"/></label>
       </div>
       <button className="nj-compensation-primary" type="button" disabled={busy === 'tax-reserve' || !taxReserveValid || taxReserveNote.trim().length < 8} onClick={() => void saveTaxReserve()}>{busy === 'tax-reserve' ? 'Saving…' : 'Save cash reserve'}</button>
