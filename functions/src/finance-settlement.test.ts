@@ -27,3 +27,12 @@ test('Creator Pool is 50 percent of eligible net revenue with deterministic penn
   assert.equal(calculateCreatorPoolPence(10001), 5000);
   assert.equal(calculateCreatorPoolPence(10), 5);
 });
+
+test('settlement deduction totals that exceed safe integer precision are rejected', () => {
+  assert.throws(() => calculateEligibleNetRevenuePence({
+    grossPence: Number.MAX_SAFE_INTEGER,
+    refundPence: Number.MAX_SAFE_INTEGER,
+    chargebackPence: Number.MAX_SAFE_INTEGER,
+    processorFeePence: 0, vatPence: 0, otherDeductionsPence: 0,
+  }), /cannot exceed gross|safe integer/);
+});
