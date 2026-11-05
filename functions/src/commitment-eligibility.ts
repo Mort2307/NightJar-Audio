@@ -64,3 +64,6 @@ export const qualifiesForCreatorPool = (assessments: RoleCommitmentAssessment[])
     ['creator', 'writer', 'editor', 'artist'].includes(assessment.role) &&
     evaluateRoleCommitments(assessment).qualifies,
   );
+
+/** Only the latest submitted evidence may be actioned by a reviewer. */
+export const isCommitmentTaskReviewable = (state: unknown): state is 'submitted' => state === 'submitted';
