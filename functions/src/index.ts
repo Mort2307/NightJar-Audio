@@ -1254,6 +1254,7 @@ export const adminCreateFinancePolicy = onCall({ region: REGION }, async (reques
     creatorPoolPercent: Number(input.creatorPoolPercent),
     nightjarPoolPercent: Number(input.nightjarPoolPercent),
     ownerPoolPercent: Number(input.ownerPoolPercent),
+    taxReservePercent: Number(input.taxReservePercent),
   };
   let policy;
   try {
@@ -1476,6 +1477,7 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
       creatorPoolPercent: Number(data.creatorPoolPercent),
       nightjarPoolPercent: Number(data.nightjarPoolPercent),
       ownerPoolPercent: Number(data.ownerPoolPercent),
+      taxReservePercent: Number(data.taxReservePercent),
     });
   } catch (error) {
     throw new HttpsError('failed-precondition', error instanceof Error ? error.message : 'The effective finance policy is invalid.');
@@ -1536,6 +1538,8 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
       nightjarPoolPence: financePoolAllocation.nightjarPoolPence,
       ownerPoolPercent: financePolicy.ownerPoolPercent,
       ownerPoolPence: financePoolAllocation.ownerPoolPence,
+      taxReservePercent: financePolicy.taxReservePercent,
+      taxReservePoolPence: financePoolAllocation.taxReservePoolPence,
       subscriptionPricePence: financePolicy.subscriptionPricePence,
       policyVersion: Number(policyDocument.data()?.version ?? 1),
       policyEffectiveFrom: String(policyDocument.data()?.effectiveFrom ?? ''),
@@ -1565,6 +1569,8 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
     nightjarPoolPence: financePoolAllocation.nightjarPoolPence,
     ownerPoolPercent: financePolicy.ownerPoolPercent,
     ownerPoolPence: financePoolAllocation.ownerPoolPence,
+    taxReservePercent: financePolicy.taxReservePercent,
+    taxReservePoolPence: financePoolAllocation.taxReservePoolPence,
     subscriptionPricePence: financePolicy.subscriptionPricePence,
     policyVersion: Number(policyDocument.data()?.version ?? 1),
     policyEffectiveFrom: String(policyDocument.data()?.effectiveFrom ?? ''),
