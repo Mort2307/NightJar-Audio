@@ -16,7 +16,15 @@ type PayoutPeriod = {
 const today = (() => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; })();
 const month = today.slice(0, 7);
 const money = (pence: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(pence / 100);
-const pence = (value: string) => Math.round((Number(value) || 0) * 100);
+const pence = (value: string) => {
+  const input = value.trim();
+  if (!input) return 0;
+  if (!/^-?\\d+(?:\\.\\d{1,2})?$/.test(input)) return Number.NaN;
+  const result = Math.round(Number(input) * 100);
+  return Number.isSafeInteger(result) ? result : Number.NaN;
+};
+const nonNegativeMoney = (value: string) => Number.isSafeInteger(pence(value)) && pence(value) >= 0;
+const positiveMoney = (value: string) => Number.isSafeInteger(pence(value)) && pence(value) > 0;
 const roleName = (role: string | null) => role === 'creator' ? 'VA Creator' : role === 'writer' ? 'Writer' : role === 'editor' ? 'Audio Editor' : role === 'artist' ? 'Artist' : 'Creative role';
 
 export default function CompensationControlCentre() {
@@ -159,8 +167,15 @@ export default function CompensationControlCentre() {
 
   const reconciled = settlements.filter((item) => item.status === 'reconciled').length;
   const pending = settlements.length - reconciled;
-  const grossPence = settlements.reduce((sum, item) => sum + item.grossPence, 0);
-  const eligibleNetPence = settlements.filter((item) => item.status === 'reconciled').reduce((sum, item) => sum + item.eligibleNetRevenuePence, 0);
+  const sumSafePence = (values: number[]) => values.reduce<number | null>((sum, value) => sum !== null && Number.isSafeInteger(sum + value) ? sum + value : null, 0);
+  const grossPence = sumSafePence(settlements.map((item) => item.grossPence));
+  const eligibleNetPence = sumSafePence(settlements.filter((item) => item.status === 'reconciled').map((item) => item.eligibleNetRevenuePence));
+  const settlementInputsValid = [gross, refunds, chargebacks, fees, vat, otherDeductions].every(nonNegativeMoney) && positiveMoney(gross);
+  const settlementNetPreviewPence = settlementInputsValid ? pence(gross) - pence(refunds) - pence(chargebacks) - pence(fees) - pence(vat) - pence(otherDeductions) : null;
+  const adjustmentValid = Number.isSafeInteger(pence(adjustmentAmount)) && pence(adjustmentAmount) !== 0;
+  const taxReserveValid = taxReserve.trim().length > 0 && nonNegativeMoney(taxReserve);
+  const taxLiabilityValid = taxLiability.trim().length > 0 && nonNegativeMoney(taxLiability);
+  const taxPaymentValid = positiveMoney(taxPaymentAmount);
 
   return <section className="nj-compensation-admin panel" aria-label="Compensation control centre">
     <header><div><span className="mini-label">NIGHTJAR / FINANCIAL CONTROL</span><h2>Compensation Control Centre</h2><p>Reconcile settled revenue, prepare the 50% Creator Pool, approve the ledger and record payments manually.</p></div><WalletCards size={22}/></header>
@@ -169,8 +184,8 @@ export default function CompensationControlCentre() {
     <div className="nj-compensation-toolbar"><label>Finance period<input type="month" value={periodId} onChange={(event) => setPeriodId(event.target.value)}/></label><span>Commitment period: <strong>{commitmentPeriodStatus.replaceAll('_', ' ')}</strong></span><button type="button" onClick={() => void refresh()}><RefreshCw size={14}/> Refresh</button></div>
 
     <div className="nj-compensation-stats">
-      <div><span>Recorded gross receipts</span><strong>{money(grossPence)}</strong></div>
-      <div><span>Reconciled eligible net</span><strong>{money(eligibleNetPence)}</strong></div>
+      <div><span>Recorded gross receipts</span><strong>{grossPence === null ? '—' : money(grossPence)}</strong></div>
+      <div><span>Reconciled eligible net</span><strong>{eligibleNetPence === null ? '—' : money(eligibleNetPence)}</strong></div>
       <div><span>Settlements reconciled</span><strong>{reconciled} / {settlements.length}</strong></div>
     </div>
 
@@ -188,8 +203,8 @@ export default function CompensationControlCentre() {
         <label>VAT collected (£)<input type="number" min="0" step="0.01" value={vat} onChange={(event) => setVat(event.target.value)}/></label>
         <label>Other deductions (£)<input type="number" min="0" step="0.01" value={otherDeductions} onChange={(event) => setOtherDeductions(event.target.value)}/></label>
       </div>
-      <div className="nj-compensation-net-preview"><span>Calculated eligible net revenue for this entry</span><strong>{money(pence(gross) - pence(refunds) - pence(chargebacks) - pence(fees) - pence(vat) - pence(otherDeductions))}</strong></div>
-      <button className="nj-compensation-primary" type="button" disabled={busy === 'settlement' || !externalId.trim() || !sourceReference.trim() || !gross || settledAt.slice(0, 7) !== periodId} onClick={() => void recordSettlement()}>{busy === 'settlement' ? 'Recording…' : 'Record settlement'}</button>
+      <div className="nj-compensation-net-preview"><span>Calculated eligible net revenue for this entry</span><strong>{settlementNetPreviewPence === null ? 'Enter valid amounts to two decimal places; deductions cannot be negative.' : money(settlementNetPreviewPence)}</strong></div>
+      <button className="nj-compensation-primary" type="button" disabled={busy === 'settlement' || !externalId.trim() || !sourceReference.trim() || !settlementInputsValid || settledAt.slice(0, 7) !== periodId} onClick={() => void recordSettlement()}>{busy === 'settlement' ? 'Recording…' : 'Record settlement'}</button>
     </article>
 
     <article className="nj-compensation-card nj-revenue-adjustments">
@@ -200,7 +215,7 @@ export default function CompensationControlCentre() {
         <label>Source reference<input value={adjustmentReference} onChange={(event) => setAdjustmentReference(event.target.value)} placeholder="Correction report reference"/></label>
         <label className="wide">Reason<textarea rows={2} value={adjustmentReason} onChange={(event) => setAdjustmentReason(event.target.value)} placeholder="Explain why this adjustment is required…"/></label>
       </div>
-      <button className="nj-compensation-primary" type="button" disabled={busy === 'adjustment' || !adjustmentAmount || !adjustmentReference.trim() || adjustmentReason.trim().length < 8 || pence(adjustmentAmount) === 0} onClick={() => void recordAdjustment()}>{busy === 'adjustment' ? 'Recording…' : 'Record audited adjustment'}</button>
+      <button className="nj-compensation-primary" type="button" disabled={busy === 'adjustment' || !adjustmentAmount || !adjustmentReference.trim() || adjustmentReason.trim().length < 8 || !adjustmentValid} onClick={() => void recordAdjustment()}>{busy === 'adjustment' ? 'Recording…' : 'Record audited adjustment'}</button>
       {adjustments.map((item) => <div className="nj-adjustment-row" key={item.id}><div><strong>{item.sourceReference}</strong><small>{item.reason}</small></div><strong>{money(item.amountPence)}</strong></div>)}
     </article>
 
@@ -209,7 +224,7 @@ export default function CompensationControlCentre() {
       {loading ? <p>Loading settlement register…</p> : !settlements.length ? <p>No settled revenue has been recorded for this period.</p> : settlements.map((item) => <div className="nj-settlement-row" key={item.id}>
         <div className="nj-settlement-head"><strong>{item.externalId}</strong><span data-status={item.status}>{item.status.replaceAll('_', ' ')}</span></div>
         <small>{item.settledAt} · Source: {item.sourceReference}</small>
-        <div className="nj-settlement-amounts"><span>Gross {money(item.grossPence)}</span><span>Refunds {money(item.refundPence)}</span><span>Chargebacks {money(item.chargebackPence)}</span><span>Fees {money(item.processorFeePence)}</span><span>VAT {money(item.vatPence)}</span><strong>Net {money(item.eligibleNetRevenuePence)}</strong></div>
+        <div className="nj-settlement-amounts"><span>Gross {money(item.grossPence)}</span><span>Refunds {money(item.refundPence)}</span><span>Chargebacks {money(item.chargebackPence)}</span><span>Fees {money(item.processorFeePence)}</span><span>VAT {money(item.vatPence)}</span><span>Other deductions {money(item.otherDeductionsPence)}</span><strong>Net {money(item.eligibleNetRevenuePence)}</strong></div>
         {item.status === 'pending_reconciliation' && <div className="nj-settlement-reconcile"><textarea rows={2} value={reconciliationNotes[item.id] ?? ''} onChange={(event) => setReconciliationNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="Confirm the Stripe source report and explain the reconciliation…"/><button type="button" disabled={busy === 'reconcile-' + item.id || (reconciliationNotes[item.id] ?? '').trim().length < 8} onClick={() => void reconcile(item)}><CheckCircle2 size={14}/> Mark reconciled</button></div>}
       </div>)}
     </article>
@@ -232,7 +247,7 @@ export default function CompensationControlCentre() {
           {payoutPeriod.period.status === 'approved' && payout.outstandingPence > 0 && <div className="nj-payout-payment-form">
             <input aria-label="Manual payment reference" value={paymentRefs[payout.userId] ?? ''} onChange={(event) => setPaymentRefs((current) => ({ ...current, [payout.userId]: event.target.value }))} placeholder="Bank payment reference"/>
             <input aria-label="Manual payment amount in pounds" type="number" min="0.01" max={payout.outstandingPence / 100} step="0.01" value={paymentAmounts[payout.userId] ?? (payout.outstandingPence / 100).toFixed(2)} onChange={(event) => setPaymentAmounts((current) => ({ ...current, [payout.userId]: event.target.value }))}/>
-            <button type="button" disabled={busy === 'pay-' + payout.userId || !(paymentRefs[payout.userId] ?? '').trim()} onClick={() => void recordPayment(payout)}><Banknote size={13}/> Record payment</button>
+            <button type="button" disabled={busy === 'pay-' + payout.userId || !(paymentRefs[payout.userId] ?? '').trim() || !positiveMoney(paymentAmounts[payout.userId] ?? (payout.outstandingPence / 100).toFixed(2)) || pence(paymentAmounts[payout.userId] ?? (payout.outstandingPence / 100).toFixed(2)) > payout.outstandingPence} onClick={() => void recordPayment(payout)}><Banknote size={13}/> Record payment</button>
           </div>}
         </div>)}
       </div> : <div className="nj-compensation-empty"><ShieldCheck size={17}/><span>No payout ledger exists for this period yet. It will only be created after all source settlements are reconciled and the commitment period is closed.</span></div>}
@@ -250,17 +265,17 @@ export default function CompensationControlCentre() {
         <label>Cash reserve (£)<input type="number" min="0" step="0.01" value={taxReserve} onChange={(event) => setTaxReserve(event.target.value)} placeholder="Set manually"/></label>
         <label className="wide">Reserve note<input value={taxReserveNote} onChange={(event) => setTaxReserveNote(event.target.value)} placeholder="Why this cash amount is being reserved"/></label>
       </div>
-      <button className="nj-compensation-primary" type="button" disabled={busy === 'tax-reserve' || taxReserveNote.trim().length < 8} onClick={() => void saveTaxReserve()}>{busy === 'tax-reserve' ? 'Saving…' : 'Save cash reserve'}</button>
+      <button className="nj-compensation-primary" type="button" disabled={busy === 'tax-reserve' || !taxReserveValid || taxReserveNote.trim().length < 8} onClick={() => void saveTaxReserve()}>{busy === 'tax-reserve' ? 'Saving…' : 'Save cash reserve'}</button>
       <div className="nj-compensation-form-grid nj-tax-liability-form">
         <label>Accountant-confirmed liability (£)<input type="number" min="0" step="0.01" value={taxLiability} onChange={(event) => setTaxLiability(event.target.value)} placeholder="Only after professional confirmation"/></label>
         <label>Accountant / HMRC reference<input value={accountantReference} onChange={(event) => setAccountantReference(event.target.value)} placeholder="Reference or source"/></label>
       </div>
-      <button className="nj-compensation-primary" type="button" disabled={busy === 'tax-liability' || accountantReference.trim().length < 4 || !taxLiability} onClick={() => void confirmTaxLiability()}>{busy === 'tax-liability' ? 'Saving…' : 'Record confirmed liability'}</button>
+      <button className="nj-compensation-primary" type="button" disabled={busy === 'tax-liability' || accountantReference.trim().length < 4 || !taxLiabilityValid} onClick={() => void confirmTaxLiability()}>{busy === 'tax-liability' ? 'Saving…' : 'Record confirmed liability'}</button>
       {!!taxLedger.ledger?.confirmedLiabilityPence && <div className="nj-compensation-form-grid nj-tax-liability-form">
         <label>Actual payment (£)<input type="number" min="0.01" step="0.01" value={taxPaymentAmount} onChange={(event) => setTaxPaymentAmount(event.target.value)} placeholder="Amount paid"/></label>
         <label>Payment reference<input value={taxPaymentReference} onChange={(event) => setTaxPaymentReference(event.target.value)} placeholder="Bank / HMRC payment reference"/></label>
       </div>}
-      {!!taxLedger.ledger?.confirmedLiabilityPence && <button className="nj-compensation-primary" type="button" disabled={busy === 'tax-payment' || !taxPaymentReference.trim() || !taxPaymentAmount} onClick={() => void recordTaxPayment()}>{busy === 'tax-payment' ? 'Recording…' : 'Record actual tax payment'}</button>}
+      {!!taxLedger.ledger?.confirmedLiabilityPence && <button className="nj-compensation-primary" type="button" disabled={busy === 'tax-payment' || !taxPaymentReference.trim() || !taxPaymentValid} onClick={() => void recordTaxPayment()}>{busy === 'tax-payment' ? 'Recording…' : 'Record actual tax payment'}</button>}
       {taxLedger.payments.map((payment) => <div className="nj-tax-payment-row" key={payment.id}><span>{payment.paidAt} · {payment.reference}</span><strong>{money(payment.amountPence)}</strong></div>)}
     </article>
     <p className="nj-compensation-footnote">No bank transfers or automatic payouts are initiated here. This centre records reconciled source data, approved payout liabilities and payment references. Tax liabilities and payments require their own accountant-confirmed ledger.</p>
