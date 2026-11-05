@@ -1,0 +1,11 @@
+{
+  "pr": 336,
+  "reason": "Connects the existing Profile Types, Commitment Tracking and Compensation Control Centre implementation to the authenticated Nightjar admin workspace. No production deploy or Firebase staging project is introduced.",
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "e818bbb60e02aa0105d0db324c9c612f0e01c5d4",
+      "sha": "a16dd83da9a8275d58a6611b465d16aea1f24420"
+    }
+  ]
+}
