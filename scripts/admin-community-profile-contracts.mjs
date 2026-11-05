@@ -24,13 +24,13 @@ assert.match(save, /adminCommunityVisible: identity\.admin && input\.adminCommun
 const payload = section('const publicProfilePayload =', 'const publicProfileForAccount =');
 assert.match(payload, /nightjarTeam = accountData\.role === 'admin'/);
 assert.match(payload, /nightjarTeam \? data\.adminCommunityVisible !== true : data\.publicProfile === false/);
-assert.match(payload, /roles: nightjarTeam \? \['listener'\] : \['listener', \.\.\.roles\]/);
+assert.match(payload, /roles: nightjarTeam \? \['listener'\] : publicTypes/,'directory payload exposes only approved, publicly visible profile types');
 assert.doesNotMatch(payload, /\b(?:email|passwordHash|authToken|adminPermissions|securityEvents):\s/,
   'Public payload must never expose administrator-only data');
 
 const listing = section('export const listPublicProfiles = onCall', 'export const getPublicProfile = onCall');
 assert.match(listing, /nightjarTeam \? data\.adminCommunityVisible !== true : data\.publicProfile === false/);
-assert.match(listing, /roles: nightjarTeam \? \['listener'\] : \['listener', \.\.\.professionalRoles\]/);
+assert.match(listing, /roles: nightjarTeam \? \['listener'\] : publicProfileTypes/,'directory listing respects per-profile visibility');
 assert.match(listing, /nightjarTeam,/);
 
 const detail = section('export const getPublicProfile = onCall', 'export const getCreatorProfile = onCall');
