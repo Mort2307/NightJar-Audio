@@ -9,9 +9,9 @@ type Settlement = {
   vatPence: number; otherDeductionsPence: number; eligibleNetRevenuePence: number; status: string;
 };
 type Payout = { userId: string; displayName: string; amountPence: number; paidPence: number; outstandingPence: number; qualifyingRole: NightjarCommitmentRole | null; status: string };
-type FinancePolicy = { id: string; policyId: string; effectiveFrom: string; version: number; subscriptionPricePence: number; creatorPoolPercent: number; nightjarPoolPercent: number; ownerPoolPercent: number; priceScope: string; status: string };
+type FinancePolicy = { id: string; policyId: string; effectiveFrom: string; version: number; subscriptionPricePence: number; creatorPoolPercent: number; nightjarPoolPercent: number; ownerPoolPercent: number; taxReservePercent: number; priceScope: string; status: string };
 type PayoutPeriod = {
-  period: { periodId: string; status: string; eligibleNetRevenuePence: number; creatorPoolPercent: number; creatorPoolPence: number; nightjarPoolPercent: number; nightjarPoolPence: number; ownerPoolPercent: number; ownerPoolPence: number; subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string; eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number };
+  period: { periodId: string; status: string; eligibleNetRevenuePence: number; creatorPoolPercent: number; creatorPoolPence: number; nightjarPoolPercent: number; nightjarPoolPence: number; ownerPoolPercent: number; ownerPoolPence: number; taxReservePercent: number; taxReservePoolPence: number; subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string; eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number };
   payouts: Payout[];
 };
 const today = (() => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; })();
@@ -36,6 +36,7 @@ export default function CompensationControlCentre() {
   const [policyCreatorPercent, setPolicyCreatorPercent] = useState('50');
   const [policyNightjarPercent, setPolicyNightjarPercent] = useState('');
   const [policyOwnerPercent, setPolicyOwnerPercent] = useState('');
+  const [policyTaxReservePercent, setPolicyTaxReservePercent] = useState('0');
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [adjustmentAmount, setAdjustmentAmount] = useState('');
@@ -155,6 +156,7 @@ export default function CompensationControlCentre() {
     creatorPoolPercent: Number(policyCreatorPercent),
     nightjarPoolPercent: Number(policyNightjarPercent),
     ownerPoolPercent: Number(policyOwnerPercent),
+    taxReservePercent: Number(policyTaxReservePercent),
   }), 'Immutable finance policy saved. Existing subscriptions and Stripe prices were not changed.');
 
   const prepare = () => run('prepare', () => nightjarAccount.adminPrepareCreatorPayoutPeriod(periodId), 'Creator Pool calculation prepared as a draft.');
@@ -195,7 +197,7 @@ export default function CompensationControlCentre() {
   const taxLiabilityValid = taxLiability.trim().length > 0 && nonNegativeMoney(taxLiability);
   const taxPaymentValid = positiveMoney(taxPaymentAmount);
   const policyPriceValid = positiveMoney(policySubscriptionPrice);
-  const policyPercentages = [policyCreatorPercent, policyNightjarPercent, policyOwnerPercent].map((value) => /^\d+$/.test(value.trim()) ? Number(value) : Number.NaN);
+  const policyPercentages = [policyCreatorPercent, policyNightjarPercent, policyOwnerPercent, policyTaxReservePercent].map((value) => /^\d+$/.test(value.trim()) ? Number(value) : Number.NaN);
   const policyPercentagesValid = policyPercentages.every((value) => Number.isInteger(value) && value >= 0 && value <= 100);
   const policyPercentTotal = policyPercentagesValid ? policyPercentages.reduce((sum, value) => sum + value, 0) : null;
   const financePolicyForPeriod = financePolicies
@@ -220,7 +222,7 @@ export default function CompensationControlCentre() {
     <article className="nj-compensation-card nj-finance-policy-card">
       <span className="mini-label">00 / EFFECTIVE-DATED FINANCE POLICY</span>
       <h3>Subscription planning and pool allocation</h3>
-      <p>Save a versioned policy for a future/current open month. Creator Pool, NightJar operations and the Meg & Mike pool must total exactly 100%. Existing payout periods keep their saved policy snapshot.</p>
+      <p>Save a versioned policy for a future/current open month. Creator Pool, NightJar operations, Meg & Mike and the optional tax reserve must total exactly 100%. Existing payout periods keep their saved policy snapshot.</p>
       <div className="nj-compensation-stats">
         <div><span>Policy effective for selected period</span><strong>{effectivePolicyLabel}</strong></div>
         <div><span>Creator Pool</span><strong>{financePolicyForPeriod ? financePolicyForPeriod.creatorPoolPercent + '%' : 'Not configured'}</strong></div>
@@ -232,15 +234,16 @@ export default function CompensationControlCentre() {
         <label>Creator Pool (%)<input type="number" min="0" max="100" step="1" value={policyCreatorPercent} onChange={(event) => setPolicyCreatorPercent(event.target.value)}/></label>
         <label>NightJar operations pool (%)<input type="number" min="0" max="100" step="1" value={policyNightjarPercent} onChange={(event) => setPolicyNightjarPercent(event.target.value)}/></label>
         <label>Meg & Mike pool (%)<input type="number" min="0" max="100" step="1" value={policyOwnerPercent} onChange={(event) => setPolicyOwnerPercent(event.target.value)}/></label>
+        <label>Tax reserve allocation (%) · optional<input type="number" min="0" max="100" step="1" value={policyTaxReservePercent} onChange={(event) => setPolicyTaxReservePercent(event.target.value)}/></label>
         <div className="nj-compensation-net-preview"><span>Allocation total</span><strong>{policyPercentTotal === null ? 'Enter whole percentages from 0 to 100.' : policyPercentTotal + '% / 100%'}</strong></div>
       </div>
-      <p className="nj-compensation-footnote">The £ price is a planning value for new subscriptions only. Saving this policy does not create or change Stripe prices, update existing customer agreements or collect payment. The Meg & Mike pool is an accounting allocation, not an automatic founder payout. Tax reserves remain separate and require accountant-confirmed treatment.</p>
+      <p className="nj-compensation-footnote">The £ price is a planning value for new subscriptions only. Saving this policy does not create or change Stripe prices, update existing customer agreements or collect payment. The Meg & Mike pool is an accounting allocation, not an automatic founder payout. A non-zero tax reserve allocates cash to a bookkeeping bucket only; it is not a tax estimate, confirmed liability or payment.</p>
       <button className="nj-compensation-primary" type="button" disabled={busy === 'policy' || !policyPriceValid || !policyPercentagesValid || policyPercentTotal !== 100 || !/^\d{4}-\\d{2}$/.test(policyEffectiveMonth)} onClick={() => void saveFinancePolicy()}>{busy === 'policy' ? 'Saving policy…' : 'Save immutable finance policy'}</button>
       {!!financePolicies.length && <div className="nj-finance-policy-history">
         <h4>Saved policy versions</h4>
         {financePolicies.map((policy) => <div className="nj-settlement-row" key={policy.id}>
           <div className="nj-settlement-head"><strong>Version {policy.version} · {policy.effectiveFrom}</strong><span>{policy.status}</span></div>
-          <div className="nj-settlement-amounts"><span>New subscription planning price {money(policy.subscriptionPricePence)}/month</span><span>Creator {policy.creatorPoolPercent}%</span><span>NightJar {policy.nightjarPoolPercent}%</span><strong>Meg & Mike {policy.ownerPoolPercent}%</strong></div>
+          <div className="nj-settlement-amounts"><span>New subscription planning price {money(policy.subscriptionPricePence)}/month</span><span>Creator {policy.creatorPoolPercent}%</span><span>NightJar {policy.nightjarPoolPercent}%</span><span>Meg & Mike {policy.ownerPoolPercent}%</span><strong>Tax reserve {policy.taxReservePercent}%</strong></div>
         </div>)}
       </div>}
     </article>
@@ -295,6 +298,7 @@ export default function CompensationControlCentre() {
           <div><span>Creator Pool ({payoutPeriod.period.creatorPoolPercent}%)</span><strong>{money(payoutPeriod.period.creatorPoolPence)}</strong></div>
           <div><span>NightJar operations ({payoutPeriod.period.nightjarPoolPercent}%)</span><strong>{money(payoutPeriod.period.nightjarPoolPence)}</strong></div>
           <div><span>Meg & Mike pool ({payoutPeriod.period.ownerPoolPercent}%)</span><strong>{money(payoutPeriod.period.ownerPoolPence)}</strong></div>
+          <div><span>Tax reserve allocation ({payoutPeriod.period.taxReservePercent}%)</span><strong>{money(payoutPeriod.period.taxReservePoolPence)}</strong></div>
           <div><span>Unallocated Creator Pool</span><strong>{money(payoutPeriod.period.unallocatedCreatorPoolPence)}</strong></div>
         </div>
         <div className="nj-compensation-unallocated"><CircleAlert size={16}/><span>The NightJar and Meg & Mike pools are saved accounting allocations. They are not automatic transfers or founder distributions; any later payment requires a separate approved process.</span></div>
