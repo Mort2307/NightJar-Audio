@@ -18,7 +18,7 @@ import { buildNightjarQualityCallables } from './nightjar-quality';
 import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes, type NightjarProfileType } from './profile-types';
 import { evaluateRoleCommitments, isCommitmentTaskReviewable, type RoleCommitmentAssessment } from './commitment-eligibility';
 import { allocateCreatorPool, type CreatorPoolMember } from './creator-pool';
-import { calculateCreatorPoolPence, calculateEligibleNetRevenuePence, isSameManualPayment } from './finance-settlement';
+import { calculateEligibleNetRevenuePence, isSameManualPayment } from './finance-settlement';
 import { allocateFinanceRevenuePoolsPence, validateFinanceAllocationPolicy } from './finance-policy';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
@@ -1560,7 +1560,14 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
     return calculated;
   });
   return {
-    prepared: true, periodId, eligibleNetRevenuePence, creatorPoolPercent: 50,
+    prepared: true, periodId, eligibleNetRevenuePence, creatorPoolPercent: financePolicy.creatorPoolPercent,
+    nightjarPoolPercent: financePolicy.nightjarPoolPercent,
+    nightjarPoolPence: financePoolAllocation.nightjarPoolPence,
+    ownerPoolPercent: financePolicy.ownerPoolPercent,
+    ownerPoolPence: financePoolAllocation.ownerPoolPence,
+    subscriptionPricePence: financePolicy.subscriptionPricePence,
+    policyVersion: Number(policyDocument.data()?.version ?? 1),
+    policyEffectiveFrom: String(policyDocument.data()?.effectiveFrom ?? ''),
     creatorPoolPence, eligibleCreatorCount: allocation.eligibleCreatorCount,
     totalAllocatedPence: allocation.totalAllocatedPence,
     unallocatedCreatorPoolPence: allocation.unallocatedPence,
@@ -3113,7 +3120,14 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
     return calculated;
   });
   return {
-    prepared: true, periodId, eligibleNetRevenuePence, creatorPoolPercent: 50,
+    prepared: true, periodId, eligibleNetRevenuePence, creatorPoolPercent: financePolicy.creatorPoolPercent,
+    nightjarPoolPercent: financePolicy.nightjarPoolPercent,
+    nightjarPoolPence: financePoolAllocation.nightjarPoolPence,
+    ownerPoolPercent: financePolicy.ownerPoolPercent,
+    ownerPoolPence: financePoolAllocation.ownerPoolPence,
+    subscriptionPricePence: financePolicy.subscriptionPricePence,
+    policyVersion: Number(policyDocument.data()?.version ?? 1),
+    policyEffectiveFrom: String(policyDocument.data()?.effectiveFrom ?? ''),
     creatorPoolPence, eligibleCreatorCount: allocation.eligibleCreatorCount,
     totalAllocatedPence: allocation.totalAllocatedPence,
     unallocatedCreatorPoolPence: allocation.unallocatedPence,
