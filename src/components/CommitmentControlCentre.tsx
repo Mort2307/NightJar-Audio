@@ -65,7 +65,7 @@ export default function CommitmentControlCentre() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Commitment controls could not be loaded.');
     } finally { setLoading(false); }
-  }, [assignRole]);
+  }, [assignRole, assignPeriod]);
   useEffect(() => { void refresh(); }, [refresh]);
 
   const run = async (key: string, action: () => Promise<unknown>, success: string) => {
