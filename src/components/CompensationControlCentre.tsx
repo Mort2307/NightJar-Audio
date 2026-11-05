@@ -19,7 +19,7 @@ const money = (pence: number) => new Intl.NumberFormat('en-GB', { style: 'curren
 const pence = (value: string) => {
   const input = value.trim();
   if (!input) return 0;
-  if (!/^-?\\d+(?:\\.\\d{1,2})?$/.test(input)) return Number.NaN;
+  if (!/^-?\d+(?:\\.\d{1,2})?$/.test(input)) return Number.NaN;
   const result = Math.round(Number(input) * 100);
   return Number.isSafeInteger(result) ? result : Number.NaN;
 };
@@ -172,6 +172,7 @@ export default function CompensationControlCentre() {
   const eligibleNetPence = sumSafePence(settlements.filter((item) => item.status === 'reconciled').map((item) => item.eligibleNetRevenuePence));
   const settlementInputsValid = [gross, refunds, chargebacks, fees, vat, otherDeductions].every(nonNegativeMoney) && positiveMoney(gross);
   const settlementNetPreviewPence = settlementInputsValid ? pence(gross) - pence(refunds) - pence(chargebacks) - pence(fees) - pence(vat) - pence(otherDeductions) : null;
+  const settlementCanRecord = settlementNetPreviewPence !== null && settlementNetPreviewPence >= 0;
   const adjustmentValid = Number.isSafeInteger(pence(adjustmentAmount)) && pence(adjustmentAmount) !== 0;
   const taxReserveValid = taxReserve.trim().length > 0 && nonNegativeMoney(taxReserve);
   const taxLiabilityValid = taxLiability.trim().length > 0 && nonNegativeMoney(taxLiability);
@@ -203,8 +204,8 @@ export default function CompensationControlCentre() {
         <label>VAT collected (£)<input type="number" min="0" step="0.01" value={vat} onChange={(event) => setVat(event.target.value)}/></label>
         <label>Other deductions (£)<input type="number" min="0" step="0.01" value={otherDeductions} onChange={(event) => setOtherDeductions(event.target.value)}/></label>
       </div>
-      <div className="nj-compensation-net-preview"><span>Calculated eligible net revenue for this entry</span><strong>{settlementNetPreviewPence === null ? 'Enter valid amounts to two decimal places; deductions cannot be negative.' : money(settlementNetPreviewPence)}</strong></div>
-      <button className="nj-compensation-primary" type="button" disabled={busy === 'settlement' || !externalId.trim() || !sourceReference.trim() || !settlementInputsValid || settledAt.slice(0, 7) !== periodId} onClick={() => void recordSettlement()}>{busy === 'settlement' ? 'Recording…' : 'Record settlement'}</button>
+      <div className="nj-compensation-net-preview"><span>Calculated eligible net revenue for this entry</span><strong>{settlementNetPreviewPence === null ? 'Enter valid amounts to two decimal places; deductions cannot be negative.' : settlementNetPreviewPence < 0 ? 'Deductions cannot exceed gross receipts.' : money(settlementNetPreviewPence)}</strong></div>
+      <button className="nj-compensation-primary" type="button" disabled={busy === 'settlement' || !externalId.trim() || !sourceReference.trim() || !settlementCanRecord || settledAt.slice(0, 7) !== periodId} onClick={() => void recordSettlement()}>{busy === 'settlement' ? 'Recording…' : 'Record settlement'}</button>
     </article>
 
     <article className="nj-compensation-card nj-revenue-adjustments">
