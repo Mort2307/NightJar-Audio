@@ -16,7 +16,7 @@ import { canUseBetaListening } from './entitlements';
 import { buildVerifiedCreditCallables } from './verified-credits';
 import { buildNightjarQualityCallables } from './nightjar-quality';
 import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes, type NightjarProfileType } from './profile-types';
-import { evaluateRoleCommitments, type RoleCommitmentAssessment } from './commitment-eligibility';
+import { evaluateRoleCommitments, isCommitmentTaskReviewable, type RoleCommitmentAssessment } from './commitment-eligibility';
 import { allocateCreatorPool, type CreatorPoolMember } from './creator-pool';
 import { calculateCreatorPoolPence, calculateEligibleNetRevenuePence } from './finance-settlement';
 export { diditWebhook, processDiditWebhook } from './didit';
@@ -1092,7 +1092,7 @@ export const adminReviewCommitmentTask = onCall({ region: REGION }, async (reque
     const tasks = Array.isArray(assignment.tasks) ? [...assignment.tasks] : [];
     const index = tasks.findIndex((task: Record<string, any>) => task.id === taskId);
     if (index < 0) throw new HttpsError('not-found', 'Commitment task not found.');
-    if (tasks[index].state !== 'submitted') {
+    if (!isCommitmentTaskReviewable(tasks[index].state)) {
       throw new HttpsError('failed-precondition', 'Only evidence currently awaiting review can be reviewed. Ask the member to resubmit after a rejection.');
     }
     if (decision === 'approved' && !(Array.isArray(tasks[index].evidenceIds) && tasks[index].evidenceIds.length)) {
