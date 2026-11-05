@@ -1120,6 +1120,7 @@ export const adminSetCommitmentException = onCall({ region: REGION }, async (req
     const assignmentSnap = await tx.get(assignmentRef);
     const assignment = assignmentSnap.data() ?? {};
     if (!assignmentSnap.exists || assignment.status !== 'open') throw new HttpsError('not-found', 'Open commitment assignment not found.');
+    if (assignment.approvedException === true) throw new HttpsError('already-exists', 'A documented eligibility exception is already recorded for this assignment.');
     const periodSnap = await tx.get(commitmentPeriodRef(String(assignment.periodId ?? '')));
     if (!periodSnap.exists || periodSnap.data()?.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment period is closed.');
     tx.update(assignmentRef, { approvedException: true, exceptionReason: reason, exceptionApprovedByAdminUserId: admin.uid, exceptionApprovedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
@@ -1675,14 +1676,13 @@ export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (
     const pendingTasks = (Array.isArray(data.tasks) ? data.tasks : [])
       .filter((task: Record<string, any>) => task.state === 'submitted')
       .map((task: Record<string, any>) => ({ id: task.id, title: task.title, evidenceIds: task.latestEvidenceId ? [task.latestEvidenceId] : (Array.isArray(task.evidenceIds) ? task.evidenceIds.slice(-1) : []) }));
-    if (!pendingTasks.length) return null;
     const evidence = await Promise.all(pendingTasks.flatMap((task) => task.evidenceIds.map(async (evidenceId: string) => {
       const evidenceDoc = await doc.ref.collection('evidence').doc(evidenceId).get();
       const item = evidenceDoc.data() ?? {};
       return { taskId: task.id, evidenceId, note: cleanText(item.note, 2000), evidenceUrl: cleanText(item.evidenceUrl, 500) || null, submittedAt: toIso(item.submittedAt) };
     })));
     const presenter = presenterByUser.get(String(data.userId ?? ''));
-    return { assignmentId: doc.id, userId: data.userId, displayName: presenter?.displayName ?? 'Nightjar member', periodId: data.periodId, role: data.role, pendingTasks, evidence };
+    return { assignmentId: doc.id, userId: data.userId, displayName: presenter?.displayName ?? 'Nightjar member', periodId: data.periodId, role: data.role, pendingTasks, evidence, exceptionApproved: data.approvedException === true, exceptionReason: cleanText(data.exceptionReason, 1000) || null };
   })).then((items) => items.filter(Boolean));
   return { queue };
 });;
