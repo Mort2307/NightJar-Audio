@@ -174,11 +174,18 @@ const adminGetCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
 const adminApproveCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, { approved: boolean; periodId: string }>(functions, 'adminApproveCreatorPayoutPeriod');
 const adminRecordCreatorPaymentCall = httpsCallable<{ periodId: string; userId: string; amountPence: number; reference: string; paidAt: string }, { recorded: boolean; duplicate: boolean; paymentId: string; paidPence?: number; outstandingPence?: number }>(functions, 'adminRecordCreatorPayment');
 
+const adminSetTaxEstimateCall = httpsCallable<{
+  periodId: string; category: 'corporation_tax' | 'income_tax' | 'vat' | 'paye_ni' | 'other';
+  taxableBasePence: number; rateBasisPoints: number; sourceReference: string; note: string;
+}, {
+  saved: boolean; periodId: string; taxableBasePence: number; rateBasisPoints: number;
+  estimatedTaxPence: number; category: string; sourceReference: string;
+}>(functions, 'adminSetTaxEstimate');
 const adminSetTaxReserveCall = httpsCallable<{ periodId: string; reservePence: number; note: string }, { saved: boolean; periodId: string; reservePence: number }>(functions, 'adminSetTaxReserve');
 const adminSetConfirmedTaxLiabilityCall = httpsCallable<{ periodId: string; liabilityPence: number; accountantReference: string }, { saved: boolean; periodId: string; liabilityPence: number }>(functions, 'adminSetConfirmedTaxLiability');
 const adminRecordTaxPaymentCall = httpsCallable<{ periodId: string; amountPence: number; reference: string; paidAt: string }, { recorded: boolean; duplicate: boolean; paymentId: string; paidPence?: number }>(functions, 'adminRecordTaxPayment');
 const adminGetTaxLedgerCall = httpsCallable<{ periodId: string }, {
-  ledger: null | { periodId: string; reservePence?: number; reserveNote?: string; confirmedLiabilityPence?: number; accountantReference?: string; paidPence?: number };
+  ledger: null | { periodId: string; reservePence?: number; reserveNote?: string; confirmedLiabilityPence?: number; accountantReference?: string; paidPence?: number; estimate?: { category: string; taxableBasePence: number; rateBasisPoints: number; estimatedTaxPence: number; sourceReference: string; note: string } };
   payments: Array<{ id: string; amountPence: number; reference: string; paidAt: string }>;
 }>(functions, 'adminGetTaxLedger');
 const getMyCreatorCompensationCall = httpsCallable<void, { compensation: Array<{
@@ -299,6 +306,13 @@ export const nightjarAccount = {
 
   async adminRecordCreatorPayment(input: { periodId: string; userId: string; amountPence: number; reference: string; paidAt: string }) {
     return (await adminRecordCreatorPaymentCall(input)).data;
+  },
+
+  async adminSetTaxEstimate(input: {
+    periodId: string; category: 'corporation_tax' | 'income_tax' | 'vat' | 'paye_ni' | 'other';
+    taxableBasePence: number; rateBasisPoints: number; sourceReference: string; note: string;
+  }) {
+    return (await adminSetTaxEstimateCall(input)).data;
   },
 
   async adminSetTaxReserve(input: { periodId: string; reservePence: number; note: string }) {
