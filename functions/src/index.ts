@@ -18,7 +18,7 @@ import { buildNightjarQualityCallables } from './nightjar-quality';
 import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes, type NightjarProfileType } from './profile-types';
 import { evaluateRoleCommitments, isCommitmentTaskReviewable, type RoleCommitmentAssessment } from './commitment-eligibility';
 import { allocateCreatorPool, type CreatorPoolMember } from './creator-pool';
-import { calculateCreatorPoolPence, calculateEligibleNetRevenuePence } from './finance-settlement';
+import { calculateCreatorPoolPence, calculateEligibleNetRevenuePence, isSameManualPayment } from './finance-settlement';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -1528,7 +1528,1542 @@ export const adminRecordCreatorPayment = onCall({ region: REGION }, async (reque
     const payout = payoutSnap.data() ?? {};
     if (!periodSnap.exists || period.status !== 'approved') throw new HttpsError('failed-precondition', 'Approve the payout period before recording payments.');
     if (!payoutSnap.exists) throw new HttpsError('not-found', 'Creator payout not found.');
-    if (paymentSnap.exists) return { recorded: true, duplicate: true, paymentId };
+import { initializeApp } from 'firebase-admin/app';
+import { getFirestore, FieldValue, FieldPath, type QueryDocumentSnapshot, type DocumentReference } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
+import { getAuth } from 'firebase-admin/auth';
+import { getMessaging } from 'firebase-admin/messaging';
+import { createHash, randomUUID } from 'node:crypto';
+import { inflateRawSync } from 'node:zlib';
+import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { exchangeGoogleAuthorizationCode, getGoogleTokenInfo, getGoogleUserInfo, refreshGoogleAccessToken, revokeGoogleToken, sendGmailApiMessage } from './gmail-api';
+import { DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT, diditConfigured, diditMode, diditPass, startDiditSession, verifiedAdultFromDecision, diditDocumentBirthDateReturned, diditSafeMemberWarningCodes } from './didit';
+import { hasPaidEntitlement } from './entitlements';
+import { canUseBetaListening } from './entitlements';
+import { buildVerifiedCreditCallables } from './verified-credits';
+import { buildNightjarQualityCallables } from './nightjar-quality';
+import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes, type NightjarProfileType } from './profile-types';
+import { evaluateRoleCommitments, isCommitmentTaskReviewable, type RoleCommitmentAssessment } from './commitment-eligibility';
+import { allocateCreatorPool, type CreatorPoolMember } from './creator-pool';
+import { calculateCreatorPoolPence, calculateEligibleNetRevenuePence, isSameManualPayment } from './finance-settlement';
+export { diditWebhook, processDiditWebhook } from './didit';
+export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
+export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
+export {
+  getAdminAttentionPreferences, saveAdminAttentionPreferences,
+  adminAttentionProfessionalApplications, adminAttentionReleases, adminAttentionScripts,
+  adminAttentionImages, adminAttentionReviews, adminAttentionEditorPortfolio,
+  adminAttentionReports, adminAttentionSecurity, adminAttentionSuggestions, adminAttentionBilling,
+} from './admin-attention';
+
+initializeApp();
+
+const db = getFirestore();
+const REGION = 'europe-west2';
+// Emergency reversible stop: no new Didit sessions until live-session creation is repaired.
+const DIDIT_VERIFICATION_PAUSED = false; // Public self-service Didit age verification enabled; existing approved accounts remain verified.
+const DIDIT_LIVE_PILOT_ADMINS_ONLY = false; // All authenticated, unverified members may begin the standard mandatory age check.
+const TESTING_AGE_ASSURANCE_BYPASS = false; // Mandatory verified-18+ rollout: private tester bypass no longer grants adult access.
+const CLOSED_BETA = true; // TESTING ONLY — must be false before public launch.
+const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
+const NIGHTJAR_GMAIL_CLIENT_ID = defineSecret('NIGHTJAR_GMAIL_CLIENT_ID');
+const NIGHTJAR_GMAIL_CLIENT_SECRET = defineSecret('NIGHTJAR_GMAIL_CLIENT_SECRET');
+const NIGHTJAR_GMAIL_SENDER_EMAIL = 'nightjar.audio.app@gmail.com';
+const NIGHTJAR_GMAIL_SCOPE = 'openid email https://www.googleapis.com/auth/gmail.send';
+const NIGHTJAR_GMAIL_REDIRECT_URI = 'https://europe-west2-nightjar-audio.cloudfunctions.net/adminGmailOAuthCallback';
+
+const ADMIN_EMAILS = new Set([
+  'mike.owen230792@gmail.com',
+  'megan.wright666@hotmail.com',
+  'nightjar.audio.app@gmail.com',
+]);
+
+type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
+type SelectableRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
+
+const cleanEmail = (value: unknown) => String(value ?? '').trim().toLowerCase();
+const maskSecurityEmail = (value: unknown) => {
+  const email = cleanEmail(value);
+  const [local = '', domain = ''] = email.split('@');
+  if (!local || !domain) return 'unknown account';
+  const visible = local.length <= 2 ? local.slice(0, 1) : local.slice(0, 2);
+  return visible + '***@' + domain;
+};
+const authenticationEventMillis = (data: Record<string, any>) => data.createdAt?.toMillis?.() ?? 0;
+
+const accountRef = (uid: string) => db.collection('accounts').doc(uid);
+
+const CURRENT_LEGAL_DOCUMENTS = {
+  platform_terms: {
+    id: 'platform_terms',
+    version: '2026-10-15.2',
+    title: 'Nightjar Terms of Use',
+    path: '/legal/terms',
+    requiredForAccount: true,
+    requiredForProfessional: true,
+  },
+  privacy_notice: {
+    id: 'privacy_notice',
+    version: '2026-10-15.1',
+    title: 'Nightjar Privacy Notice',
+    path: '/legal/privacy',
+    requiredForAccount: true,
+    requiredForProfessional: true,
+  },
+  age_assurance_notice: {
+    id: 'age_assurance_notice',
+    version: '2026-10-14.3',
+    title: 'Nightjar Age Verification & Didit Privacy Notice',
+    path: '/legal/age-verification',
+    requiredForAccount: false,
+    requiredForProfessional: false,
+  },
+  professional_terms: {
+    id: 'professional_terms',
+    version: '2026-10-09.1',
+    title: 'Nightjar Professional & Content Terms',
+    path: '/legal/professional',
+    requiredForAccount: false,
+    requiredForProfessional: true,
+  },
+} as const;
+
+type LegalDocumentId = keyof typeof CURRENT_LEGAL_DOCUMENTS;
+
+const legalAcceptanceRef = (uid: string, documentId: LegalDocumentId) =>
+  accountRef(uid).collection('legalAcceptances').doc(documentId);
+
+const currentLegalAcceptanceFor = async (uid: string, documentId: LegalDocumentId) => {
+  const expected = CURRENT_LEGAL_DOCUMENTS[documentId];
+  const snapshot = await legalAcceptanceRef(uid, documentId).get();
+  const data = snapshot.data() ?? {};
+  return {
+    accepted: snapshot.exists && data.version === expected.version && data.withdrawnAt == null,
+    version: cleanText(data.version, 60) || null,
+    acceptedAt: toIso(data.acceptedAt),
+  };
+};
+
+const requireCurrentLegalAcceptance = async (uid: string, documentId: LegalDocumentId) => {
+  const status = await currentLegalAcceptanceFor(uid, documentId);
+  if (!status.accepted) {
+    const document = CURRENT_LEGAL_DOCUMENTS[documentId];
+    throw new HttpsError(
+      'failed-precondition',
+      'Accept the current ' + document.title + ' before continuing.',
+      { code:'legal_acceptance_required', documentId, version:document.version, path:document.path },
+    );
+  }
+  return status;
+};
+
+const requireProfessionalLegalTerms = async (uid: string) => {
+  await Promise.all([
+    requireCurrentLegalAcceptance(uid, 'platform_terms'),
+    requireCurrentLegalAcceptance(uid, 'privacy_notice'),
+    requireCurrentLegalAcceptance(uid, 'professional_terms'),
+  ]);
+};
+
+const validEmailAddress = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const testerAllowlistRef = (email: string) => db
+  .collection(CLOSED_BETA_ALLOWLIST_COLLECTION)
+  .doc(createHash('sha256').update(cleanEmail(email)).digest('hex'));
+
+const testerAccessForEmail = async (emailValue: unknown) => {
+  const email = cleanEmail(emailValue);
+  if (!validEmailAddress(email)) return null;
+  const snapshot = await testerAllowlistRef(email).get();
+  const data = snapshot.data() ?? {};
+  if (!snapshot.exists || data.enabled !== true || cleanEmail(data.email) !== email) return null;
+  return data;
+};
+
+const closedBetaAccessFor = async (emailValue: unknown, accountState: Record<string, unknown> | null = null) => {
+  const email = cleanEmail(emailValue);
+  if (!CLOSED_BETA) return { allowed: true, reason: 'public-registration' as const };
+  if (ADMIN_EMAILS.has(email)) return { allowed: true, reason: 'administrator' as const };
+  if (accountState?.testAccess === true) return { allowed: true, reason: 'legacy-test-access' as const };
+  if (await testerAccessForEmail(email)) return { allowed: true, reason: 'approved-tester' as const };
+  return { allowed: false, reason: 'not-invited' as const };
+};
+
+const requireClosedBetaAccess = async (emailValue: unknown, accountState: Record<string, unknown> | null = null) => {
+  const access = await closedBetaAccessFor(emailValue, accountState);
+  if (!access.allowed) {
+    throw new HttpsError(
+      'permission-denied',
+      'Nightjar is currently in private testing. This email has not been invited.',
+      { code: 'closed_beta_not_invited' },
+    );
+  }
+  return access;
+};
+
+const requireVerifiedIdentity = (request: { auth?: { uid: string; token: Record<string, unknown> } | null }) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in to Nightjar first.');
+
+  const email = cleanEmail(request.auth.token.email);
+  if (!email || request.auth.token.email_verified !== true) {
+    throw new HttpsError('failed-precondition', 'Verify your email before continuing.');
+  }
+
+  return {
+    uid: request.auth.uid,
+    email,
+    admin: ADMIN_EMAILS.has(email),
+  };
+};
+
+const requireRegistrationIdentity = (request: { auth?: { uid: string; token: Record<string, unknown> } | null }) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Create or sign in to your Nightjar account first.');
+  const email = cleanEmail(request.auth.token.email);
+  if (!email) throw new HttpsError('failed-precondition', 'A valid account email is required.');
+  return { uid: request.auth.uid, email };
+};
+
+export const getLegalAgreementStatus = onCall({ region: REGION }, async (request) => {
+  const identity = requireVerifiedIdentity(request);
+  const entries = await Promise.all(
+    (Object.keys(CURRENT_LEGAL_DOCUMENTS) as LegalDocumentId[]).map(async (documentId) => {
+      const document = CURRENT_LEGAL_DOCUMENTS[documentId];
+      const acceptance = await currentLegalAcceptanceFor(identity.uid, documentId);
+      return {
+        ...document,
+        accepted: acceptance.accepted,
+        acceptedVersion: acceptance.version,
+        acceptedAt: acceptance.acceptedAt,
+      };
+    }),
+  );
+  return { documents: entries };
+});
+
+export const acceptLegalAgreements = onCall({ region: REGION }, async (request) => {
+  const identity = requireVerifiedIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const requested = Array.isArray(input.documents) ? input.documents : [];
+  const source = cleanText(input.source, 60) || 'account';
+  if (!requested.length) throw new HttpsError('invalid-argument', 'Choose at least one Nightjar legal document to accept.');
+
+  const accepted: Array<{ id: LegalDocumentId; version: string }> = [];
+  const batch = db.batch();
+
+  for (const raw of requested) {
+    const entry = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const id = cleanText(entry.id, 60) as LegalDocumentId;
+    if (!(id in CURRENT_LEGAL_DOCUMENTS)) throw new HttpsError('invalid-argument', 'Unknown Nightjar legal document.');
+    const document = CURRENT_LEGAL_DOCUMENTS[id];
+    const version = cleanText(entry.version, 60);
+    if (version !== document.version) {
+      throw new HttpsError('failed-precondition', 'That Nightjar legal document has changed. Review the current version before accepting.', {
+        code:'legal_version_changed', documentId:id, currentVersion:document.version, path:document.path,
+      });
+    }
+    if (entry.accepted !== true) throw new HttpsError('invalid-argument', 'Legal acceptance must be an explicit positive action.');
+
+    batch.set(legalAcceptanceRef(identity.uid, id), {
+      documentId:id,
+      title:document.title,
+      version:document.version,
+      accepted:true,
+      acceptedAt:FieldValue.serverTimestamp(),
+      acceptedByUserId:identity.uid,
+      acceptedByEmail:identity.email,
+      source,
+      withdrawnAt:null,
+      updatedAt:FieldValue.serverTimestamp(),
+    }, { merge:true });
+    // Preserve each explicit decision: the current-version mirror is overwritten
+    // when terms change and is not sufficient to evidence earlier acceptances.
+    batch.create(accountRef(identity.uid).collection('legalAcceptanceHistory').doc(), {
+      documentId:id,
+      title:document.title,
+      version:document.version,
+      accepted:true,
+      acceptedAt:FieldValue.serverTimestamp(),
+      acceptedByUserId:identity.uid,
+      acceptedByEmail:identity.email,
+      source,
+    });
+    accepted.push({ id, version:document.version });
+  }
+
+  // Update an account mirror as part of the legal acceptance transaction,
+  // so active-account middleware can enforce versions with no extra reads.
+  const acceptedFields: Record<string, unknown> = {};
+  if (accepted.some((entry) => entry.id === 'platform_terms')) {
+    acceptedFields.acceptedPlatformTermsVersion = CURRENT_LEGAL_DOCUMENTS.platform_terms.version;
+  }
+  if (accepted.some((entry) => entry.id === 'privacy_notice')) {
+    acceptedFields.acknowledgedPrivacyNoticeVersion = CURRENT_LEGAL_DOCUMENTS.privacy_notice.version;
+  }
+  if (Object.keys(acceptedFields).length) {
+    batch.set(accountRef(identity.uid), {
+      ...acceptedFields, legalUpdatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+
+  await batch.commit();
+  return { accepted };
+});
+
+export const stageRegistrationIntent = onCall({ region: REGION }, async (request) => {
+  const identity = requireRegistrationIdentity(request);
+  await requireClosedBetaAccess(identity.email);
+  const input = (request.data ?? {}) as { role?: unknown; roles?: unknown; referralCode?: unknown; legalAcceptances?: unknown };
+  const legacyRole = String(input.role ?? '').trim();
+  const submittedRoles = Array.isArray(input.roles)
+    ? input.roles.map((value) => String(value ?? '').trim())
+    : legacyRole ? [legacyRole] : [];
+  const roles = Array.from(new Set(submittedRoles))
+    .filter((role): role is SelectableRole => ['creator','listener','writer','editor','artist'].includes(role));
+  if (!roles.length) roles.push('listener');
+  const professionalRoles = roles.filter((role): role is ProfessionalRole => ['creator','writer','editor','artist'].includes(role));
+  const legalInput = Array.isArray(input.legalAcceptances) ? input.legalAcceptances : [];
+  const legalVersions = new Map(
+    legalInput
+      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+      .filter((item) => item.accepted === true)
+      .map((item) => [cleanText(item.id, 60), cleanText(item.version, 60)]),
+  );
+  for (const documentId of ['platform_terms','privacy_notice'] as LegalDocumentId[]) {
+    const document = CURRENT_LEGAL_DOCUMENTS[documentId];
+    if (legalVersions.get(documentId) !== document.version) {
+      throw new HttpsError('failed-precondition', 'Review and accept the current ' + document.title + ' before creating a Nightjar account.', {
+        code:'registration_legal_acceptance_required', documentId, version:document.version, path:document.path,
+      });
+    }
+  }
+  if (professionalRoles.length) {
+    const document = CURRENT_LEGAL_DOCUMENTS.professional_terms;
+    if (legalVersions.get('professional_terms') !== document.version) {
+      throw new HttpsError('failed-precondition', 'Professional applicants must review and accept the current Nightjar Professional & Content Terms.', {
+        code:'registration_professional_terms_required', documentId:'professional_terms', version:document.version, path:document.path,
+      });
+    }
+  }
+  const referralCode = String(input.referralCode ?? '').trim().slice(0,80);
+  await db.collection('registrationIntents').doc(identity.uid).set({
+    userId: identity.uid,
+    email: identity.email,
+    role: professionalRoles[0] ?? 'listener',
+    roles: ['listener', ...professionalRoles],
+    professionalRoles,
+    legalAcceptances: Array.from(legalVersions.entries()).map(([id,version]) => ({ id, version })),
+    legalAcceptedAt: FieldValue.serverTimestamp(),
+    referralCode: professionalRoles.includes('creator') && referralCode ? referralCode : null,
+    updatedAt: FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+  }, { merge:true });
+  return { role: professionalRoles[0] ?? 'listener', roles: ['listener', ...professionalRoles], professionalRoles, staged:true };
+});
+
+const requireAdminIdentity = (request: { auth?: { uid: string; token: Record<string, unknown> } | null }) => {
+  const identity = requireVerifiedIdentity(request);
+  if (!identity.admin) throw new HttpsError('permission-denied', 'Administrator access required.');
+  return identity;
+};
+
+const requireActiveIdentity = async (request: { auth?: { uid: string; token: Record<string, unknown> } | null }) => {
+  const identity = requireVerifiedIdentity(request);
+  if (identity.admin) return identity;
+  const snapshot = await accountRef(identity.uid).get();
+  const account = snapshot.data() ?? {};
+  await requireClosedBetaAccess(identity.email, account);
+  if (account.status === 'suspended') {
+    throw new HttpsError('permission-denied', 'This Nightjar account is suspended.');
+  }
+  if (account.acceptedPlatformTermsVersion !== CURRENT_LEGAL_DOCUMENTS.platform_terms.version ||
+      account.acknowledgedPrivacyNoticeVersion !== CURRENT_LEGAL_DOCUMENTS.privacy_notice.version) {
+    // Registration may already have saved the member's explicit acceptance
+    // documents while leaving the account mirror stale. Reconcile only from
+    // current, non-withdrawn, account-owned evidence; never infer consent.
+    const [terms, privacy] = await Promise.all([
+      currentLegalAcceptanceFor(identity.uid, 'platform_terms'),
+      currentLegalAcceptanceFor(identity.uid, 'privacy_notice'),
+    ]);
+    if (!terms.accepted || !privacy.accepted) {
+      throw new HttpsError('failed-precondition', 'Review Nightjar\'s current Terms of Use and Privacy Notice before continuing.', {
+        code: 'mandatory_agreement_required',
+      });
+    }
+    await accountRef(identity.uid).set({
+      acceptedPlatformTermsVersion: CURRENT_LEGAL_DOCUMENTS.platform_terms.version,
+      acknowledgedPrivacyNoticeVersion: CURRENT_LEGAL_DOCUMENTS.privacy_notice.version,
+      legalUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+  return identity;
+};
+
+
+export const health = onRequest({ region: REGION }, (_request, response) => {
+  response.status(200).json({ service: 'nightjar', status: 'ok' });
+});
+
+export const closedBetaRegistrationStatus = onCall({ region: REGION }, async (request) => {
+  const email = cleanEmail((request.data as { email?: unknown } | undefined)?.email);
+  if (!validEmailAddress(email)) {
+    return {
+      closedBeta: CLOSED_BETA,
+      allowed: false,
+      temporaryAgeBypass: false,
+    };
+  }
+  const access = await closedBetaAccessFor(email);
+  return {
+    closedBeta: CLOSED_BETA,
+    allowed: access.allowed,
+    temporaryAgeBypass: access.allowed && TESTING_AGE_ASSURANCE_BYPASS,
+  };
+});
+
+export const accountIdentity = onCall({ region: REGION }, async (request) => {
+  const identity = requireVerifiedIdentity(request);
+  const ref = accountRef(identity.uid);
+  const [snapshot, registrationIntent] = await Promise.all([
+    ref.get(),
+    db.collection('registrationIntents').doc(identity.uid).get(),
+  ]);
+  const betaAccess = await requireClosedBetaAccess(identity.email, snapshot.data() ?? null);
+
+  if (identity.admin) {
+    const record = {
+      email: identity.email,
+      role: 'admin' as AccountRole,
+      status: 'active',
+      emailVerified: true,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    };
+    await ref.set(record, { merge: true });
+    return {
+      userId: identity.uid,
+      email: identity.email,
+      admin: true,
+      role: 'admin',
+      status: 'active',
+      emailVerified: true,
+    };
+  }
+
+  const current = snapshot.exists ? snapshot.data() ?? {} : {};
+  const intentData = registrationIntent.data() ?? {};
+  const rawStagedRole = String(intentData.role ?? '');
+  const stagedProfessionalRoles = cleanProfessionalRoles(
+    Array.isArray(intentData.professionalRoles)
+      ? intentData.professionalRoles
+      : Array.isArray(intentData.roles)
+        ? intentData.roles
+        : ['creator','writer','editor','artist'].includes(rawStagedRole) ? [rawStagedRole] : [],
+  );
+  const stagedRole = !current.role && rawStagedRole === 'listener' && !stagedProfessionalRoles.length
+    ? 'listener' as SelectableRole
+    : null;
+  const role = (current.role as AccountRole | null) ?? (stagedProfessionalRoles.length ? 'listener' : stagedRole) ?? null;
+  const status = String(current.status ?? 'active');
+
+  await ref.set({
+    email: identity.email,
+    role,
+    status,
+    emailVerified: true,
+    suspensionReason: status === 'suspended' ? cleanText(current.suspensionReason, 500) : null,
+    suspensionCaseId: status === 'suspended' ? cleanText(current.suspensionCaseId, 80) : null,
+    testAccess: current.testAccess === true || betaAccess.reason === 'approved-tester' || betaAccess.reason === 'legacy-test-access',
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+  }, { merge:true });
+
+  if (stagedProfessionalRoles.length) {
+    const applicationRef = professionalApplicationRef(identity.uid);
+    const application = await applicationRef.get();
+    const requestedRoles = Array.from(new Set([
+      ...cleanProfessionalRoles(application.data()?.requestedRoles),
+      ...stagedProfessionalRoles,
+    ]));
+    await applicationRef.set({
+      userId: identity.uid,
+      email: identity.email,
+      requestedRoles,
+      approvedRoles: professionalRolesForAccount(current),
+      status: 'banked',
+      source: 'registration',
+      bankedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(application.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge:true });
+    await ref.set({
+      pendingProfessionalRoles: requestedRoles,
+      approvedProfessionalRoles: professionalRolesForAccount(current),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge:true });
+  }
+
+  const stagedReferralCode = stagedProfessionalRoles.includes('creator')
+    ? String(registrationIntent.data()?.referralCode ?? '').trim().slice(0,80)
+    : '';
+  if (stagedReferralCode) {
+    const referrals = await db.collection('creatorSuggestions').where('referralCode','==',stagedReferralCode).limit(1).get();
+    const suggestion = referrals.docs[0];
+    if (suggestion) {
+      await suggestion.ref.set({
+        status:'joined',
+        claimedByUserId:identity.uid,
+        claimedAt:FieldValue.serverTimestamp(),
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+      await ref.set({
+        creatorReferralCode:stagedReferralCode,
+        creatorReferralSuggestionId:suggestion.id,
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+    }
+  }
+
+  if (registrationIntent.exists) {
+    const stagedLegal = Array.isArray(intentData.legalAcceptances) ? intentData.legalAcceptances : [];
+    const legalBatch = db.batch();
+    const acceptedRegistrationDocs = new Set<LegalDocumentId>();
+    for (const raw of stagedLegal) {
+      const item = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+      const id = cleanText(item.id, 60) as LegalDocumentId;
+      if (!(id in CURRENT_LEGAL_DOCUMENTS)) continue;
+      const document = CURRENT_LEGAL_DOCUMENTS[id];
+      if (cleanText(item.version, 60) !== document.version) continue;
+      acceptedRegistrationDocs.add(id);
+      legalBatch.set(legalAcceptanceRef(identity.uid, id), {
+        documentId:id,
+        title:document.title,
+        version:document.version,
+        accepted:true,
+        acceptedAt:FieldValue.serverTimestamp(),
+        acceptedByUserId:identity.uid,
+        acceptedByEmail:identity.email,
+        source:'registration',
+        withdrawnAt:null,
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+      legalBatch.create(accountRef(identity.uid).collection('legalAcceptanceHistory').doc(), {
+        documentId:id,
+        title:document.title,
+        version:document.version,
+        accepted:true,
+        acceptedAt:FieldValue.serverTimestamp(),
+        acceptedByUserId:identity.uid,
+        acceptedByEmail:identity.email,
+        source:'registration',
+      });
+    }
+    // Commit explicit legal evidence and its account-level enforcement mirror
+    // together. A partial/old staged intent cannot manufacture an acceptance.
+    const registrationLegalMirror: Record<string, unknown> = {};
+    if (acceptedRegistrationDocs.has('platform_terms')) {
+      registrationLegalMirror.acceptedPlatformTermsVersion = CURRENT_LEGAL_DOCUMENTS.platform_terms.version;
+    }
+    if (acceptedRegistrationDocs.has('privacy_notice')) {
+      registrationLegalMirror.acknowledgedPrivacyNoticeVersion = CURRENT_LEGAL_DOCUMENTS.privacy_notice.version;
+    }
+    if (Object.keys(registrationLegalMirror).length) {
+      legalBatch.set(ref, {
+        ...registrationLegalMirror,
+        legalUpdatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    await legalBatch.commit();
+    await registrationIntent.ref.delete();
+  }
+
+  return {
+    userId: identity.uid,
+    email: identity.email,
+    admin: false,
+    role,
+    status,
+    emailVerified: true,
+  };
+});
+
+export const chooseAccountRole = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  if (identity.admin) throw new HttpsError('failed-precondition', 'Administrator roles are assigned by Nightjar.');
+
+  const input = (request.data ?? {}) as { role?: unknown; referralCode?: unknown };
+  const requestedRole = String(input.role ?? '') as SelectableRole;
+  if (!['creator', 'listener', 'writer', 'editor', 'artist'].includes(requestedRole)) {
+    throw new HttpsError('invalid-argument', 'Choose Listener, Creator, Writer, Audio Editor or Artist.');
+  }
+
+  const ref = accountRef(identity.uid);
+  const snapshot = await ref.get();
+  const current = snapshot.data() ?? {};
+  const professionalRequest = ['creator','writer','editor','artist'].includes(requestedRole);
+
+  if (!professionalRequest) {
+    await ref.set({
+      email: identity.email,
+      emailVerified: true,
+      role: 'listener',
+      status: 'active',
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge:true });
+  } else {
+    const applicationRef = professionalApplicationRef(identity.uid);
+    const application = await applicationRef.get();
+    const approved = professionalRolesForAccount(current);
+    const applicationStatus = cleanText(application.data()?.status, 30);
+    const carriedRequestedRoles = ['banked','waitlist'].includes(applicationStatus)
+      ? cleanProfessionalRoles(application.data()?.requestedRoles)
+      : [];
+    const requestedRoles = Array.from(new Set([
+      ...carriedRequestedRoles,
+      requestedRole as ProfessionalRole,
+    ])).filter((role) => !approved.includes(role));
+    await ref.set({
+      email: identity.email,
+      emailVerified: true,
+      role: cleanText(current.role, 30) || 'listener',
+      status: 'active',
+      approvedProfessionalRoles: approved,
+      pendingProfessionalRoles: requestedRoles,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge:true });
+    await applicationRef.set({
+      userId: identity.uid,
+      email: identity.email,
+      requestedRoles,
+      approvedRoles: approved,
+      status: 'banked',
+      bankedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(application.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge:true });
+  }
+  const status = professionalRequest ? 'banked' : 'active';
+
+  const referralCode = cleanText(input.referralCode, 80);
+  if (requestedRole === 'creator' && referralCode) {
+    const referrals = await db.collection('creatorSuggestions').where('referralCode', '==', referralCode).limit(1).get();
+    const suggestion = referrals.docs[0];
+    if (suggestion) {
+      await suggestion.ref.set({
+        status: 'joined',
+        claimedByUserId: identity.uid,
+        claimedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      await accountRef(identity.uid).set({
+        creatorReferralCode: referralCode,
+        creatorReferralSuggestionId: suggestion.id,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  }
+
+  return {
+    userId: identity.uid,
+    role: professionalRequest ? (cleanText(current.role, 30) || 'listener') : 'listener',
+    requestedProfessionalRole: professionalRequest ? requestedRole : null,
+    status,
+  };
+});
+
+const cleanText = (value: unknown, maxLength: number) =>
+  String(value ?? '').trim().slice(0, maxLength);
+
+const validPublicUrl = (value: unknown) => {
+  const raw = cleanText(value, 500);
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    return ['http:','https:'].includes(parsed.protocol) ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+};
+
+export const submitCreatorSuggestion = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const creatorName = cleanText(input.creatorName, 120);
+  const publicUrl = validPublicUrl(input.publicUrl);
+  const note = cleanText(input.note, 1200);
+  if (!creatorName) throw new HttpsError('invalid-argument', 'Creator name is required.');
+  if (cleanText(input.publicUrl, 500) && !publicUrl) throw new HttpsError('invalid-argument', 'Creator link must be a valid http or https URL.');
+
+  const profile = await profileRef(identity.uid).get();
+  const ref = db.collection('creatorSuggestions').doc();
+  const referralCode = randomUUID().replace(/-/g, '').slice(0, 14);
+  await ref.set({
+    creatorName,
+    publicUrl,
+    note: note || null,
+    submittedByUserId: identity.uid,
+    submittedByName: profile.data()?.displayName ?? identity.email.split('@')[0],
+    submittedByHandle: profile.data()?.handle ?? null,
+    referralCode,
+    status: 'new',
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    suggestion: {
+      id: ref.id,
+      creatorName,
+      publicUrl,
+      status: 'new',
+      referralCode,
+      recommendationPath: '/account?entry=register&role=creator&ref=' + encodeURIComponent(referralCode),
+    },
+  };
+});
+
+export const listCreatorSuggestions = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('creatorSuggestions').limit(500).get();
+  const suggestions = snapshot.docs
+    .map((doc) => {
+      const data = doc.data() ?? {};
+      return {
+        id: doc.id,
+        creatorName: cleanText(data.creatorName, 120),
+        publicUrl: validPublicUrl(data.publicUrl),
+        note: cleanText(data.note, 1200) || null,
+        submittedByUserId: cleanText(data.submittedByUserId, 160) || null,
+        submittedByName: cleanText(data.submittedByName, 120) || 'Nightjar member',
+        submittedByHandle: cleanText(data.submittedByHandle, 120) || null,
+        referralCode: cleanText(data.referralCode, 80) || null,
+        status: cleanText(data.status, 40) || 'new',
+        claimedByUserId: cleanText(data.claimedByUserId, 160) || null,
+        createdAt: toIso(data.createdAt),
+        updatedAt: toIso(data.updatedAt),
+      };
+    })
+    .sort((a,b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  return { suggestions };
+});
+
+export const reviewCreatorSuggestion = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const suggestionId = cleanText(input.suggestionId, 160);
+  const status = cleanText(input.status, 40);
+  if (!suggestionId) throw new HttpsError('invalid-argument', 'Creator suggestion is required.');
+  if (!['new','contacted','invited','joined','dismissed'].includes(status)) {
+    throw new HttpsError('invalid-argument', 'Creator suggestion status is invalid.');
+  }
+  const ref = db.collection('creatorSuggestions').doc(suggestionId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Creator suggestion not found.');
+  await ref.set({
+    status,
+    reviewedBy: admin.uid,
+    reviewedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { suggestionId, status };
+});
+
+export const creatorRecommendationLink = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const targetCreatorUserId = cleanText((request.data as Record<string, unknown> | undefined)?.targetCreatorUserId, 160);
+  if (!targetCreatorUserId) throw new HttpsError('invalid-argument', 'Creator is required.');
+  const target = await accountRef(targetCreatorUserId).get();
+  if (!target.exists || target.data()?.role !== 'creator' || target.data()?.status !== 'active') {
+    throw new HttpsError('not-found', 'Active Nightjar Creator not found.');
+  }
+  const code = createHash('sha256').update(identity.uid + '\u0000' + targetCreatorUserId).digest('hex').slice(0, 14);
+  await db.collection('creatorRecommendations').doc(code).set({
+    code,
+    recommenderUserId: identity.uid,
+    targetCreatorUserId,
+    updatedAt: FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { path: '/people/' + encodeURIComponent(targetCreatorUserId) + '?recommend=' + encodeURIComponent(code), code };
+});
+
+
+const cleanStringList = (value: unknown, maxItems = 16) => {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(
+    value
+      .map((item) => cleanText(item, 48))
+      .filter(Boolean),
+  )).slice(0, maxItems);
+};
+
+const PROFILE_TAG_SEED = new Set([
+  'Atmospheric','ASMR','Binaural','Cinematic','Conversational','Dialogue-heavy','Gentle','Immersive','Intimate','Playful','Romantic','Slow-paced','Story-led','Voice-led','Whispered','Sound-rich',
+].map((item) => item.toLocaleLowerCase()));
+const PROFILE_TAG_PROMOTION_THRESHOLD = 5;
+
+const cleanProfileTag = (value: unknown) => cleanText(value, 48).replace(/\s+/g, ' ');
+const profileTagKey = (value: unknown) => cleanProfileTag(value).toLocaleLowerCase();
+const profileTagDocId = (value: unknown) => encodeURIComponent(profileTagKey(value)).slice(0, 220);
+const customProfileTagMap = (value: unknown) => {
+  const result = new Map<string, string>();
+  for (const label of cleanStringList(value, 200)) {
+    const key = profileTagKey(label);
+    if (!key || PROFILE_TAG_SEED.has(key)) continue;
+    if (!result.has(key)) result.set(key, cleanProfileTag(label));
+  }
+  return result;
+};
+
+const cleanHandle = (value: unknown) =>
+  cleanText(value, 30).replace(/^@+/, '').toLowerCase();
+
+const validateHandle = (value: string) => {
+  if (!/^[a-z0-9_-]{3,30}$/.test(value)) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Handle must be 3–30 characters using letters, numbers, underscores or hyphens.',
+    );
+  }
+};
+
+const profileRef = (uid: string) => db.collection('profiles').doc(uid);
+
+const profileTypeSettingsSnapshot = (data: Record<string, any> | undefined) => ({
+  revision: Math.max(0, Number(data?.profileTypeSettingsRevision ?? 0)),
+  settings: normaliseProfileTypeSettings(data?.profileTypeSettings),
+});
+
+export const getMyProfileTypeSettings = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const snapshot = await profileRef(identity.uid).get();
+  return profileTypeSettingsSnapshot(snapshot.data());
+});
+
+export const saveMyProfileTypeSettings = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const expectedRevision = Number(input.expectedRevision);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new HttpsError('invalid-argument', 'Invalid profile settings version.');
+  }
+  if (!input.settings || typeof input.settings !== 'object' || Array.isArray(input.settings)) {
+    throw new HttpsError('invalid-argument', 'Profile type settings are required.');
+  }
+  const raw = input.settings as Record<string, unknown>;
+  if (Object.keys(raw).some((key) => !isNightjarProfileType(key))) {
+    throw new HttpsError('invalid-argument', 'One or more profile types are not supported.');
+  }
+  const accountSnapshot = await accountRef(identity.uid).get();
+  const approvedRoles = professionalRolesForAccount(accountSnapshot.data() ?? {});
+  for (const [type, value] of Object.entries(raw)) {
+    if (type === 'listener' || !value || typeof value !== 'object' || Array.isArray(value)) continue;
+    if ((value as Record<string, unknown>).enabled === true && !approvedRoles.includes(type as AccountRole)) {
+      throw new HttpsError('failed-precondition', 'A professional profile can only be enabled after that role is approved.');
+    }
+  }
+  const settings: Partial<Record<NightjarProfileType, ReturnType<typeof normaliseProfileTypeRecord>>> = {};
+  for (const type of NIGHTJAR_PROFILE_TYPES) {
+    const value = raw[type];
+    if (value === undefined) continue;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new HttpsError('invalid-argument', 'A profile type setting is invalid.');
+    }
+    const record = value as Record<string, unknown>;
+    if (record.enabled !== undefined && typeof record.enabled !== 'boolean') {
+      throw new HttpsError('invalid-argument', 'Profile enabled state must be true or false.');
+    }
+    if (record.visibility !== undefined && !['public', 'private', 'unlisted'].includes(String(record.visibility))) {
+      throw new HttpsError('invalid-argument', 'Choose public, unlisted or private visibility.');
+    }
+    settings[type] = normaliseProfileTypeRecord(type, record as never);
+  }
+  const ref = profileRef(identity.uid);
+  return db.runTransaction(async (tx) => {
+    const current = profileTypeSettingsSnapshot((await tx.get(ref)).data());
+    if (current.revision !== expectedRevision) {
+      return { saved: false, ...current };
+    }
+    const revision = current.revision + 1;
+    tx.set(ref, {
+      profileTypeSettings: settings,
+      profileTypeSettingsRevision: revision,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { saved: true, revision, settings };
+  });
+});
+
+const COMMITMENT_ROLES = ['creator', 'writer', 'editor', 'artist'] as const;
+type CommitmentRole = typeof COMMITMENT_ROLES[number];
+const isCommitmentRole = (value: unknown): value is CommitmentRole =>
+  typeof value === 'string' && (COMMITMENT_ROLES as readonly string[]).includes(value);
+const commitmentPeriodRef = (periodId: string) => db.collection('commitmentPeriods').doc(periodId);
+const commitmentTemplateRef = (templateId: string) => db.collection('commitmentTemplates').doc(templateId);
+const commitmentAssignmentRef = (assignmentId: string) => db.collection('commitmentAssignments').doc(assignmentId);
+const validCommitmentPeriodId = (value: unknown): value is string =>
+  typeof value === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+const validIsoCalendarDate = (value: unknown): value is string =>
+  typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && !Number.isNaN(Date.parse(value))
+  && new Date(value + 'T00:00:00.000Z').toISOString().slice(0, 10) === value;
+const validCommitmentDocId = (value: unknown): value is string =>
+  typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(value);
+const commitmentAssignmentId = (periodId: string, userId: string, role: CommitmentRole) =>
+  [periodId, userId, role].join('__');
+
+export const adminCreateCommitmentTemplate = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const role = input.role;
+  const effectiveFrom = cleanText(input.effectiveFrom, 10);
+  if (!isCommitmentRole(role) || !validIsoCalendarDate(effectiveFrom)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid creative role and effective date.');
+  }
+  if (!Array.isArray(input.tasks) || input.tasks.length < 1 || input.tasks.length > 40) {
+    throw new HttpsError('invalid-argument', 'A commitment template needs between 1 and 40 tasks.');
+  }
+  const seen = new Set<string>();
+  const tasks = input.tasks.map((raw) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new HttpsError('invalid-argument', 'A commitment task is invalid.');
+    const task = raw as Record<string, unknown>;
+    const id = cleanText(task.id, 60);
+    const title = cleanText(task.title, 120);
+    const description = cleanText(task.description, 500);
+    const mandatory = task.mandatory === true;
+    const dueDay = task.dueDay === undefined || task.dueDay === null ? null : Number(task.dueDay);
+    if (!/^[A-Za-z0-9_-]{1,60}$/.test(id) || !title || seen.has(id)
+      || (task.mandatory !== true && task.mandatory !== false)
+      || (dueDay !== null && (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31))) {
+      throw new HttpsError('invalid-argument', 'A commitment task has an invalid ID, title, mandatory flag or due day.');
+    }
+    seen.add(id);
+    return { id, title, description, mandatory, dueDay, state: 'not_started' as const };
+  });
+  if (!tasks.some((task) => task.mandatory)) throw new HttpsError('invalid-argument', 'A role template needs at least one mandatory task.');
+  const existingTemplates = await db.collection('commitmentTemplates').where('role', '==', role).get();
+  const latestVersion = existingTemplates.docs.reduce((latest, doc) => Math.max(latest, Number(doc.data()?.version ?? 0)), 0);
+  const version = latestVersion + 1;
+  const templateId = role + '__v' + version;
+  const ref = commitmentTemplateRef(templateId);
+  await ref.create({
+    role, version, effectiveFrom, tasks, status: 'published',
+    createdByAdminUserId: admin.uid,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { templateId, role, version, effectiveFrom, tasks };
+});
+
+export const adminCreateCommitmentPeriod = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const startDate = cleanText(input.startDate, 10);
+  const endDate = cleanText(input.endDate, 10);
+  if (!validCommitmentPeriodId(periodId) || !validIsoCalendarDate(startDate) || !validIsoCalendarDate(endDate)
+    || startDate.slice(0, 7) !== periodId || endDate.slice(0, 7) !== periodId || startDate > endDate) {
+    throw new HttpsError('invalid-argument', 'Choose a valid monthly commitment period and date range.');
+  }
+  const ref = commitmentPeriodRef(periodId);
+  return db.runTransaction(async (tx) => {
+    const existing = await tx.get(ref);
+    if (existing.exists) throw new HttpsError('already-exists', 'This commitment period already exists.');
+    tx.create(ref, {
+      periodId, startDate, endDate, status: 'open', activityRevision: 0,
+      createdByAdminUserId: admin.uid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return { created: true, periodId, startDate, endDate, status: 'open' };
+  });
+});
+
+export const adminAssignCommitmentTemplate = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const requestedUserId = cleanText(input.userId, 160);
+  const email = cleanEmail(input.email);
+  const role = input.role;
+  const templateId = cleanText(input.templateId, 100);
+  if (!validCommitmentPeriodId(periodId) || (!validCommitmentDocId(requestedUserId) && !validEmailAddress(email))
+    || !isCommitmentRole(role) || !/^(creator|writer|editor|artist)__v\d+$/.test(templateId)) {
+    throw new HttpsError('invalid-argument', 'Period, member email or account UID, role and template are required.');
+  }
+  let userId = requestedUserId;
+  if (!userId) {
+    const matches = await db.collection('accounts').where('email', '==', email).limit(2).get();
+    if (matches.size !== 1) throw new HttpsError('not-found', 'No unique Nightjar account matched that email address. Check the address or use the account UID.');
+    userId = matches.docs[0].id;
+  }
+  const periodRef = commitmentPeriodRef(periodId);
+  const templateRef = commitmentTemplateRef(templateId);
+  const accountDocument = accountRef(userId);
+  const assignmentRef = commitmentAssignmentRef(commitmentAssignmentId(periodId, userId, role));
+  return db.runTransaction(async (tx) => {
+    const [periodSnap, templateSnap, accountSnap, assignmentSnap] = await Promise.all([
+      tx.get(periodRef), tx.get(templateRef), tx.get(accountDocument), tx.get(assignmentRef),
+    ]);
+    const period = periodSnap.data() ?? {};
+    const template = templateSnap.data() ?? {};
+    const account = accountSnap.data() ?? {};
+    if (!periodSnap.exists || period.status !== 'open') throw new HttpsError('failed-precondition', 'The commitment period is missing or closed.');
+    if (!templateSnap.exists || template.status !== 'published' || template.role !== role
+      || String(template.effectiveFrom ?? '') > String(period.startDate ?? '')) {
+      throw new HttpsError('failed-precondition', 'The selected template is not effective for this period.');
+    }
+    if (!accountSnap.exists || account.status !== 'active' || !professionalRolesForAccount(account).includes(role as AccountRole)) {
+      throw new HttpsError('failed-precondition', 'This member does not have an active approved role for this assignment.');
+    }
+    if (assignmentSnap.exists) throw new HttpsError('already-exists', 'This member already has an assignment for this role and period.');
+    const periodStart = String(period.startDate ?? '');
+    const [periodYear, periodMonth] = periodStart.split('-').map(Number);
+    const daysInPeriod = new Date(Date.UTC(periodYear, periodMonth, 0)).getUTCDate();
+    const tasks = (Array.isArray(template.tasks) ? template.tasks : []).map((task: Record<string, any>) => {
+      const dueDay = task.dueDay === null || task.dueDay === undefined ? null : Math.min(daysInPeriod, Math.max(1, Number(task.dueDay)));
+      const dueAt = dueDay ? new Date(Date.UTC(periodYear, periodMonth - 1, dueDay)).toISOString().slice(0, 10) : null;
+      return {
+        id: cleanText(task.id, 60), title: cleanText(task.title, 120),
+        description: cleanText(task.description, 500), mandatory: task.mandatory === true,
+        dueDay, dueAt, state: 'not_started', evidenceIds: [],
+      };
+    });
+    if (!tasks.length) throw new HttpsError('failed-precondition', 'The selected template has no tasks.');
+    tx.update(periodRef, { activityRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+    tx.create(assignmentRef, {
+      periodId, userId, role, templateId, templateVersion: Number(template.version ?? 1),
+      templateSnapshot: tasks.map(({ id, title, description, mandatory, dueDay }) => ({ id, title, description, mandatory, dueDay })),
+      tasks, status: 'open', assignedByAdminUserId: admin.uid,
+      assignedAt: FieldValue.serverTimestamp(),
+    });
+    return { assigned: true, assignmentId: assignmentRef.id, periodId, role, taskCount: tasks.length };
+  });
+});
+
+export const getMyCommitments = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const snapshot = await db.collection('commitmentAssignments').where('userId', '==', identity.uid).limit(100).get();
+  const assignments = await Promise.all(snapshot.docs.map(async (doc) => {
+    const data = doc.data();
+    const period = await commitmentPeriodRef(String(data.periodId ?? '')).get();
+    return {
+      id: doc.id, periodId: data.periodId, role: data.role,
+      templateVersion: data.templateVersion, status: data.status,
+      approvedException: data.approvedException === true && cleanText(data.exceptionReason, 1000).length >= 8,
+      exceptionReason: cleanText(data.exceptionReason, 1000) || null,
+      tasks: Array.isArray(data.tasks) ? data.tasks : [],
+      periodStatus: period.data()?.status ?? 'missing',
+      startDate: period.data()?.startDate ?? null,
+      endDate: period.data()?.endDate ?? null,
+    };
+  }));
+  return { assignments: assignments.sort((a, b) => String(b.periodId).localeCompare(String(a.periodId))) };
+});
+
+export const submitCommitmentEvidence = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const assignmentId = cleanText(input.assignmentId, 180);
+  const taskId = cleanText(input.taskId, 60);
+  const note = cleanText(input.note, 2000);
+  const evidenceUrl = validPublicUrl(input.evidenceUrl);
+  if (!/^[A-Za-z0-9_-]{1,180}$/.test(assignmentId) || !/^[A-Za-z0-9_-]{1,60}$/.test(taskId) || (!note && !evidenceUrl)) {
+    throw new HttpsError('invalid-argument', 'Provide a task and either an evidence note or a public evidence link.');
+  }
+  const assignmentRef = commitmentAssignmentRef(assignmentId);
+  const evidenceRef = assignmentRef.collection('evidence').doc();
+  const eventRef = assignmentRef.collection('events').doc();
+  return db.runTransaction(async (tx) => {
+    const assignmentSnap = await tx.get(assignmentRef);
+    const assignment = assignmentSnap.data() ?? {};
+    if (!assignmentSnap.exists || assignment.userId !== identity.uid) throw new HttpsError('not-found', 'Commitment assignment not found.');
+    if (assignment.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment assignment is not open.');
+    const periodSnap = await tx.get(commitmentPeriodRef(String(assignment.periodId ?? '')));
+    if (!periodSnap.exists || periodSnap.data()?.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment period is closed.');
+    const tasks = Array.isArray(assignment.tasks) ? [...assignment.tasks] : [];
+    const index = tasks.findIndex((task: Record<string, any>) => task.id === taskId);
+    if (index < 0) throw new HttpsError('not-found', 'Commitment task not found.');
+    if (['approved', 'cancelled', 'excused'].includes(String(tasks[index].state))) {
+      throw new HttpsError('failed-precondition', 'This task no longer accepts evidence.');
+    }
+    const evidence = { note, evidenceUrl: evidenceUrl || null, submittedByUserId: identity.uid, submittedAt: FieldValue.serverTimestamp() };
+    tasks[index] = { ...tasks[index], state: 'submitted', latestEvidenceId: evidenceRef.id, evidenceIds: [...new Set([...(tasks[index].evidenceIds ?? []), evidenceRef.id])] };
+    tx.create(evidenceRef, evidence);
+    tx.create(eventRef, { type: 'evidence_submitted', taskId, actorUserId: identity.uid, at: FieldValue.serverTimestamp() });
+    tx.update(assignmentRef, { tasks, updatedAt: FieldValue.serverTimestamp() });
+    tx.update(periodSnap.ref, { activityRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+    return { submitted: true, evidenceId: evidenceRef.id, taskState: 'submitted' };
+  });
+});
+
+export const adminReviewCommitmentTask = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const assignmentId = cleanText(input.assignmentId, 180);
+  const taskId = cleanText(input.taskId, 60);
+  const decision = input.decision;
+  const reason = cleanText(input.reason, 1000);
+  if (!/^[A-Za-z0-9_-]{1,180}$/.test(assignmentId) || !/^[A-Za-z0-9_-]{1,60}$/.test(taskId)
+    || !['approved', 'rejected', 'cancelled', 'excused'].includes(String(decision))) {
+    throw new HttpsError('invalid-argument', 'Choose a valid assignment, task and review decision.');
+  }
+  if (['cancelled', 'excused', 'rejected'].includes(String(decision)) && reason.length < 8) {
+    throw new HttpsError('invalid-argument', 'A reason of at least eight characters is required for this decision.');
+  }
+  const assignmentRef = commitmentAssignmentRef(assignmentId);
+  const eventRef = assignmentRef.collection('events').doc();
+  return db.runTransaction(async (tx) => {
+    const assignmentSnap = await tx.get(assignmentRef);
+    const assignment = assignmentSnap.data() ?? {};
+    if (!assignmentSnap.exists || assignment.status !== 'open') throw new HttpsError('not-found', 'Open commitment assignment not found.');
+    const periodSnap = await tx.get(commitmentPeriodRef(String(assignment.periodId ?? '')));
+    if (!periodSnap.exists || periodSnap.data()?.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment period is closed.');
+    const tasks = Array.isArray(assignment.tasks) ? [...assignment.tasks] : [];
+    const index = tasks.findIndex((task: Record<string, any>) => task.id === taskId);
+    if (index < 0) throw new HttpsError('not-found', 'Commitment task not found.');
+    if (!isCommitmentTaskReviewable(tasks[index].state)) {
+      throw new HttpsError('failed-precondition', 'Only evidence currently awaiting review can be reviewed. Ask the member to resubmit after a rejection.');
+    }
+    if (decision === 'approved' && !(Array.isArray(tasks[index].evidenceIds) && tasks[index].evidenceIds.length)) {
+      throw new HttpsError('failed-precondition', 'Evidence must be submitted before approval.');
+    }
+    tasks[index] = { ...tasks[index], state: decision, reviewedByAdminUserId: admin.uid, reviewedAt: FieldValue.serverTimestamp(), reviewReason: reason || null };
+    tx.create(eventRef, { type: 'task_reviewed', taskId, decision, reason: reason || null, actorUserId: admin.uid, at: FieldValue.serverTimestamp() });
+    tx.update(assignmentRef, { tasks, updatedAt: FieldValue.serverTimestamp() });
+    tx.update(periodSnap.ref, { activityRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+    return { reviewed: true, taskId, state: decision };
+  });
+});
+
+export const adminSetCommitmentException = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const assignmentId = cleanText(input.assignmentId, 180);
+  const reason = cleanText(input.reason, 1000);
+  if (!/^[A-Za-z0-9_-]{1,180}$/.test(assignmentId) || reason.length < 8) {
+    throw new HttpsError('invalid-argument', 'An assignment and a documented exception reason are required.');
+  }
+  const assignmentRef = commitmentAssignmentRef(assignmentId);
+  const eventRef = assignmentRef.collection('events').doc();
+  await db.runTransaction(async (tx) => {
+    const assignmentSnap = await tx.get(assignmentRef);
+    const assignment = assignmentSnap.data() ?? {};
+    if (!assignmentSnap.exists || assignment.status !== 'open') throw new HttpsError('not-found', 'Open commitment assignment not found.');
+    if (assignment.approvedException === true) throw new HttpsError('already-exists', 'A documented eligibility exception is already recorded for this assignment.');
+    const periodSnap = await tx.get(commitmentPeriodRef(String(assignment.periodId ?? '')));
+    if (!periodSnap.exists || periodSnap.data()?.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment period is closed.');
+    tx.update(assignmentRef, { approvedException: true, exceptionReason: reason, exceptionApprovedByAdminUserId: admin.uid, exceptionApprovedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    tx.update(periodSnap.ref, { activityRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+    tx.create(eventRef, { type: 'eligibility_exception_approved', reason, actorUserId: admin.uid, at: FieldValue.serverTimestamp() });
+  });
+  return { saved: true, assignmentId };
+});
+
+export const getMyCommitmentEligibility = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId === undefined ? null : input.periodId;
+  if (periodId !== null && !validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Invalid commitment period.');
+  const [accountSnap, assignmentSnap] = await Promise.all([
+    accountRef(identity.uid).get(),
+    db.collection('commitmentAssignments').where('userId', '==', identity.uid).limit(100).get(),
+  ]);
+  const account = accountSnap.data() ?? {};
+  const approvedRoles = String(account.status ?? 'active') === 'active' ? professionalRolesForAccount(account) : [];
+  const allAssignments = assignmentSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Array<Record<string, any>>;
+  let selectedPeriodId = periodId as string | null;
+  if (!selectedPeriodId) {
+    const periodIds = [...new Set(allAssignments.map((item) => cleanText(item.periodId, 16)).filter(Boolean))];
+    const periodDocs = await Promise.all(periodIds.map((id) => commitmentPeriodRef(id).get()));
+    const availablePeriods = periodDocs
+      .filter((doc) => doc.exists)
+      .map((doc) => ({ id: doc.id, status: doc.data()?.status, startDate: String(doc.data()?.startDate ?? '') }))
+      .sort((a, b) => b.startDate.localeCompare(a.startDate));
+    selectedPeriodId = availablePeriods.find((period) => period.status === 'open')?.id ?? availablePeriods[0]?.id ?? null;
+  }
+  const assignments = allAssignments
+    .filter((item) => selectedPeriodId && item.periodId === selectedPeriodId && approvedRoles.includes(item.role as AccountRole));
+  const assessments: RoleCommitmentAssessment[] = assignments.map((item: any) => ({
+    role: item.role,
+    assigned: true,
+    effective: true,
+    tasks: (Array.isArray(item.tasks) ? item.tasks : []).map((task: any) => ({
+      id: cleanText(task.id, 60), mandatory: task.mandatory === true, state: task.state,
+    })),
+    approvedException: item.approvedException === true,
+    exceptionReason: item.exceptionReason ?? null,
+  }));
+  const roleResults = assessments.map((assessment) => evaluateRoleCommitments(assessment));
+  const qualifyingRole = roleResults.find((result) => result.qualifies)?.role ?? null;
+  return { periodId: selectedPeriodId, approvedRoles, roleResults, eligible: Boolean(qualifyingRole), qualifyingRole };
+});
+
+export const adminListCommitmentTemplates = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('commitmentTemplates').orderBy('createdAt', 'desc').limit(100).get();
+  return { templates: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
+export const adminListCommitmentPeriods = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('commitmentPeriods').orderBy('startDate', 'desc').limit(36).get();
+  return { periods: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
+export const adminCloseCommitmentPeriod = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid commitment period.');
+  const ref = commitmentPeriodRef(periodId);
+  const before = await ref.get();
+  if (!before.exists) throw new HttpsError('not-found', 'Commitment period not found.');
+  if (before.data()?.status === 'closed') return { closed: true, periodId, alreadyClosed: true };
+  const activityRevision = Number(before.data()?.activityRevision ?? 0);
+  if (!Number.isSafeInteger(activityRevision) || activityRevision < 0 || activityRevision >= Number.MAX_SAFE_INTEGER) {
+    throw new HttpsError('failed-precondition', 'This commitment period has an invalid activity revision and cannot be safely closed.');
+  }
+  const assignments = await db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5001).get();
+  if (assignments.size > 5000) throw new HttpsError('resource-exhausted', 'This period exceeds the 5,000-assignment closure limit. Contact Nightjar engineering before closing it.');
+  const pendingReviewCount = assignments.docs.reduce((count, doc) =>
+    count + (Array.isArray(doc.data().tasks) ? doc.data().tasks.filter((task: Record<string, any>) => task.state === 'submitted').length : 0), 0);
+  if (pendingReviewCount > 0) throw new HttpsError('failed-precondition', 'Review all submitted evidence before closing this assessment period.');
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Commitment period not found.');
+    if (snapshot.data()?.status === 'closed') return { closed: true, periodId, alreadyClosed: true };
+    if (Number(snapshot.data()?.activityRevision ?? 0) !== activityRevision) {
+      throw new HttpsError('aborted', 'Commitment activity changed while the period was being checked. Refresh and close it again.');
+    }
+    tx.update(ref, { status: 'closed', activityRevision: activityRevision + 1, closedByAdminUserId: admin.uid, closedAt: FieldValue.serverTimestamp() });
+    return { closed: true, periodId, alreadyClosed: false };
+  });
+});
+
+
+
+const revenueSettlementRef = (settlementId: string) => db.collection('financeRevenueSettlements').doc(settlementId);
+const financePeriodControlRef = (periodId: string) => db.collection('financePeriodControls').doc(periodId);
+const creatorPayoutPeriodRef = (periodId: string) => db.collection('creatorPayoutPeriods').doc(periodId);
+const creatorPayoutRef = (periodId: string, userId: string) => creatorPayoutPeriodRef(periodId).collection('payouts').doc(userId);
+const safePence = (value: unknown, label: string) => {
+  const amount = Number(value);
+  if (!Number.isSafeInteger(amount) || amount < 0) throw new HttpsError('invalid-argument', label + ' must be a non-negative whole number of pence.');
+  return amount;
+};
+const settlementDocumentId = (provider: string, externalId: string) =>
+  createHash('sha256').update(provider + ':' + externalId).digest('hex');
+
+export const adminRecordRevenueSettlement = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const provider = input.provider === 'stripe' ? 'stripe' : null;
+  const externalId = cleanText(input.externalId, 160);
+  const settledAt = cleanText(input.settledAt, 10);
+  const sourceReference = cleanText(input.sourceReference, 500);
+  if (!validCommitmentPeriodId(periodId) || !provider || !/^[A-Za-z0-9_-]{1,160}$/.test(externalId)
+    || !validIsoCalendarDate(settledAt) || settledAt.slice(0, 7) !== periodId || sourceReference.length < 4) {
+    throw new HttpsError('invalid-argument', 'Provide a period, Stripe payout or balance reference, settlement date and source report reference.');
+  }
+  const grossPence = safePence(input.grossPence, 'Gross amount');
+  if (grossPence < 1) throw new HttpsError('invalid-argument', 'A settled Stripe entry must contain positive gross receipts.');
+  const refundPence = safePence(input.refundPence, 'Refunds');
+  const chargebackPence = safePence(input.chargebackPence, 'Chargebacks');
+  const processorFeePence = safePence(input.processorFeePence, 'Processor fees');
+  const vatPence = safePence(input.vatPence, 'VAT');
+  const otherDeductionsPence = safePence(input.otherDeductionsPence ?? 0, 'Other deductions');
+  let eligibleNetRevenuePence: number;
+  try {
+    eligibleNetRevenuePence = calculateEligibleNetRevenuePence({
+      grossPence, refundPence, chargebackPence, processorFeePence, vatPence, otherDeductionsPence,
+    });
+  } catch (error) {
+    throw new HttpsError('invalid-argument', error instanceof Error ? error.message : 'Invalid settlement deductions.');
+  }
+  const settlementId = settlementDocumentId(provider, externalId);
+  const ref = revenueSettlementRef(settlementId);
+  await db.runTransaction(async (tx) => {
+    const [existing, payoutPeriod, control] = await Promise.all([
+      tx.get(ref), tx.get(creatorPayoutPeriodRef(periodId)), tx.get(financePeriodControlRef(periodId)),
+    ]);
+    if (payoutPeriod.exists || control.data()?.payoutPrepared === true) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
+    if (existing.exists) throw new HttpsError('already-exists', 'This Stripe settlement reference has already been recorded.');
+    tx.create(ref, {
+      settlementId, periodId, provider, externalId, settledAt, sourceReference,
+      grossPence, refundPence, chargebackPence, processorFeePence, vatPence,
+      otherDeductionsPence, eligibleNetRevenuePence,
+      status: 'pending_reconciliation',
+      recordedByAdminUserId: admin.uid,
+      recordedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(financePeriodControlRef(periodId), { revision: Number(control.data()?.revision ?? 0) + 1, payoutPrepared: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
+  return { recorded: true, settlementId, eligibleNetRevenuePence, status: 'pending_reconciliation' };
+});
+
+export const adminReconcileRevenueSettlement = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const settlementId = cleanText(input.settlementId, 80);
+  const reconciliationNote = cleanText(input.reconciliationNote, 1000);
+  if (!/^[a-f0-9]{64}$/.test(settlementId) || reconciliationNote.length < 8) {
+    throw new HttpsError('invalid-argument', 'A settlement and a reconciliation note are required.');
+  }
+  const ref = revenueSettlementRef(settlementId);
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const data = snapshot.data() ?? {};
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Revenue settlement not found.');
+    const periodId = String(data.periodId ?? '');
+    const [payoutPeriod, control] = await Promise.all([
+      tx.get(creatorPayoutPeriodRef(periodId)), tx.get(financePeriodControlRef(periodId)),
+    ]);
+    if (payoutPeriod.exists || control.data()?.payoutPrepared === true) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
+    if (data.status !== 'pending_reconciliation') throw new HttpsError('failed-precondition', 'Only pending settlements can be reconciled.');
+    tx.update(ref, {
+      status: 'reconciled', reconciliationNote,
+      reconciledByAdminUserId: admin.uid, reconciledAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(financePeriodControlRef(periodId), { revision: Number(control.data()?.revision ?? 0) + 1, payoutPrepared: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return { reconciled: true, settlementId, eligibleNetRevenuePence: data.eligibleNetRevenuePence };
+  });
+});
+
+export const adminListRevenueSettlements = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid finance period.');
+  const snapshot = await db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(501).get();
+  if (snapshot.size > 500) throw new HttpsError('resource-exhausted', 'This settlement register exceeds the safe 500-entry view. Contact Nightjar engineering for pagination.');
+  return { settlements: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
+export const adminRecordRevenueAdjustment = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const amountPence = Number(input.amountPence);
+  const reason = cleanText(input.reason, 1000);
+  const sourceReference = cleanText(input.sourceReference, 500);
+  if (!validCommitmentPeriodId(periodId) || !Number.isSafeInteger(amountPence) || amountPence === 0
+    || reason.length < 8 || sourceReference.length < 4) {
+    throw new HttpsError('invalid-argument', 'Provide a non-zero signed pence adjustment, reason and source reference.');
+  }
+  const adjustmentId = createHash('sha256').update(periodId + ':adjustment:' + sourceReference).digest('hex');
+  const ref = db.collection('financeRevenueAdjustments').doc(adjustmentId);
+  await db.runTransaction(async (tx) => {
+    const [existing, payoutPeriod, control] = await Promise.all([
+      tx.get(ref), tx.get(creatorPayoutPeriodRef(periodId)), tx.get(financePeriodControlRef(periodId)),
+    ]);
+    if (payoutPeriod.exists || control.data()?.payoutPrepared === true) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
+    if (existing.exists) throw new HttpsError('already-exists', 'This adjustment source reference has already been recorded.');
+    tx.create(ref, {
+      adjustmentId, periodId, amountPence, reason, sourceReference,
+      createdByAdminUserId: admin.uid, createdAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(financePeriodControlRef(periodId), { revision: Number(control.data()?.revision ?? 0) + 1, payoutPrepared: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
+  return { recorded: true, adjustmentId, amountPence };
+});
+
+export const adminListRevenueAdjustments = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid finance period.');
+  const snapshot = await db.collection('financeRevenueAdjustments').where('periodId', '==', periodId).limit(501).get();
+  if (snapshot.size > 500) throw new HttpsError('resource-exhausted', 'This adjustment register exceeds the safe 500-entry view. Contact Nightjar engineering for pagination.');
+  return { adjustments: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
+export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid monthly period.');
+  const financeControlRef = financePeriodControlRef(periodId);
+  const controlSnapshot = await financeControlRef.get();
+  const controlRevision = Number(controlSnapshot.data()?.revision ?? 0);
+  if (controlSnapshot.data()?.payoutPrepared === true) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
+  const [commitmentPeriod, settlements, adjustments, assignments, existingPayoutPeriod] = await Promise.all([
+    commitmentPeriodRef(periodId).get(),
+    db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(501).get(),
+    db.collection('financeRevenueAdjustments').where('periodId', '==', periodId).limit(501).get(),
+    db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5001).get(),
+    creatorPayoutPeriodRef(periodId).get(),
+  ]);
+  if (!commitmentPeriod.exists || commitmentPeriod.data()?.status !== 'closed') {
+    throw new HttpsError('failed-precondition', 'Close the commitment assessment period after all reviews before preparing compensation.');
+  }
+  if (existingPayoutPeriod.exists) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
+  if (settlements.size > 500 || adjustments.size > 500 || assignments.size > 5000) {
+    throw new HttpsError('resource-exhausted', 'This period exceeds the safe finance preparation limits. Contact Nightjar engineering before preparing compensation.');
+  }
+  if (!settlements.size || settlements.docs.some((doc) => doc.data().status !== 'reconciled')) {
+    throw new HttpsError('failed-precondition', 'Every Stripe settlement must be recorded and reconciled before calculating payouts.');
+  }
+  const settlementNetPence = settlements.docs.reduce((sum, doc) => {
+    const next = sum + safePence(doc.data().eligibleNetRevenuePence, 'Eligible net revenue');
+    if (!Number.isSafeInteger(next)) throw new HttpsError('failed-precondition', 'Reconciled settlement totals exceed the safe calculation range.');
+    return next;
+  }, 0);
+  const adjustmentNetPence = adjustments.docs.reduce((sum, doc) => {
+    const amount = Number(doc.data().amountPence ?? 0);
+    if (!Number.isSafeInteger(amount)) throw new HttpsError('failed-precondition', 'A revenue adjustment is invalid.');
+    const next = sum + amount;
+    if (!Number.isSafeInteger(next)) throw new HttpsError('failed-precondition', 'Revenue adjustment totals exceed the safe calculation range.');
+    return next;
+  }, 0);
+  const eligibleNetRevenuePence = settlementNetPence + adjustmentNetPence;
+  if (!Number.isSafeInteger(eligibleNetRevenuePence) || eligibleNetRevenuePence < 0) {
+    throw new HttpsError('failed-precondition', 'Reconciled revenue and adjustments must produce a non-negative safe total.');
+  }
+  const creatorPoolPence = calculateCreatorPoolPence(eligibleNetRevenuePence, 50);
+  const assignmentsByUser = new Map<string, Array<Record<string, any>>>();
+  for (const doc of assignments.docs) {
+    const data = doc.data();
+    const userId = cleanText(data.userId, 160);
+    if (!userId) continue;
+    const rows = assignmentsByUser.get(userId) ?? [];
+    rows.push(data);
+    assignmentsByUser.set(userId, rows);
+  }
+  const userIds = [...assignmentsByUser.keys()];
+  if (userIds.length > 450) throw new HttpsError('resource-exhausted', 'This period exceeds the single-transaction payout preparation limit. Contact Nightjar engineering before closing this period.');
+  const payoutPeriod = creatorPayoutPeriodRef(periodId);
+  const allocation = await db.runTransaction(async (tx) => {
+    const [existing, control] = await Promise.all([tx.get(payoutPeriod), tx.get(financeControlRef)]);
+    if (existing.exists || control.data()?.payoutPrepared === true) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
+    if (Number(control.data()?.revision ?? 0) !== controlRevision) {
+      throw new HttpsError('aborted', 'Revenue changed while this calculation was being prepared. Refresh the settlement register and try again.');
+    }
+    // Re-read every member account inside the payout transaction. Eligibility
+    // must reflect current account status and approved roles at ledger creation,
+    // not a potentially stale snapshot taken before this transaction began.
+    const accountSnapshots = await Promise.all(userIds.map((userId) => tx.get(accountRef(userId))));
+    const accountByUser = new Map(accountSnapshots.map((snapshot) => [snapshot.id, snapshot.data() ?? {}]));
+    const members: CreatorPoolMember[] = [];
+    const qualifyingRoleByUser = new Map<string, string>();
+    for (const userId of userIds) {
+      const account = accountByUser.get(userId) ?? {};
+      if (String(account.status ?? '') !== 'active') continue;
+      const approvedRoles = professionalRolesForAccount(account);
+      const userAssignments = assignmentsByUser.get(userId) ?? [];
+      const assessments: RoleCommitmentAssessment[] = userAssignments
+        .filter((assignment) => approvedRoles.includes(assignment.role as AccountRole) && isCommitmentRole(assignment.role))
+        .map((assignment) => ({
+          role: assignment.role,
+          assigned: true,
+          effective: true,
+          tasks: (Array.isArray(assignment.tasks) ? assignment.tasks : []).map((task: Record<string, any>) => ({
+            id: cleanText(task.id, 60), mandatory: task.mandatory === true, state: task.state,
+          })),
+          approvedException: assignment.approvedException === true,
+          exceptionReason: assignment.exceptionReason ?? null,
+        }));
+      const completedCommitmentRoles = assessments.filter((assessment) => evaluateRoleCommitments(assessment).qualifies).map((assessment) => assessment.role);
+      if (completedCommitmentRoles.length) qualifyingRoleByUser.set(userId, completedCommitmentRoles[0]);
+      members.push({ userId, accountStatus: 'active', approvedRoles, completedCommitmentRoles });
+    }
+    const calculated = allocateCreatorPool(creatorPoolPence, members);
+    tx.create(payoutPeriod, {
+      periodId, status: 'draft', currency: 'GBP',
+      eligibleNetRevenuePence, creatorPoolPercent: 50, creatorPoolPence,
+      eligibleCreatorCount: calculated.eligibleCreatorCount,
+      totalAllocatedPence: calculated.totalAllocatedPence,
+      unallocatedCreatorPoolPence: calculated.unallocatedPence,
+      nonCreatorRemainderPence: eligibleNetRevenuePence - creatorPoolPence,
+      settlementIds: settlements.docs.map((doc) => doc.id),
+      adjustmentIds: adjustments.docs.map((doc) => doc.id),
+      preparedByAdminUserId: admin.uid,
+      preparedAt: FieldValue.serverTimestamp(),
+      policyVersion: 1,
+    });
+    tx.set(financeControlRef, { revision: controlRevision + 1, payoutPrepared: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    for (const payout of calculated.payouts) {
+      tx.create(creatorPayoutRef(periodId, payout.userId), {
+        periodId, userId: payout.userId, amountPence: payout.amountPence,
+        paidPence: 0, outstandingPence: payout.amountPence,
+        qualifyingRole: qualifyingRoleByUser.get(payout.userId) ?? null,
+        status: 'pending', createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    return calculated;
+  });
+  return {
+    prepared: true, periodId, eligibleNetRevenuePence, creatorPoolPercent: 50,
+    creatorPoolPence, eligibleCreatorCount: allocation.eligibleCreatorCount,
+    totalAllocatedPence: allocation.totalAllocatedPence,
+    unallocatedCreatorPoolPence: allocation.unallocatedPence,
+    nonCreatorRemainderPence: eligibleNetRevenuePence - creatorPoolPence,
+    payouts: allocation.payouts,
+  };
+});
+
+export const adminGetCreatorPayoutPeriod = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid payout period.');
+  const ref = creatorPayoutPeriodRef(periodId);
+  const [period, payouts] = await Promise.all([ref.get(), ref.collection('payouts').orderBy('userId').limit(500).get()]);
+  if (!period.exists) throw new HttpsError('not-found', 'Creator Pool calculation not found.');
+  return {
+    period: { periodId, ...period.data() },
+    payouts: await Promise.all(payouts.docs.map(async (doc) => ({ userId: doc.id, displayName: (await accountPresentation(doc.id)).displayName, ...doc.data() }))),
+  };
+});
+
+export const adminApproveCreatorPayoutPeriod = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid payout period.');
+  const ref = creatorPayoutPeriodRef(periodId);
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Creator Pool calculation not found.');
+    if (snapshot.data()?.status !== 'draft') throw new HttpsError('failed-precondition', 'Only a draft Creator Pool calculation can be approved.');
+    tx.update(ref, { status: 'approved', approvedByAdminUserId: admin.uid, approvedAt: FieldValue.serverTimestamp() });
+    return { approved: true, periodId };
+  });
+});
+
+export const adminRecordCreatorPayment = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const userId = cleanText(input.userId, 160);
+  const amountPence = safePence(input.amountPence, 'Payment amount');
+  const reference = cleanText(input.reference, 160);
+  const paidAt = cleanText(input.paidAt, 10);
+  if (!validCommitmentPeriodId(periodId) || !validCommitmentDocId(userId) || amountPence < 1
+    || reference.length < 4 || !validIsoCalendarDate(paidAt)) {
+    throw new HttpsError('invalid-argument', 'Provide a period, member, positive payment amount, payment reference and payment date.');
+  }
+  const periodRef = creatorPayoutPeriodRef(periodId);
+  const payoutRef = creatorPayoutRef(periodId, userId);
+  const paymentId = createHash('sha256').update(periodId + ':' + userId + ':' + reference).digest('hex');
+  const paymentRef = periodRef.collection('payments').doc(paymentId);
+  return db.runTransaction(async (tx) => {
+    const [periodSnap, payoutSnap, paymentSnap] = await Promise.all([tx.get(periodRef), tx.get(payoutRef), tx.get(paymentRef)]);
+    const period = periodSnap.data() ?? {};
+    const payout = payoutSnap.data() ?? {};
+    if (!periodSnap.exists || period.status !== 'approved') throw new HttpsError('failed-precondition', 'Approve the payout period before recording payments.');
+    if (!payoutSnap.exists) throw new HttpsError('not-found', 'Creator payout not found.');
+    if (paymentSnap.exists) {
+      if (!isSameManualPayment(paymentSnap.data() ?? {}, { periodId, userId, amountPence, reference, paidAt })) {
+        throw new HttpsError('already-exists', 'This payment reference is already recorded with different details. Use a new reference for a correction.');
+      }
+      return { recorded: true, duplicate: true, paymentId };
+    }
     const outstanding = safePence(payout.outstandingPence, 'Outstanding amount');
     if (amountPence > outstanding) throw new HttpsError('failed-precondition', 'Payment exceeds the outstanding balance.');
     const nextPaid = safePence(safePence(payout.paidPence, 'Paid amount') + amountPence, 'Updated paid amount');
@@ -1610,7 +3145,12 @@ export const adminRecordTaxPayment = onCall({ region: REGION }, async (request) 
     if (!ledgerSnap.exists || !Number.isSafeInteger(ledger.confirmedLiabilityPence)) {
       throw new HttpsError('failed-precondition', 'An accountant-confirmed tax liability must be recorded before tax payments are reconciled.');
     }
-    if (paymentSnap.exists) return { recorded: true, duplicate: true, paymentId };
+    if (paymentSnap.exists) {
+      if (!isSameManualPayment(paymentSnap.data() ?? {}, { periodId, amountPence, reference, paidAt })) {
+        throw new HttpsError('already-exists', 'This tax payment reference is already recorded with different details. Use a new reference for a correction.');
+      }
+      return { recorded: true, duplicate: true, paymentId };
+    }
     const paidPence = safePence(ledger.paidPence ?? 0, 'Tax paid');
     const liabilityPence = safePence(ledger.confirmedLiabilityPence, 'Confirmed tax liability');
     if (amountPence > liabilityPence - paidPence) throw new HttpsError('failed-precondition', 'Tax payment exceeds the outstanding confirmed liability.');
