@@ -1398,47 +1398,48 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   }
   const userIds = [...assignmentsByUser.keys()];
   if (userIds.length > 450) throw new HttpsError('resource-exhausted', 'This period exceeds the single-transaction payout preparation limit. Contact Nightjar engineering before closing this period.');
-  const accountDocs = userIds.length ? await db.getAll(...userIds.map((uid) => accountRef(uid))) : [];
-  const accountByUser = new Map(accountDocs.map((doc) => [doc.id, doc.data() ?? {}]));
-  const members: CreatorPoolMember[] = [];
-  const qualifyingRoleByUser = new Map<string, string>();
-  for (const userId of userIds) {
-    const account = accountByUser.get(userId) ?? {};
-    if (String(account.status ?? '') !== 'active') continue;
-    const approvedRoles = professionalRolesForAccount(account);
-    const userAssignments = assignmentsByUser.get(userId) ?? [];
-    const assessments: RoleCommitmentAssessment[] = userAssignments
-      .filter((assignment) => approvedRoles.includes(assignment.role as AccountRole) && isCommitmentRole(assignment.role))
-      .map((assignment) => ({
-        role: assignment.role,
-        assigned: true,
-        effective: true,
-        tasks: (Array.isArray(assignment.tasks) ? assignment.tasks : []).map((task: Record<string, any>) => ({
-          id: cleanText(task.id, 60), mandatory: task.mandatory === true, state: task.state,
-        })),
-        approvedException: assignment.approvedException === true,
-        exceptionReason: assignment.exceptionReason ?? null,
-      }));
-    const completedCommitmentRoles = assessments.filter((assessment) => evaluateRoleCommitments(assessment).qualifies).map((assessment) => assessment.role);
-    if (completedCommitmentRoles.length) qualifyingRoleByUser.set(userId, completedCommitmentRoles[0]);
-    members.push({
-      userId, accountStatus: 'active', approvedRoles, completedCommitmentRoles,
-    });
-  }
-  const allocation = allocateCreatorPool(creatorPoolPence, members);
   const payoutPeriod = creatorPayoutPeriodRef(periodId);
-  await db.runTransaction(async (tx) => {
+  const allocation = await db.runTransaction(async (tx) => {
     const [existing, control] = await Promise.all([tx.get(payoutPeriod), tx.get(financeControlRef)]);
     if (existing.exists || control.data()?.payoutPrepared === true) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
     if (Number(control.data()?.revision ?? 0) !== controlRevision) {
       throw new HttpsError('aborted', 'Revenue changed while this calculation was being prepared. Refresh the settlement register and try again.');
     }
+    // Re-read every member account inside the payout transaction. Eligibility
+    // must reflect current account status and approved roles at ledger creation,
+    // not a potentially stale snapshot taken before this transaction began.
+    const accountSnapshots = await Promise.all(userIds.map((userId) => tx.get(accountRef(userId))));
+    const accountByUser = new Map(accountSnapshots.map((snapshot) => [snapshot.id, snapshot.data() ?? {}]));
+    const members: CreatorPoolMember[] = [];
+    const qualifyingRoleByUser = new Map<string, string>();
+    for (const userId of userIds) {
+      const account = accountByUser.get(userId) ?? {};
+      if (String(account.status ?? '') !== 'active') continue;
+      const approvedRoles = professionalRolesForAccount(account);
+      const userAssignments = assignmentsByUser.get(userId) ?? [];
+      const assessments: RoleCommitmentAssessment[] = userAssignments
+        .filter((assignment) => approvedRoles.includes(assignment.role as AccountRole) && isCommitmentRole(assignment.role))
+        .map((assignment) => ({
+          role: assignment.role,
+          assigned: true,
+          effective: true,
+          tasks: (Array.isArray(assignment.tasks) ? assignment.tasks : []).map((task: Record<string, any>) => ({
+            id: cleanText(task.id, 60), mandatory: task.mandatory === true, state: task.state,
+          })),
+          approvedException: assignment.approvedException === true,
+          exceptionReason: assignment.exceptionReason ?? null,
+        }));
+      const completedCommitmentRoles = assessments.filter((assessment) => evaluateRoleCommitments(assessment).qualifies).map((assessment) => assessment.role);
+      if (completedCommitmentRoles.length) qualifyingRoleByUser.set(userId, completedCommitmentRoles[0]);
+      members.push({ userId, accountStatus: 'active', approvedRoles, completedCommitmentRoles });
+    }
+    const calculated = allocateCreatorPool(creatorPoolPence, members);
     tx.create(payoutPeriod, {
       periodId, status: 'draft', currency: 'GBP',
       eligibleNetRevenuePence, creatorPoolPercent: 50, creatorPoolPence,
-      eligibleCreatorCount: allocation.eligibleCreatorCount,
-      totalAllocatedPence: allocation.totalAllocatedPence,
-      unallocatedCreatorPoolPence: allocation.unallocatedPence,
+      eligibleCreatorCount: calculated.eligibleCreatorCount,
+      totalAllocatedPence: calculated.totalAllocatedPence,
+      unallocatedCreatorPoolPence: calculated.unallocatedPence,
       nonCreatorRemainderPence: eligibleNetRevenuePence - creatorPoolPence,
       settlementIds: settlements.docs.map((doc) => doc.id),
       adjustmentIds: adjustments.docs.map((doc) => doc.id),
@@ -1447,7 +1448,7 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
       policyVersion: 1,
     });
     tx.set(financeControlRef, { revision: controlRevision + 1, payoutPrepared: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-    for (const payout of allocation.payouts) {
+    for (const payout of calculated.payouts) {
       tx.create(creatorPayoutRef(periodId, payout.userId), {
         periodId, userId: payout.userId, amountPence: payout.amountPence,
         paidPence: 0, outstandingPence: payout.amountPence,
@@ -1455,6 +1456,7 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
         status: 'pending', createdAt: FieldValue.serverTimestamp(),
       });
     }
+    return calculated;
   });
   return {
     prepared: true, periodId, eligibleNetRevenuePence, creatorPoolPercent: 50,
@@ -1655,12 +1657,17 @@ export const getMyCreatorCompensation = onCall({ region: REGION }, async (reques
 });
 export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
-  const snapshot = await db.collection('commitmentAssignments').limit(1001).get();
-  if (snapshot.size > 1000) throw new HttpsError('resource-exhausted', 'The commitment review queue exceeds the safe 1,000-assignment view. Contact Nightjar engineering for a paginated review queue.');
-  const queue = await Promise.all(snapshot.docs.map(async (doc) => {
+  const openPeriods = await db.collection('commitmentPeriods').where('status', '==', 'open').limit(36).get();
+  const assignmentSnapshots = await Promise.all(openPeriods.docs.map((period) =>
+    db.collection('commitmentAssignments').where('periodId', '==', period.id).limit(1001).get(),
+  ));
+  const oversizedPeriod = assignmentSnapshots.findIndex((snapshot) => snapshot.size > 1000);
+  if (oversizedPeriod >= 0) {
+    throw new HttpsError('resource-exhausted', 'The open commitment period ' + openPeriods.docs[oversizedPeriod].id + ' exceeds the safe 1,000-assignment review view. Contact Nightjar engineering for pagination.');
+  }
+  const assignmentDocs = assignmentSnapshots.flatMap((snapshot) => snapshot.docs);
+  const queue = await Promise.all(assignmentDocs.map(async (doc) => {
     const data = doc.data();
-    const period = await commitmentPeriodRef(String(data.periodId ?? '')).get();
-    if (!period.exists || period.data()?.status !== 'open') return null;
     const pendingTasks = (Array.isArray(data.tasks) ? data.tasks : [])
       .filter((task: Record<string, any>) => task.state === 'submitted')
       .map((task: Record<string, any>) => ({ id: task.id, title: task.title, evidenceIds: task.evidenceIds ?? [] }));
