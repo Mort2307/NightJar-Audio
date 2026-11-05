@@ -32,7 +32,7 @@ export default function CommitmentControlCentre() {
   const [tasks, setTasks] = useState<Array<{ id: string; title: string; description: string; mandatory: boolean; dueDay: string }>>([]);
   const [periodId, setPeriodId] = useState(monthToday);
   const [periodStart, setPeriodStart] = useState(monthToday + '-01');
-  const [periodEnd, setPeriodEnd] = useState(monthEnd);
+  const [periodEnd, setPeriodEnd] = useState(monthEndFor(monthToday));
   const [assignUserId, setAssignUserId] = useState('');
   const [assignRole, setAssignRole] = useState<NightjarCommitmentRole>('creator');
   const [assignPeriod, setAssignPeriod] = useState(monthToday);
