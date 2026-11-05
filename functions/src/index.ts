@@ -1190,6 +1190,9 @@ export const adminCloseCommitmentPeriod = onCall({ region: REGION }, async (requ
   if (!before.exists) throw new HttpsError('not-found', 'Commitment period not found.');
   if (before.data()?.status === 'closed') return { closed: true, periodId, alreadyClosed: true };
   const activityRevision = Number(before.data()?.activityRevision ?? 0);
+  if (!Number.isSafeInteger(activityRevision) || activityRevision < 0 || activityRevision >= Number.MAX_SAFE_INTEGER) {
+    throw new HttpsError('failed-precondition', 'This commitment period has an invalid activity revision and cannot be safely closed.');
+  }
   const assignments = await db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5001).get();
   if (assignments.size > 5000) throw new HttpsError('resource-exhausted', 'This period exceeds the 5,000-assignment closure limit. Contact Nightjar engineering before closing it.');
   const pendingReviewCount = assignments.docs.reduce((count, doc) =>
@@ -1300,7 +1303,8 @@ export const adminListRevenueSettlements = onCall({ region: REGION }, async (req
   requireAdminIdentity(request);
   const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
   if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid finance period.');
-  const snapshot = await db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(500).get();
+  const snapshot = await db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(501).get();
+  if (snapshot.size > 500) throw new HttpsError('resource-exhausted', 'This settlement register exceeds the safe 500-entry view. Contact Nightjar engineering for pagination.');
   return { settlements: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
 });
 
@@ -1336,7 +1340,8 @@ export const adminListRevenueAdjustments = onCall({ region: REGION }, async (req
   requireAdminIdentity(request);
   const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
   if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid finance period.');
-  const snapshot = await db.collection('financeRevenueAdjustments').where('periodId', '==', periodId).limit(500).get();
+  const snapshot = await db.collection('financeRevenueAdjustments').where('periodId', '==', periodId).limit(501).get();
+  if (snapshot.size > 500) throw new HttpsError('resource-exhausted', 'This adjustment register exceeds the safe 500-entry view. Contact Nightjar engineering for pagination.');
   return { adjustments: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
 });
 
