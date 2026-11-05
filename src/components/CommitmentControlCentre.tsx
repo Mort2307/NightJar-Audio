@@ -11,9 +11,13 @@ type ReviewItem = {
 };
 const roles: NightjarCommitmentRole[] = ['creator', 'writer', 'editor', 'artist'];
 const roleName = (role: string) => role === 'creator' ? 'VA Creator' : role === 'writer' ? 'Writer' : role === 'editor' ? 'Audio Editor' : 'Artist';
-const dateToday = new Date().toISOString().slice(0, 10);
+const localDate = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const dateToday = localDate();
 const monthToday = dateToday.slice(0, 7);
-const monthEnd = new Date(Date.UTC(new Date(dateToday).getUTCFullYear(), new Date(dateToday).getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+const monthEndFor = (periodId: string) => {
+  const [year, month] = periodId.split('-').map(Number);
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+};
 
 export default function CommitmentControlCentre() {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -33,7 +37,9 @@ export default function CommitmentControlCentre() {
   const [assignRole, setAssignRole] = useState<NightjarCommitmentRole>('creator');
   const [assignPeriod, setAssignPeriod] = useState(monthToday);
   const [assignTemplate, setAssignTemplate] = useState('');
-  const assignableTemplates = templates.filter((item) => item.role === assignRole);
+  const selectedAssignPeriod = periods.find((item) => item.id === assignPeriod);
+  const assignableTemplates = templates.filter((item) => item.role === assignRole
+    && Boolean(selectedAssignPeriod) && item.effectiveFrom <= (selectedAssignPeriod?.startDate ?? ''));
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
   const [exceptionReasons, setExceptionReasons] = useState<Record<string, string>>({});
 
@@ -48,10 +54,14 @@ export default function CommitmentControlCentre() {
       setTemplates(templateResult.templates as Template[]);
       setPeriods(periodResult.periods as Period[]);
       setQueue(queueResult.queue as ReviewItem[]);
-      setAssignPeriod((current) => current || periodResult.periods.find((item) => item.status === 'open')?.id || monthToday);
-      setAssignTemplate((current) => templateResult.templates.some((item) => item.id === current && item.role === assignRole)
-        ? current
-        : templateResult.templates.find((item) => item.role === assignRole)?.id || '');
+      const openPeriods = periodResult.periods.filter((item) => item.status === 'open');
+      setAssignPeriod((current) => openPeriods.some((item) => item.id === current) ? current : openPeriods[0]?.id || '');
+      setAssignTemplate((current) => {
+        const selected = openPeriods.find((item) => item.id === (openPeriods.some((period) => period.id === assignPeriod) ? assignPeriod : openPeriods[0]?.id));
+        return templateResult.templates.some((item) => item.id === current && item.role === assignRole && selected && item.effectiveFrom <= selected.startDate)
+          ? current
+          : templateResult.templates.find((item) => item.role === assignRole && selected && item.effectiveFrom <= selected.startDate)?.id || '';
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Commitment controls could not be loaded.');
     } finally { setLoading(false); }
@@ -66,6 +76,8 @@ export default function CommitmentControlCentre() {
   };
   const createTemplate = () => run('template', async () => {
     if (!tasks.length) throw new Error('Add at least one commitment task first.');
+    const taskIds = tasks.map((task) => task.id.trim());
+    if (new Set(taskIds).size !== taskIds.length) throw new Error('Every task needs a unique task ID.');
     const result = await nightjarAccount.adminCreateCommitmentTemplate({
       role: templateRole, effectiveFrom,
       tasks: tasks.map((task) => ({
@@ -111,16 +123,16 @@ export default function CommitmentControlCentre() {
 
       <article className="nj-commitment-admin-card">
         <span className="mini-label">02 / PERIODS & ASSIGNMENTS</span><h3>Set up a monthly cycle</h3><p>Create the assessment period, then assign the appropriate immutable template to each approved individual role.</p>
-        <label>Period ID (YYYY-MM)<input value={periodId} onChange={(event) => setPeriodId(event.target.value)} maxLength={7}/></label>
+        <label>Period ID<input type="month" value={periodId} onChange={(event) => { const next = event.target.value; setPeriodId(next); if (/^\\d{4}-(0[1-9]|1[0-2])$/.test(next)) { setPeriodStart(next + '-01'); setPeriodEnd(monthEndFor(next)); } }}/></label>
         <div className="nj-commitment-admin-two"><label>Starts<input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)}/></label><label>Ends<input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)}/></label></div>
-        <button className="nj-commitment-admin-primary" type="button" disabled={busy === 'period'} onClick={() => void createPeriod()}>{busy === 'period' ? 'Creating…' : 'Create assessment period'}</button>
+        <button className="nj-commitment-admin-primary" type="button" disabled={busy === 'period' || !/^\\d{4}-(0[1-9]|1[0-2])$/.test(periodId) || periodStart.slice(0, 7) !== periodId || periodEnd.slice(0, 7) !== periodId || periodStart > periodEnd} onClick={() => void createPeriod()}>{busy === 'period' ? 'Creating…' : 'Create assessment period'}</button>
         <hr/>
-        <label>Open period<select value={assignPeriod} onChange={(event) => setAssignPeriod(event.target.value)}>{periods.filter((item) => item.status === 'open').map((item) => <option key={item.id} value={item.id}>{item.id} · {item.startDate} to {item.endDate}</option>)}</select></label>
+        <label>Open period<select value={assignPeriod} onChange={(event) => { const next = event.target.value; setAssignPeriod(next); const selected = periods.find((item) => item.id === next); setAssignTemplate(templates.find((item) => item.role === assignRole && selected && item.effectiveFrom <= selected.startDate)?.id ?? ''); }}>{periods.filter((item) => item.status === 'open').map((item) => <option key={item.id} value={item.id}>{item.id} · {item.startDate} to {item.endDate}</option>)}</select></label>
         <label>Template<select value={assignTemplate} onChange={(event) => setAssignTemplate(event.target.value)}>{assignableTemplates.length ? assignableTemplates.map((item) => <option key={item.id} value={item.id}>{roleName(item.role)} v{item.version} · {item.effectiveFrom}</option>) : <option value="">No published template for this role</option>}</select></label>
         <label>Member account UID<input value={assignUserId} onChange={(event) => setAssignUserId(event.target.value)} placeholder="Firebase account UID"/><small>Find the UID in People &amp; accounts. The member must be active and already approved for the selected role.</small></label>
-        <label>Role<select value={assignRole} onChange={(event) => { const nextRole = event.target.value as NightjarCommitmentRole; setAssignRole(nextRole); setAssignTemplate(templates.find((item) => item.role === nextRole)?.id ?? ''); }}>{roles.map((role) => <option key={role} value={role}>{roleName(role)}</option>)}</select></label>
+        <label>Role<select value={assignRole} onChange={(event) => { const nextRole = event.target.value as NightjarCommitmentRole; setAssignRole(nextRole); setAssignTemplate(templates.find((item) => item.role === nextRole && selectedAssignPeriod && item.effectiveFrom <= selectedAssignPeriod.startDate)?.id ?? ''); }}>{roles.map((role) => <option key={role} value={role}>{roleName(role)}</option>)}</select></label>
         <button className="nj-commitment-admin-primary" type="button" disabled={busy === 'assign' || !assignUserId.trim() || !assignableTemplates.some((item) => item.id === assignTemplate) || !assignPeriod} onClick={() => void assign()}>{busy === 'assign' ? 'Assigning…' : 'Assign commitment plan'}</button>
-        <div className="nj-commitment-period-list">{periods.map((period) => <div key={period.id}><span>{period.id} · {period.startDate} – {period.endDate}</span><strong>{period.status}</strong>{period.status === 'open' && <button type="button" onClick={() => void run('close-' + period.id, () => nightjarAccount.adminCloseCommitmentPeriod(period.id), 'Assessment period closed.') }><Lock size={12}/> Close</button>}</div>)}</div>
+        <div className="nj-commitment-period-list">{periods.map((period) => <div key={period.id}><span>{period.id} · {period.startDate} – {period.endDate}</span><strong>{period.status}</strong>{period.status === 'open' && <button type="button" disabled={busy === 'close-' + period.id} onClick={() => void run('close-' + period.id, () => nightjarAccount.adminCloseCommitmentPeriod(period.id), 'Assessment period closed.') }><Lock size={12}/> {busy === 'close-' + period.id ? 'Closing…' : 'Close'}</button>}</div>)}</div>
       </article>
     </div>
 
