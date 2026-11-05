@@ -19,7 +19,7 @@ const money = (pence: number) => new Intl.NumberFormat('en-GB', { style: 'curren
 const pence = (value: string) => {
   const input = value.trim();
   if (!input) return 0;
-  if (!/^-?\d+(?:\\.\d{1,2})?$/.test(input)) return Number.NaN;
+  if (!/^-?\d+(?:\.\d{1,2})?$/.test(input)) return Number.NaN;
   const result = Math.round(Number(input) * 100);
   return Number.isSafeInteger(result) ? result : Number.NaN;
 };
