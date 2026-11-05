@@ -51,29 +51,31 @@ export default function MyCommitmentsPanel() {
     } finally { setSavingKey(''); }
   };
   const activeAssignments = assignments.filter((assignment) => !periodId || assignment.periodId === periodId);
+  const qualifyingException = activeAssignments.find((assignment) => assignment.role === qualifyingRole && assignment.approvedException);
   return <section className="panel nj-my-commitments" aria-label="My commitments">
     <header><div><span className="mini-label">CONTRIBUTOR COMMITMENTS</span><h2>My commitments</h2><p>Evidence is reviewed before a task counts as complete. Your eligibility is assessed separately for each approved role.</p></div><FileCheck2 size={20}/></header>
     {loading ? <p className="nj-commitment-loading" role="status"><LoaderCircle size={16}/> Loading your commitments…</p> : <>
       {periodId && <div className="nj-commitment-period"><span>Assessment period</span><strong>{periodId}</strong></div>}
       <div className={eligible ? 'nj-commitment-eligibility eligible' : 'nj-commitment-eligibility'}>
         {eligible ? <CheckCircle2 size={18}/> : <CircleAlert size={18}/>}
-        <span><strong>{eligible ? 'Eligible for this period' : 'Not yet eligible'}</strong><small>{eligible ? (qualifyingRole ? roleName(qualifyingRole) + ' commitments are complete. You qualify for one individual share.' : 'Your completed role qualifies for one share.') : 'Complete and receive approval for every applicable mandatory task in at least one approved role.'}</small></span>
+        <span><strong>{eligible ? 'Eligible for this period' : 'Not yet eligible'}</strong><small>{eligible ? (qualifyingException ? roleName(qualifyingRole || '') + ' has an approved eligibility exception. You qualify for one individual share.' : (qualifyingRole ? roleName(qualifyingRole) + ' commitments are complete. You qualify for one individual share.' : 'Your completed role qualifies for one share.')) : 'Complete and receive approval for every applicable mandatory task in at least one approved role.'}</small></span>
       </div>
       {error && <p className="nj-commitment-error" role="alert">{error}</p>}
       {!activeAssignments.length ? <div className="nj-commitment-empty"><strong>No commitments assigned for this period.</strong><small>Nightjar will show your role-specific tasks here once an administrator assigns a commitment plan.</small></div> :
         activeAssignments.map((assignment) => {
           const mandatory = assignment.tasks.filter((task) => task.mandatory && !['cancelled', 'excused'].includes(task.state));
           const completed = mandatory.filter((task) => task.state === 'approved').length;
-          const percent = mandatory.length ? Math.floor(completed / mandatory.length * 100) : 0;
+          const percent = assignment.approvedException ? 100 : (mandatory.length ? Math.floor(completed / mandatory.length * 100) : 0);
           return <article className="nj-commitment-role-card" key={assignment.id}>
             <div className="nj-commitment-role-head"><div><span className="mini-label">{assignment.periodId} / ROLE PLAN</span><h3>{roleName(assignment.role)}</h3></div><strong>{percent}%</strong></div>
             <div className="nj-commitment-progress"><span style={{ width: percent + '%' }}/></div>
-            <small className="nj-commitment-progress-copy">{completed} of {mandatory.length} applicable mandatory tasks approved · Template v{assignment.templateVersion}</small>
+            <small className="nj-commitment-progress-copy">{assignment.approvedException ? 'Eligibility exception approved · this role qualifies for one share' : `${completed} of ${mandatory.length} applicable mandatory tasks approved`} · Template v{assignment.templateVersion}</small>
+            {assignment.approvedException && assignment.exceptionReason && <p className="nj-commitment-review-note">Exception recorded: {assignment.exceptionReason}</p>}
             <div className="nj-commitment-task-list">
               {assignment.tasks.map((task) => {
                 const key = assignment.id + '__' + task.id;
                 const draft = drafts[key] ?? { note: '', evidenceUrl: '' };
-                const canSubmit = assignment.periodStatus === 'open' && !['approved', 'cancelled', 'excused'].includes(task.state);
+                const canSubmit = assignment.periodStatus === 'open' && !assignment.approvedException && !['approved', 'cancelled', 'excused'].includes(task.state);
                 return <div className="nj-commitment-task" key={task.id}>
                   <div className="nj-commitment-task-title"><span><strong>{task.title}</strong>{task.mandatory && <em>Mandatory</em>}</span><small data-state={task.state}>{taskStateLabel(task.state)}</small></div>
                   {task.description && <p>{task.description}</p>}
