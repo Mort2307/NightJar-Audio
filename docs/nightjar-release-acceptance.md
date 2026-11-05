@@ -4,7 +4,10 @@
 
 Automated CI validates builds, contracts and emulated Firestore rules/slot contention. It **does not** verify real identity providers, production account permissions, push delivery to actual devices, or the 16 workstreams end-to-end. Do not create new Didit sessions merely to perform this smoke test. Use existing approved test accounts, mock data, and recorded decision receipts.
 
-\n> Engineering coverage map: see [the 14-workstream engineering reconciliation](NIGHTJAR_14_WORKSTREAM_ENGINEERING_RECONCILIATION.md) for the current source-contract mapping and the runtime/device evidence that remains outstanding. This map does not change any acceptance status.\n\n## Acceptance instructions
+
+> Engineering coverage map: see [the 14-workstream engineering reconciliation](NIGHTJAR_14_WORKSTREAM_ENGINEERING_RECONCILIATION.md) for the current source-contract mapping and the runtime/device evidence that remains outstanding. This map does not change any acceptance status.
+
+## Acceptance instructions
 Use NightJar's PR Hosting preview with approved tester accounts on Android APK/PWA, iOS web/PWA and desktop browser. Preserve the existing Didit approvals and maintain the 18+ gate. Record the date, test account **role only**, platform and result (PASS/FAIL/BLOCKED) for each workflow; never put personal identities, ID documents or live access tokens in this document.
 
 | # | Workstream | Required hands-on evidence | State |
