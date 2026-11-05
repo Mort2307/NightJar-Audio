@@ -13,7 +13,7 @@ type PayoutPeriod = {
   period: { periodId: string; status: string; eligibleNetRevenuePence: number; creatorPoolPercent: number; creatorPoolPence: number; eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number };
   payouts: Payout[];
 };
-const today = new Date().toISOString().slice(0, 10);
+const today = (() => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; })();
 const month = today.slice(0, 7);
 const money = (pence: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(pence / 100);
 const pence = (value: string) => Math.round((Number(value) || 0) * 100);
@@ -27,6 +27,7 @@ export default function CompensationControlCentre() {
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [adjustmentReference, setAdjustmentReference] = useState('');
   const [payoutPeriod, setPayoutPeriod] = useState<PayoutPeriod | null>(null);
+  const [commitmentPeriodStatus, setCommitmentPeriodStatus] = useState('missing');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -54,12 +55,14 @@ export default function CompensationControlCentre() {
   const refresh = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [result, adjustmentResult] = await Promise.all([
+      const [result, adjustmentResult, commitmentPeriods] = await Promise.all([
         nightjarAccount.adminListRevenueSettlements(periodId),
         nightjarAccount.adminListRevenueAdjustments(periodId),
+        nightjarAccount.adminListCommitmentPeriods(),
       ]);
       setSettlements(result.settlements as Settlement[]);
       setAdjustments(adjustmentResult.adjustments as Adjustment[]);
+      setCommitmentPeriodStatus(commitmentPeriods.periods.find((item) => item.id === periodId)?.status ?? 'missing');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Revenue settlements could not be loaded.');
     }
@@ -137,7 +140,7 @@ export default function CompensationControlCentre() {
     <header><div><span className="mini-label">NIGHTJAR / FINANCIAL CONTROL</span><h2>Compensation Control Centre</h2><p>Reconcile settled revenue, prepare the 50% Creator Pool, approve the ledger and record payments manually.</p></div><WalletCards size={22}/></header>
     {error && <p className="nj-compensation-error" role="alert">{error}</p>}
     {message && <p className="nj-compensation-success" role="status">{message}</p>}
-    <div className="nj-compensation-toolbar"><label>Finance period<input value={periodId} onChange={(event) => setPeriodId(event.target.value)} maxLength={7} placeholder="YYYY-MM"/></label><button type="button" onClick={() => void refresh()}><RefreshCw size={14}/> Refresh</button></div>
+    <div className="nj-compensation-toolbar"><label>Finance period<input type="month" value={periodId} onChange={(event) => setPeriodId(event.target.value)}/></label><span>Commitment period: <strong>{commitmentPeriodStatus.replaceAll('_', ' ')}</strong></span><button type="button" onClick={() => void refresh()}><RefreshCw size={14}/> Refresh</button></div>
 
     <div className="nj-compensation-stats">
       <div><span>Recorded gross receipts</span><strong>{money(grossPence)}</strong></div>
@@ -207,7 +210,7 @@ export default function CompensationControlCentre() {
           </div>}
         </div>)}
       </div> : <div className="nj-compensation-empty"><ShieldCheck size={17}/><span>No payout ledger exists for this period yet. It will only be created after all source settlements are reconciled and the commitment period is closed.</span></div>}
-      {!payoutPeriod && <button className="nj-compensation-primary" type="button" disabled={busy === 'prepare' || pending > 0 || !settlements.length} onClick={() => void prepare()}>{busy === 'prepare' ? 'Preparing…' : 'Prepare Creator Pool draft'}</button>}
+      {!payoutPeriod && <><p className="nj-compensation-period-gate">{commitmentPeriodStatus === 'closed' ? 'Assessment period closed. Finance reconciliation can now be prepared.' : 'The matching commitment period must be closed before a Creator Pool draft can be prepared.'}</p><button className="nj-compensation-primary" type="button" disabled={busy === 'prepare' || pending > 0 || !settlements.length || commitmentPeriodStatus !== 'closed'} onClick={() => void prepare()}>{busy === 'prepare' ? 'Preparing…' : 'Prepare Creator Pool draft'}</button></>}
     </article>
     <article className="nj-compensation-card nj-tax-ledger">
       <span className="mini-label">04 / TAX RESERVE & LIABILITY LEDGER</span><h3>Keep reserves separate from tax actually due</h3>
