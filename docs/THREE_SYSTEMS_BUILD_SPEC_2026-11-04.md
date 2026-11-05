@@ -93,12 +93,17 @@ The branch now includes the following implementation beyond the original preview
 - Manual Stripe settlement import records gross receipts, refunds, chargebacks, processor fees, VAT and other deductions in integer pence.
 - Eligible net revenue is calculated as gross less those recorded deductions. Each source entry requires a Stripe external reference, settlement date and report reference, then a separate reconciliation note.
 - A Creator Pool calculation is blocked until the commitment period is closed and all settlement entries for that period are reconciled.
-- The backend allocates exactly 50% of eligible net revenue to one equal share per eligible individual, using the server-derived approved-role and commitment records.
+- The backend applies the immutable finance policy effective for the accounting month, then divides the configured Creator Pool equally between eligible individuals using server-derived approved-role and commitment records.
 - Revenue is locked once the payout period is prepared. The payout ledger is immutable in its calculation; manual payment records are appended separately and duplicate references are idempotent.
-- The admin UI displays the remaining 50% as unallocated. It does not assume the split between Nightjar operations, founders or reserves.
+- The admin Compensation Control Centre now saves versioned monthly policies with a complete 100% split across Creator, NightJar operations and the Meg & Mike pool. A split cannot be saved while it does not reconcile. Closed periods and earlier policies cannot be rewritten. The Meg & Mike pool is an accounting allocation only, not an automatic owner payout.
 - Member-facing compensation history shows only that member's own share, payment records and outstanding amount.
 - A separate manual tax ledger records a cash reserve, accountant-confirmed liability and actual tax payments. It does not calculate a tax rate or infer a legal entity.
 - No bank transfer or Stripe Connect payout is initiated.
+
+- Each payout period stores its policy version/effective date, subscription-price planning value and all three pool percentages/amounts as a calculation snapshot. The three pools use integer-pence largest-remainder rounding, so the allocation reconciles exactly.
+- The monthly subscription price is planning-only for new subscribers; saving a finance policy does not create/update Stripe Prices or alter existing customer billing agreements. Historical payout snapshots are not recalculated by later policies.
+- Reusing a manual creator or tax payment reference is idempotent only when the period, amount, date, reference and (for creator payments) recipient match. A conflicting retry is rejected and must use a new correction reference.
+- The subscription-price field is not used to infer cash receipts. Only reconciled settlement records feed the pool calculation.
 
 ### Financial integration boundary
 The current revenue intake is a controlled manual Stripe payout/balance-report import. It is deliberately not described as a live Stripe webhook integration. Automatic ingestion of signed Stripe events, processor balance transactions and app-store billing streams remains future work. Until that is built and independently reconciled, the admin must source and reconcile each settlement from Stripe reports; MRR, trial status or unpaid invoices must never be used as cash received.
@@ -107,7 +112,7 @@ The current revenue intake is a controlled manual Stripe payout/balance-report i
 - Profile type allowlist and visibility projection tests.
 - Commitment eligibility tests including multiple roles, mandatory/optional tasks and audited exceptions.
 - Equal-share allocator tests including duplicate identities, deterministic remainder and zero eligible members.
-- Revenue settlement arithmetic tests including deductions, invalid values and 50% rounding.
+- Revenue settlement arithmetic tests including deductions and invalid values; effective finance-policy validation, exact three-pool penny allocation and conflicting payment-reference retries.
 - The unified Functions test command is `npm run test:systems`, wired into PR preflight.
 
 ## Release sequence
