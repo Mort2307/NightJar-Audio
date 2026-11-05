@@ -1,6 +1,6 @@
 import { ArrowRight, BarChart3, CheckCircle2, Fingerprint, Headphones, LayoutDashboard, Rocket, ShieldCheck, Users, Wrench, LifeBuoy, type LucideIcon } from 'lucide-react';
 
-export type AdminWorkspace = 'overview' | 'people' | 'content' | 'launch' | 'didit' | 'finance' | 'security' | 'assistance' | 'tools';
+export type AdminWorkspace = 'overview' | 'people' | 'content' | 'launch' | 'didit' | 'contributors' | 'finance' | 'security' | 'assistance' | 'tools';
 
 type Props = {
   active: AdminWorkspace;
@@ -17,6 +17,7 @@ const sections: { id: AdminWorkspace; label: string; detail: string; icon: Lucid
   { id: 'content', label: 'Content', detail: 'Approvals and moderation', icon: Headphones },
   { id: 'launch', label: 'Launch', detail: 'Release readiness', icon: Rocket },
   { id: 'didit', label: 'Didit', detail: 'Age checks and dashboard', icon: Fingerprint },
+  { id: 'contributors', label: 'Contributors', detail: 'Commitments and equal-share pool', icon: Users },
   { id: 'finance', label: 'Finance', detail: 'Revenue and payouts', icon: BarChart3 },
   { id: 'security', label: 'Safety', detail: 'Alerts and activity', icon: ShieldCheck },
   { id: 'assistance', label: 'Assistance', detail: 'Accounts and recovery', icon: LifeBuoy },
