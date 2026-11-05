@@ -1,22 +1,21 @@
 # Nightjar: Profile Types, Commitments and Compensation Centre
 Date: 4 November 2026
-Status: implementation plan and acceptance contract; not a production policy change.
+Status: active implementation in PR #336; not yet released to production.
 
 ## Delivery boundary
-All work is being developed on `feat/profile-commitments-compensation-centre`. No merge, Firebase deployment, Stripe configuration change, live price change, payout, tax remittance or migration is authorised by this document. The owner receives a working preview and reviewable change set before any production release.
+Development continues on `feat/profile-commitments-compensation-centre`. A separate Firebase staging project is not required or being provisioned. Pull requests run automated validation and production-bundle builds only; they do not deploy Hosting, Functions or data rules. Live-app acceptance will happen in controlled increments after CI passes and Mike explicitly approves each release. No payment, payout, tax remittance, identity-check charge or production data migration is triggered automatically.
 
+## Current implementation status — 5 November 2026
 
-## Current implementation status — 4 November 2026
-
-This section distinguishes implemented code from planned production behaviour. A green CI run does not mean these systems are fully integrated.
-
-| Area | Implemented in this branch | Still required before production |
+| Area | Implemented in this branch | Remaining delivery / acceptance |
 |---|---|---|
-| Profile types | Allowlisted profile metadata contract and isolated preview | Integrate with the existing `profiles/{uid}.roleProfiles` model; add authenticated settings persistence, approved-role filtering, per-type public/unlisted/private projection and visibility leak tests |
-| Commitments | Pure role-completion evaluator and tests | Versioned template/assignment storage, admin configuration, member task UI, evidence submission/review, exception audit trail, period locking and server-side eligibility calculation |
-| Compensation | Integer-pence equal-share allocator and tests | Authoritative settlement/revenue inputs, refund/chargeback/fee/VAT reconciliation, monthly close, immutable payout ledger, manual payment reconciliation, tax ledger, admin settings and migration strategy |
-| Experience | Midnight Gold interactive preview in Admin Finance Lab | Full member/admin journeys, loading/error/empty states, keyboard/screen-reader checks and Android-width acceptance |
-| Security | Existing account/role callable architecture remains the authority | New callable permission tests, public visibility enforcement and security review of every new write path |
+| Profile Types | Authenticated settings persistence with revision checks; approved-role gating; public/unlisted/private projections; directory filtering; member controls in the existing Profile Studio | Live acceptance of each profile type and visibility state on desktop and Android |
+| Commitments | Versioned role templates; monthly periods; admin assignment; member evidence submission; admin review and documented exceptions; server-side role eligibility; member progress panel; admin Commitment Control Centre mounted in Contributors | Assignments are currently administered manually by account UID; evidence accepts a note and/or external HTTPS reference, not Nightjar-hosted file uploads; live member/admin acceptance |
+| Compensation | Manual Stripe settlement-report entry and reconciliation; refunds, chargebacks, fees, VAT and adjustments; 50% Creator Pool; deterministic equal shares by individual; approved payout ledger; manual payment references; separate tax reserve/liability/payment ledger; member-only compensation history; admin Compensation Control Centre mounted in Contributors | Automatic Stripe settlement ingestion and bank transfers are not implemented; the remaining 50% allocation and accountant-approved tax treatment remain separate owner/accountant decisions |
+| Experience | Member and admin workflows connected to the existing Nightjar app, with Midnight Gold styling and loading/error/empty states in the new control surfaces | Complete manual desktop/Android acceptance, accessibility review and final usability corrections |
+| Security | Server-authoritative role, evidence, eligibility and finance callables; admin-only financial controls; integer-pence calculations; idempotent payment references; CI contract and emulator coverage | Final production acceptance and controlled verification against the live app |
+
+The 4 November design notes below remain useful as the product and security contract. Their original “still required” checklist is a historical snapshot and is superseded by this current status table.
 
 ### Non-negotiable integration boundaries
 
@@ -85,7 +84,7 @@ The branch now includes the following implementation beyond the original preview
 ### Commitment Tracking
 - Versioned role templates, monthly period creation, individual assignments, member evidence submission, admin review decisions, documented eligibility exceptions and period closure are implemented as authenticated callable workflows.
 - Member-facing progress and evidence submission are mounted in the profile workspace.
-- The administrator Commitment Control Centre is mounted in the Finance Lab and supports template creation, period creation, manual assignment by account UID, evidence review and exceptions.
+- The administrator Commitment Control Centre is mounted in the Contributors workspace and supports template creation, period creation, manual assignment by account UID, evidence review and exceptions.
 - Eligibility is calculated server-side from approved roles and reviewed task states. With no assignment, no evidence approval or no completed approved role, the member does not qualify.
 - Period-specific evaluation now selects the latest open assessment period by default; a closed period can still be queried for historical eligibility.
 - Current limitation: assignment is an administrator-directed workflow, not yet a scheduled bulk monthly assignment process. Evidence is a note and/or external HTTPS reference; Nightjar-hosted evidence-file upload is not yet wired into this workflow.
@@ -117,7 +116,7 @@ The current revenue intake is a controlled manual Stripe payout/balance-report i
 2. **Profile system:** implement callable persistence and server-filtered public projections; connect the existing profile studio without duplicating identity or role approvals.
 3. **Commitment system:** implement template/version administration, assignment lifecycle, evidence/review and server eligibility calculation; test cancelled work and Nightjar-caused blockers.
 4. **Compensation system:** verify payment-provider data lineage; implement reconciliation and immutable period ledger; connect allocator only after eligibility and revenue are server-derived.
-5. **Experience and QA:** connect member/admin screens, accessibility, responsive layouts, empty/error/loading states, emulator tests and preview screenshots.
+5. **Experience and QA:** connect member/admin screens, accessibility, responsive layouts, empty/error/loading states, emulator tests and live-app acceptance screenshots.
 6. **Migration and release:** dry-run migration, compare old/new outputs without paying anyone, obtain owner/accountant decisions, user acceptance, staged rollout and rollback plan.
 
 ## Findings from the current main branch
@@ -187,8 +186,8 @@ A pure server-side allocator has been added in `functions/src/creator-pool.ts`. 
 ## Tax and accounting guardrails
 Tax calculations cannot be represented as a single universal percentage of subscription receipts. Before enabling tax estimates, the owner/accountant must confirm the operating legal entity, accounting period, VAT registration and treatment, payroll/director remuneration, owner distributions and relevant sales jurisdictions. The system will label estimates separately from confirmed liabilities and will not provide automated tax advice or remit funds.
 
-## Preview and release acceptance
-The preview must run against fictional or explicitly redacted test data and must not read or mutate live customer financial records. The live admin view may show actual data only after backend authorisation and data-source verification. Preview actions must be inert or operate only on an isolated test dataset.
+## Live release acceptance
+No separate Firebase staging project or hosted PR preview is being used. CI validates the branch without deploying it. After all required checks pass, the owner can approve a controlled production release and test the new workflows in the live Nightjar app. Live financial and identity-provider actions remain separately gated: no real payment, payout, tax remittance, paid identity check or production migration is performed as part of a routine UI release.
 
 Required acceptance evidence:
 1. Desktop and Android-width screenshots of all three systems in Midnight Gold.
