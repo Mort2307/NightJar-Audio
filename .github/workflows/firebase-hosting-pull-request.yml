@@ -1,5 +1,4 @@
-# Nightjar PR previews only: never deploy untrusted forks with production credentials.
-name: Deploy to Firebase Hosting on PR
+name: Nightjar PR build (no deployment)
 
 on:
   pull_request:
@@ -7,30 +6,17 @@ on:
       - main
 
 permissions:
-  checks: write
   contents: read
-  pull-requests: write
 
 concurrency:
-  group: nightjar-hosting-preview-${{ github.event.pull_request.number }}
+  group: nightjar-pr-build-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  build_and_preview:
+  build:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      # Firebase Web Push VAPID is a PUBLIC key, but must be embedded by Vite at build time.
-      VITE_FIREBASE_API_KEY: ${{ vars.NIGHTJAR_PREVIEW_FIREBASE_API_KEY }}
-      VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.NIGHTJAR_PREVIEW_FIREBASE_AUTH_DOMAIN }}
-      VITE_FIREBASE_PROJECT_ID: ${{ vars.NIGHTJAR_PREVIEW_FIREBASE_PROJECT_ID }}
-      VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.NIGHTJAR_PREVIEW_FIREBASE_STORAGE_BUCKET }}
-      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.NIGHTJAR_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
-      VITE_FIREBASE_APP_ID: ${{ vars.NIGHTJAR_PREVIEW_FIREBASE_APP_ID }}
-      VITE_FIREBASE_MEASUREMENT_ID: ${{ vars.NIGHTJAR_PREVIEW_FIREBASE_MEASUREMENT_ID }}
-      VITE_FIREBASE_VAPID_KEY: ${{ vars.NIGHTJAR_PREVIEW_FIREBASE_VAPID_KEY }}
-      NIGHTJAR_PREVIEW_FIREBASE_SERVICE_ACCOUNT: ${{ secrets.NIGHTJAR_PREVIEW_FIREBASE_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,43 +27,11 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Require isolated Nightjar preview Firebase project
-        shell: bash
-        run: |
-          if [[ -z "$VITE_FIREBASE_API_KEY" || -z "$VITE_FIREBASE_AUTH_DOMAIN" || -z "$VITE_FIREBASE_PROJECT_ID" || -z "$VITE_FIREBASE_STORAGE_BUCKET" || -z "$VITE_FIREBASE_MESSAGING_SENDER_ID" || -z "$VITE_FIREBASE_APP_ID" || -z "$VITE_FIREBASE_VAPID_KEY" || -z "$NIGHTJAR_PREVIEW_FIREBASE_SERVICE_ACCOUNT" ]]; then
-            echo "::error::Configure all NIGHTJAR_PREVIEW_FIREBASE_* repository variables and the NIGHTJAR_PREVIEW_FIREBASE_SERVICE_ACCOUNT secret before deploying a PR preview."
-            exit 1
-          fi
-          if [[ "$VITE_FIREBASE_PROJECT_ID" == "nightjar-audio" ]]; then
-            echo "::error::PR previews must use a dedicated staging Firebase project, never the live nightjar-audio project."
-            exit 1
-          fi
+      - name: Install dependencies
+        run: npm ci --no-fund
 
-      - name: Verify Firebase Web Push build configuration
-        shell: bash
-        run: |
-          if [[ ! "$VITE_FIREBASE_VAPID_KEY" =~ ^[A-Za-z0-9_-]{80,110}$ ]]; then
-            echo "::error::VITE_FIREBASE_VAPID_KEY is missing or invalid. Configure the PUBLIC VAPID key in GitHub Actions Variables before merging."
-            exit 1
-          fi
+      - name: Validate application
+        run: npm run validate
 
-      - name: Install and validate
-        run: npm ci --no-fund && npm run validate
-
-      - name: Deploy Hosting preview
-        id: deploy
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.NIGHTJAR_PREVIEW_FIREBASE_SERVICE_ACCOUNT }}
-          expires: 7d
-          projectId: ${{ env.VITE_FIREBASE_PROJECT_ID }}
-
-      - name: Summarise preview
-        if: success()
-        env:
-          PREVIEW_URLS: ${{ steps.deploy.outputs.urls }}
-        run: |
-          echo "### Nightjar Firebase Hosting preview" >> "$GITHUB_STEP_SUMMARY"
-          echo "Commit: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "Preview: $PREVIEW_URLS" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build production bundle
+        run: npm run build
