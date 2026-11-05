@@ -193,7 +193,7 @@ export const nightjarAccount = {
     return (await adminCreateCommitmentPeriodCall(input)).data;
   },
 
-  async adminAssignCommitmentTemplate(input: { periodId: string; userId: string; role: NightjarCommitmentRole; templateId: string }) {
+  async adminAssignCommitmentTemplate(input: { periodId: string; userId?: string; email?: string; role: NightjarCommitmentRole; templateId: string }) {
     return (await adminAssignCommitmentTemplateCall(input)).data;
   },
 
