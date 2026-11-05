@@ -8,7 +8,7 @@ type Settlement = {
   grossPence: number; refundPence: number; chargebackPence: number; processorFeePence: number;
   vatPence: number; otherDeductionsPence: number; eligibleNetRevenuePence: number; status: string;
 };
-type Payout = { userId: string; amountPence: number; paidPence: number; outstandingPence: number; qualifyingRole: NightjarCommitmentRole | null; status: string };
+type Payout = { userId: string; displayName: string; amountPence: number; paidPence: number; outstandingPence: number; qualifyingRole: NightjarCommitmentRole | null; status: string };
 type PayoutPeriod = {
   period: { periodId: string; status: string; eligibleNetRevenuePence: number; creatorPoolPercent: number; creatorPoolPence: number; eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number };
   payouts: Payout[];
@@ -201,7 +201,7 @@ export default function CompensationControlCentre() {
         <div className="nj-compensation-unallocated"><CircleAlert size={16}/><span>The remaining 50% ({money(payoutPeriod.period.nonCreatorRemainderPence)}) is deliberately unallocated. Nightjar operations, founder distributions and tax reserves are separate decisions and are not inferred from 50/50 ownership.</span></div>
         {payoutPeriod.period.status === 'draft' && <button className="nj-compensation-primary" type="button" disabled={busy === 'approve'} onClick={() => void approve()}>{busy === 'approve' ? 'Approving…' : 'Approve payout ledger'}</button>}
         {payoutPeriod.payouts.map((payout) => <div className="nj-payout-row" key={payout.userId}>
-          <div><strong>{payout.userId}</strong><small>{roleName(payout.qualifyingRole)} · {payout.status}</small></div>
+          <div><strong>{payout.displayName || payout.userId}</strong><small>{roleName(payout.qualifyingRole)} · {payout.status} · Account {payout.userId}</small></div>
           <div><strong>{money(payout.amountPence)}</strong><small>Paid {money(payout.paidPence)} · Outstanding {money(payout.outstandingPence)}</small></div>
           {payoutPeriod.period.status === 'approved' && payout.outstandingPence > 0 && <div className="nj-payout-payment-form">
             <input aria-label="Manual payment reference" value={paymentRefs[payout.userId] ?? ''} onChange={(event) => setPaymentRefs((current) => ({ ...current, [payout.userId]: event.target.value }))} placeholder="Bank payment reference"/>
