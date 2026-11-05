@@ -195,7 +195,7 @@ export default function CompensationControlCentre() {
   const taxLiabilityValid = taxLiability.trim().length > 0 && nonNegativeMoney(taxLiability);
   const taxPaymentValid = positiveMoney(taxPaymentAmount);
   const policyPriceValid = positiveMoney(policySubscriptionPrice);
-  const policyPercentages = [policyCreatorPercent, policyNightjarPercent, policyOwnerPercent].map((value) => /^\\d+$/.test(value.trim()) ? Number(value) : Number.NaN);
+  const policyPercentages = [policyCreatorPercent, policyNightjarPercent, policyOwnerPercent].map((value) => /^\d+$/.test(value.trim()) ? Number(value) : Number.NaN);
   const policyPercentagesValid = policyPercentages.every((value) => Number.isInteger(value) && value >= 0 && value <= 100);
   const policyPercentTotal = policyPercentagesValid ? policyPercentages.reduce((sum, value) => sum + value, 0) : null;
   const financePolicyForPeriod = financePolicies
@@ -235,7 +235,7 @@ export default function CompensationControlCentre() {
         <div className="nj-compensation-net-preview"><span>Allocation total</span><strong>{policyPercentTotal === null ? 'Enter whole percentages from 0 to 100.' : policyPercentTotal + '% / 100%'}</strong></div>
       </div>
       <p className="nj-compensation-footnote">The £ price is a planning value for new subscriptions only. Saving this policy does not create or change Stripe prices, update existing customer agreements or collect payment. The Meg & Mike pool is an accounting allocation, not an automatic founder payout. Tax reserves remain separate and require accountant-confirmed treatment.</p>
-      <button className="nj-compensation-primary" type="button" disabled={busy === 'policy' || !policyPriceValid || !policyPercentagesValid || policyPercentTotal !== 100 || !/^\\d{4}-\\d{2}$/.test(policyEffectiveMonth)} onClick={() => void saveFinancePolicy()}>{busy === 'policy' ? 'Saving policy…' : 'Save immutable finance policy'}</button>
+      <button className="nj-compensation-primary" type="button" disabled={busy === 'policy' || !policyPriceValid || !policyPercentagesValid || policyPercentTotal !== 100 || !/^\d{4}-\\d{2}$/.test(policyEffectiveMonth)} onClick={() => void saveFinancePolicy()}>{busy === 'policy' ? 'Saving policy…' : 'Save immutable finance policy'}</button>
       {!!financePolicies.length && <div className="nj-finance-policy-history">
         <h4>Saved policy versions</h4>
         {financePolicies.map((policy) => <div className="nj-settlement-row" key={policy.id}>
@@ -309,7 +309,7 @@ export default function CompensationControlCentre() {
           </div>}
         </div>)}
       </div> : <div className="nj-compensation-empty"><ShieldCheck size={17}/><span>No payout ledger exists for this period yet. It will only be created after all source settlements are reconciled and the commitment period is closed.</span></div>}
-      {!payoutPeriod && <><p className="nj-compensation-period-gate">{commitmentPeriodStatus === 'closed' ? 'Assessment period closed. Finance reconciliation can now be prepared.' : 'The matching commitment period must be closed and an effective finance policy must exist before a Creator Pool draft can be prepared.'}</p><button className="nj-compensation-primary" type="button" disabled={busy === 'prepare' || pending > 0 || !settlements.length || commitmentPeriodStatus !== 'closed'} onClick={() => void prepare()}>{busy === 'prepare' ? 'Preparing…' : 'Prepare Creator Pool draft'}</button></>}
+      {!payoutPeriod && <><p className="nj-compensation-period-gate">{commitmentPeriodStatus === 'closed' ? 'Assessment period closed. Finance reconciliation can now be prepared.' : 'The matching commitment period must be closed and an effective finance policy must exist before a Creator Pool draft can be prepared.'}</p><button className="nj-compensation-primary" type="button" disabled={busy === 'prepare' || pending > 0 || !settlements.length || commitmentPeriodStatus !== 'closed' || !financePolicyForPeriod} onClick={() => void prepare()}>{busy === 'prepare' ? 'Preparing…' : 'Prepare Creator Pool draft'}</button></>}
     </article>
     <article className="nj-compensation-card nj-tax-ledger">
       <span className="mini-label">04 / TAX RESERVE & LIABILITY LEDGER</span><h3>Keep reserves separate from tax actually due</h3>
