@@ -5,7 +5,7 @@ import { nightjarAccount, type NightjarCommitmentRole, type NightjarCommitmentTa
 type Template = { id: string; role: NightjarCommitmentRole; version: number; effectiveFrom: string; tasks: NightjarCommitmentTask[]; status: string };
 type Period = { id: string; startDate: string; endDate: string; status: string };
 type ReviewItem = {
-  assignmentId: string; userId: string; periodId: string; role: NightjarCommitmentRole;
+  assignmentId: string; userId: string; displayName: string; periodId: string; role: NightjarCommitmentRole;
   pendingTasks: Array<{ id: string; title: string; evidenceIds: string[] }>;
   evidence: Array<{ taskId: string; evidenceId: string; note: string; evidenceUrl: string | null; submittedAt: string | null }>;
 };
@@ -139,7 +139,7 @@ export default function CommitmentControlCentre() {
     <article className="nj-commitment-admin-card nj-commitment-review">
       <span className="mini-label">03 / EVIDENCE REVIEW</span><h3>Submission queue</h3><p>Only approved evidence completes a mandatory task. Every decision is recorded with reviewer identity and timestamp.</p>
       {!queue.length && !loading ? <div className="nj-commitment-admin-empty"><Check size={17}/> No submissions awaiting review.</div> : queue.map((item) => <div className="nj-commitment-review-item" key={item.assignmentId}>
-        <div className="nj-commitment-review-head"><strong>{roleName(item.role)} · {item.periodId}</strong><small>Account {item.userId}</small></div>
+        <div className="nj-commitment-review-head"><strong>{item.displayName} · {roleName(item.role)} · {item.periodId}</strong><small>Account {item.userId}</small></div>
         {item.pendingTasks.map((task) => <div className="nj-commitment-review-task" key={task.id}>
           <strong>{task.title}</strong>
           {item.evidence.filter((evidence) => evidence.taskId === task.id).map((evidence) => <div className="nj-commitment-evidence-view" key={evidence.evidenceId}>{evidence.note && <p>{evidence.note}</p>}{evidence.evidenceUrl && <a href={evidence.evidenceUrl} target="_blank" rel="noreferrer">Open submitted evidence</a>}</div>)}
