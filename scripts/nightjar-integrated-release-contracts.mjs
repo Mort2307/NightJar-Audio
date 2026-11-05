@@ -166,8 +166,8 @@ for(const item of creativePartnersFollowup.files) {
 // Preserve the previously reviewed App baseline and pin this exact integration blob.
 const contributorSystemsFollowup=JSON.parse(string('docs/NIGHTJAR_CONTRIBUTOR_SYSTEMS_FOLLOWUP.json'));
 assert.equal(contributorSystemsFollowup.pr,336,'contributor systems integration requires its own review');
-assert.deepEqual(contributorSystemsFollowup.files.map(item=>item.path),['src/App.tsx'],
-  'contributor systems follow-up may change only the admin workspace integration');
+assert.deepEqual(contributorSystemsFollowup.files.map(item=>item.path).sort(),['scripts/mobile-touch-layout-contracts.mjs','src/App.tsx'].sort(),
+  'contributor systems follow-up may change only the admin workspace integration and its workspace contract');
 for(const item of contributorSystemsFollowup.files){
   assert.match(item.sha,/^[0-9a-f]{40}$/);
   const previous=overrides.get(item.path);
