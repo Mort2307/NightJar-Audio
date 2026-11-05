@@ -113,6 +113,32 @@ const adminListCommitmentReviewQueueCall = httpsCallable<void, { queue: Array<{ 
 const adminListCommitmentTemplatesCall = httpsCallable<void, { templates: Array<{ id: string; role: NightjarCommitmentRole; version: number; effectiveFrom: string; tasks: NightjarCommitmentTask[]; status: string }> }>(functions, 'adminListCommitmentTemplates');
 const adminListCommitmentPeriodsCall = httpsCallable<void, { periods: Array<{ id: string; startDate: string; endDate: string; status: string }> }>(functions, 'adminListCommitmentPeriods');
 const adminCloseCommitmentPeriodCall = httpsCallable<{ periodId: string }, { closed: boolean; periodId: string; alreadyClosed: boolean }>(functions, 'adminCloseCommitmentPeriod');
+export type NightjarFinancePolicy = {
+  id: string;
+  policyId: string;
+  effectiveFrom: string;
+  version: number;
+  currency: 'GBP';
+  subscriptionPricePence: number;
+  creatorPoolPercent: number;
+  nightjarPoolPercent: number;
+  ownerPoolPercent: number;
+  priceScope: 'planning_only_new_subscribers';
+  status: string;
+};
+
+const adminCreateFinancePolicyCall = httpsCallable<{
+  effectiveFrom: string;
+  subscriptionPricePence: number;
+  creatorPoolPercent: number;
+  nightjarPoolPercent: number;
+  ownerPoolPercent: number;
+}, {
+  saved: boolean; policyId: string; effectiveFrom: string; version: number;
+  subscriptionPricePence: number; creatorPoolPercent: number; nightjarPoolPercent: number; ownerPoolPercent: number;
+  priceScope: 'planning_only_new_subscribers';
+}>(functions, 'adminCreateFinancePolicy');
+const adminListFinancePoliciesCall = httpsCallable<void, { policies: NightjarFinancePolicy[] }>(functions, 'adminListFinancePolicies');
 const adminRecordRevenueSettlementCall = httpsCallable<{
   periodId: string; provider: 'stripe'; externalId: string; settledAt: string; sourceReference: string;
   grossPence: number; refundPence: number; chargebackPence: number; processorFeePence: number; vatPence: number; otherDeductionsPence?: number;
@@ -126,12 +152,19 @@ const adminListRevenueSettlementsCall = httpsCallable<{ periodId: string }, { se
 const adminRecordRevenueAdjustmentCall = httpsCallable<{ periodId: string; amountPence: number; reason: string; sourceReference: string }, { recorded: boolean; adjustmentId: string; amountPence: number }>(functions, 'adminRecordRevenueAdjustment');
 const adminListRevenueAdjustmentsCall = httpsCallable<{ periodId: string }, { adjustments: Array<{ id: string; amountPence: number; reason: string; sourceReference: string }> }>(functions, 'adminListRevenueAdjustments');
 const adminPrepareCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
-  prepared: boolean; periodId: string; eligibleNetRevenuePence: number; creatorPoolPercent: number; creatorPoolPence: number;
+  prepared: boolean; periodId: string; eligibleNetRevenuePence: number;
+  creatorPoolPercent: number; creatorPoolPence: number; nightjarPoolPercent: number; nightjarPoolPence: number;
+  ownerPoolPercent: number; ownerPoolPence: number; subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string;
   eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number;
   payouts: Array<{ userId: string; amountPence: number }>;
 }>(functions, 'adminPrepareCreatorPayoutPeriod');
 const adminGetCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
-  period: { periodId: string; status: string; eligibleNetRevenuePence: number; creatorPoolPercent: number; creatorPoolPence: number; eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number };
+  period: {
+    periodId: string; status: string; eligibleNetRevenuePence: number;
+    creatorPoolPercent: number; creatorPoolPence: number; nightjarPoolPercent: number; nightjarPoolPence: number;
+    ownerPoolPercent: number; ownerPoolPence: number; subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string;
+    eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number;
+  };
   payouts: Array<{ userId: string; displayName: string; amountPence: number; paidPence: number; outstandingPence: number; qualifyingRole: NightjarCommitmentRole | null; status: string }>;
 }>(functions, 'adminGetCreatorPayoutPeriod');
 const adminApproveCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, { approved: boolean; periodId: string }>(functions, 'adminApproveCreatorPayoutPeriod');
@@ -212,6 +245,17 @@ export const nightjarAccount = {
 
   async adminListCommitmentPeriods() {
     return (await adminListCommitmentPeriodsCall()).data;
+  },
+
+  async adminCreateFinancePolicy(input: {
+    effectiveFrom: string; subscriptionPricePence: number; creatorPoolPercent: number;
+    nightjarPoolPercent: number; ownerPoolPercent: number;
+  }) {
+    return (await adminCreateFinancePolicyCall(input)).data;
+  },
+
+  async adminListFinancePolicies() {
+    return (await adminListFinancePoliciesCall()).data;
   },
 
   async adminRecordRevenueSettlement(input: {
