@@ -1676,21 +1676,33 @@ export const adminSetTaxEstimate = onCall({ region: REGION }, async (request) =>
     throw new HttpsError('invalid-argument', 'Provide a tax period, category, positive taxable base, explicit rate from 0% to 100%, source reference and estimate note.');
   }
   const estimate = calculateTaxEstimatePence({ taxableBasePence, rateBasisPoints });
-  const ref = taxLedgerRef(periodId);
-  await ref.set({
-    periodId,
-    estimate: {
-      category, taxableBasePence, rateBasisPoints,
-      estimatedTaxPence: estimate.estimatedTaxPence,
-      sourceReference, note,
-      recordedByAdminUserId: admin.uid,
-      recordedAt: FieldValue.serverTimestamp(),
-    },
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { saved: true, periodId, ...estimate, category, sourceReference };
+  const ledgerRef = taxLedgerRef(periodId);
+  const estimateId = createHash('sha256')
+    .update(periodId + ':estimate:' + category + ':' + sourceReference)
+    .digest('hex');
+  const estimateRef = ledgerRef.collection('estimates').doc(estimateId);
+  const estimateRecord = {
+    estimateId, periodId, category, taxableBasePence, rateBasisPoints,
+    estimatedTaxPence: estimate.estimatedTaxPence, sourceReference, note,
+    recordedByAdminUserId: admin.uid, recordedAt: FieldValue.serverTimestamp(),
+  };
+  const duplicate = await db.runTransaction(async (tx) => {
+    const existing = await tx.get(estimateRef);
+    if (existing.exists) {
+      const previous = existing.data() ?? {};
+      if (previous.taxableBasePence !== taxableBasePence
+        || previous.rateBasisPoints !== rateBasisPoints
+        || previous.estimatedTaxPence !== estimate.estimatedTaxPence
+        || previous.note !== note) {
+        throw new HttpsError('already-exists', 'This tax estimate source reference is already recorded with different assumptions. Use a new reference for a revised estimate.');
+      }
+      return true;
+    }
+    tx.create(estimateRef, estimateRecord);
+    return false;
+  });
+  return { saved: true, duplicate, periodId, ...estimate, category, sourceReference };
 });
-
 export const adminSetTaxReserve = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -1779,13 +1791,17 @@ export const adminGetTaxLedger = onCall({ region: REGION }, async (request) => {
   const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
   if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid tax period.');
   const ref = taxLedgerRef(periodId);
-  const [ledger, payments] = await Promise.all([ref.get(), ref.collection('payments').orderBy('recordedAt', 'desc').limit(100).get()]);
+  const [ledger, payments, estimates] = await Promise.all([
+    ref.get(),
+    ref.collection('payments').orderBy('recordedAt', 'desc').limit(100).get(),
+    ref.collection('estimates').orderBy('recordedAt', 'desc').limit(100).get(),
+  ]);
   return {
     ledger: ledger.exists ? { periodId, ...ledger.data() } : null,
     payments: payments.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    estimates: estimates.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
   };
 });
-
 export const getMyCreatorCompensation = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
