@@ -64,13 +64,18 @@ export default function CompensationControlCentre() {
       setAdjustments(adjustmentResult.adjustments as Adjustment[]);
       setCommitmentPeriodStatus(commitmentPeriods.periods.find((item) => item.id === periodId)?.status ?? 'missing');
     } catch (cause) {
+      setSettlements([]); setAdjustments([]); setCommitmentPeriodStatus('unavailable');
       setError(cause instanceof Error ? cause.message : 'Revenue settlements could not be loaded.');
     }
     try {
       const payout = await nightjarAccount.adminGetCreatorPayoutPeriod(periodId);
       setPayoutPeriod(payout as PayoutPeriod);
-    } catch {
+    } catch (cause) {
       setPayoutPeriod(null);
+      const code = cause && typeof cause === 'object' && 'code' in cause ? String((cause as { code: unknown }).code) : '';
+      if (code !== 'functions/not-found' && code !== 'not-found') {
+        setError(cause instanceof Error ? cause.message : 'The payout ledger could not be loaded.');
+      }
     }
     try {
       const tax = await nightjarAccount.adminGetTaxLedger(periodId);
@@ -80,10 +85,21 @@ export default function CompensationControlCentre() {
         setTaxLiability((tax.ledger.confirmedLiabilityPence === undefined ? '' : (tax.ledger.confirmedLiabilityPence / 100).toFixed(2)));
         setTaxReserveNote(tax.ledger.reserveNote ?? '');
         setAccountantReference(tax.ledger.accountantReference ?? '');
+      } else {
+        setTaxReserve(''); setTaxLiability(''); setTaxReserveNote(''); setAccountantReference('');
       }
-    } catch {
+    } catch (cause) {
       setTaxLedger({ ledger: null, payments: [] });
+      setError(cause instanceof Error ? cause.message : 'The tax ledger could not be loaded.');
     } finally { setLoading(false); }
+  }, [periodId]);
+  useEffect(() => {
+    setSettlements([]); setAdjustments([]); setPayoutPeriod(null); setCommitmentPeriodStatus('missing');
+    setExternalId(''); setSettledAt(periodId + '-01'); setSourceReference(''); setGross('');
+    setRefunds('0'); setChargebacks('0'); setFees('0'); setVat('0'); setOtherDeductions('0');
+    setReconciliationNotes({}); setPaymentRefs({}); setPaymentAmounts({});
+    setTaxLedger({ ledger: null, payments: [] }); setTaxReserve(''); setTaxReserveNote('');
+    setTaxLiability(''); setAccountantReference(''); setTaxPaymentAmount(''); setTaxPaymentReference('');
   }, [periodId]);
   useEffect(() => { void refresh(); }, [refresh]);
 
