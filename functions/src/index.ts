@@ -1657,7 +1657,8 @@ export const getMyCreatorCompensation = onCall({ region: REGION }, async (reques
 });
 export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (request) => {
   requireAdminIdentity(request);
-  const openPeriods = await db.collection('commitmentPeriods').where('status', '==', 'open').limit(36).get();
+  const openPeriods = await db.collection('commitmentPeriods').where('status', '==', 'open').limit(37).get();
+  if (openPeriods.size > 36) throw new HttpsError('resource-exhausted', 'More than 36 commitment periods are open. Close older periods before reviewing the queue.');
   const assignmentSnapshots = await Promise.all(openPeriods.docs.map((period) =>
     db.collection('commitmentAssignments').where('periodId', '==', period.id).limit(1001).get(),
   ));
