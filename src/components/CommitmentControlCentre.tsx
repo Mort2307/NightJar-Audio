@@ -6,6 +6,7 @@ type Template = { id: string; role: NightjarCommitmentRole; version: number; eff
 type Period = { id: string; startDate: string; endDate: string; status: string };
 type ReviewItem = {
   assignmentId: string; userId: string; displayName: string; periodId: string; role: NightjarCommitmentRole;
+  exceptionApproved: boolean; exceptionReason: string | null;
   pendingTasks: Array<{ id: string; title: string; evidenceIds: string[] }>;
   evidence: Array<{ taskId: string; evidenceId: string; note: string; evidenceUrl: string | null; submittedAt: string | null }>;
 };
@@ -104,7 +105,7 @@ export default function CommitmentControlCentre() {
     <header><div><span className="mini-label">NIGHTJAR / ADMIN OPERATIONS</span><h2>Commitment Control Centre</h2><p>Versioned role plans, period assignments, evidence review and auditable eligibility exceptions.</p></div><ShieldCheck size={21}/></header>
     {error && <p className="nj-commitment-admin-error" role="alert">{error}</p>}
     {message && <p className="nj-commitment-admin-message" role="status">{message}</p>}
-    <div className="nj-commitment-admin-toolbar"><span>{loading ? 'Loading controls…' : templates.length + ' templates · ' + periods.length + ' periods · ' + queue.length + ' assignments awaiting review'}</span><button type="button" onClick={() => void refresh()}><RefreshCw size={14}/> Refresh</button></div>
+    <div className="nj-commitment-admin-toolbar"><span>{loading ? 'Loading controls…' : templates.length + ' templates · ' + periods.length + ' periods · ' + queue.length + ' open assignments · ' + queue.reduce((count, item) => count + item.pendingTasks.length, 0) + ' submissions awaiting review'}</span><button type="button" onClick={() => void refresh()}><RefreshCw size={14}/> Refresh</button></div>
 
     <div className="nj-commitment-admin-grid">
       <article className="nj-commitment-admin-card">
@@ -137,16 +138,17 @@ export default function CommitmentControlCentre() {
     </div>
 
     <article className="nj-commitment-admin-card nj-commitment-review">
-      <span className="mini-label">03 / EVIDENCE REVIEW</span><h3>Submission queue</h3><p>Only approved evidence completes a mandatory task. Every decision is recorded with reviewer identity and timestamp.</p>
-      {!queue.length && !loading ? <div className="nj-commitment-admin-empty"><Check size={17}/> No submissions awaiting review.</div> : queue.map((item) => <div className="nj-commitment-review-item" key={item.assignmentId}>
+      <span className="mini-label">03 / EVIDENCE & EXCEPTIONS</span><h3>Assignments and review queue</h3><p>Review submitted evidence or record a documented eligibility exception against any open assignment. Only approved evidence completes a mandatory task.</p>
+      {!queue.length && !loading ? <div className="nj-commitment-admin-empty"><Check size={17}/> No open assignments. Create a period and assign a role template to begin.</div> : queue.map((item) => <div className="nj-commitment-review-item" key={item.assignmentId}>
         <div className="nj-commitment-review-head"><strong>{item.displayName} · {roleName(item.role)} · {item.periodId}</strong><small>Account {item.userId}</small></div>
+        {!item.pendingTasks.length && <small>No evidence awaiting review for this assignment.</small>}
         {item.pendingTasks.map((task) => <div className="nj-commitment-review-task" key={task.id}>
           <strong>{task.title}</strong>
           {item.evidence.filter((evidence) => evidence.taskId === task.id).map((evidence) => <div className="nj-commitment-evidence-view" key={evidence.evidenceId}>{evidence.note && <p>{evidence.note}</p>}{evidence.evidenceUrl && <a href={evidence.evidenceUrl} target="_blank" rel="noreferrer">Open submitted evidence</a>}</div>)}
           <textarea rows={2} maxLength={1000} value={reviewReasons[item.assignmentId + '__' + task.id] ?? ''} onChange={(event) => setReviewReasons((current) => ({ ...current, [item.assignmentId + '__' + task.id]: event.target.value }))} placeholder="Optional feedback; required when rejecting…"/>
           <div className="nj-commitment-review-actions"><button type="button" disabled={busy === item.assignmentId + '__' + task.id} onClick={() => void review(item, task.id, 'approved')}><Check size={13}/> Approve evidence</button><button type="button" disabled={busy === item.assignmentId + '__' + task.id || (reviewReasons[item.assignmentId + '__' + task.id] ?? '').trim().length < 8} onClick={() => void review(item, task.id, 'rejected')}>Return for changes</button></div>
         </div>)}
-        <div className="nj-commitment-exception"><label>Eligibility exception reason<textarea rows={2} value={exceptionReasons[item.assignmentId] ?? ''} onChange={(event) => setExceptionReasons((current) => ({ ...current, [item.assignmentId]: event.target.value }))} placeholder="Document Nightjar-caused cancellation or exceptional circumstances…"/></label><button type="button" disabled={busy === 'exception-' + item.assignmentId || (exceptionReasons[item.assignmentId] ?? '').trim().length < 8} onClick={() => void exception(item)}>Approve documented exception</button></div>
+        {item.exceptionApproved ? <div className="nj-commitment-exception"><strong>Eligibility exception approved</strong><small>{item.exceptionReason}</small></div> : <div className="nj-commitment-exception"><label>Eligibility exception reason<textarea rows={2} value={exceptionReasons[item.assignmentId] ?? ''} onChange={(event) => setExceptionReasons((current) => ({ ...current, [item.assignmentId]: event.target.value }))} placeholder="Document Nightjar-caused cancellation or exceptional circumstances…"/></label><button type="button" disabled={busy === 'exception-' + item.assignmentId || (exceptionReasons[item.assignmentId] ?? '').trim().length < 8} onClick={() => void exception(item)}>Approve documented exception</button></div>}
       </div>)}
     </article>
   </section>;
