@@ -20,6 +20,7 @@ import { evaluateRoleCommitments, isCommitmentTaskReviewable, type RoleCommitmen
 import { allocateCreatorPool, type CreatorPoolMember } from './creator-pool';
 import { calculateEligibleNetRevenuePence, isSameManualPayment } from './finance-settlement';
 import { allocateFinanceRevenuePoolsPence, validateFinanceAllocationPolicy } from './finance-policy';
+import { calculateTaxEstimatePence } from './finance-tax-estimate';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -1656,6 +1657,39 @@ export const adminRecordCreatorPayment = onCall({ region: REGION }, async (reque
 
 
 const taxLedgerRef = (periodId: string) => db.collection('taxLedger').doc(periodId);
+
+export const adminSetTaxEstimate = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const category = cleanText(input.category, 40);
+  const allowedCategories = ['corporation_tax', 'income_tax', 'vat', 'paye_ni', 'other'];
+  const taxableBasePence = safePence(input.taxableBasePence, 'Taxable base');
+  const rateBasisPoints = Number(input.rateBasisPoints);
+  const sourceReference = cleanText(input.sourceReference, 300);
+  const note = cleanText(input.note, 1000);
+  if (!validCommitmentPeriodId(periodId)
+    || !allowedCategories.includes(category)
+    || taxableBasePence < 1
+    || !Number.isInteger(rateBasisPoints) || rateBasisPoints < 0 || rateBasisPoints > 10000
+    || sourceReference.length < 4 || note.length < 8) {
+    throw new HttpsError('invalid-argument', 'Provide a tax period, category, positive taxable base, explicit rate from 0% to 100%, source reference and estimate note.');
+  }
+  const estimate = calculateTaxEstimatePence({ taxableBasePence, rateBasisPoints });
+  const ref = taxLedgerRef(periodId);
+  await ref.set({
+    periodId,
+    estimate: {
+      category, taxableBasePence, rateBasisPoints,
+      estimatedTaxPence: estimate.estimatedTaxPence,
+      sourceReference, note,
+      recordedByAdminUserId: admin.uid,
+      recordedAt: FieldValue.serverTimestamp(),
+    },
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { saved: true, periodId, ...estimate, category, sourceReference };
+});
 
 export const adminSetTaxReserve = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
