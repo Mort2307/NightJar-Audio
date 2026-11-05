@@ -3149,7 +3149,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
         userId: doc.id,
         role,
         roles: nightjarTeam ? ['listener'] : publicProfileTypes,
-        approvedProfessionalRoles: nightjarTeam ? [] : publicProfileTypes.filter((type) => type !== 'listener'),
+        approvedProfessionalRoles: nightjarTeam ? [] : professionalRoles,
         nightjarTeam,
         displayName: data.displayName ?? 'Nightjar member',
         name: data.displayName ?? 'Nightjar member',
@@ -3238,7 +3238,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       return credit.state === 'approved' && Boolean(credit.approvedByAdminUserId && credit.approvedAt);
     })
     .map(doc => ({ id:doc.id, releaseId:doc.data().releaseId, releaseRole:doc.data().releaseRole }));
-  const professionalRoles = professionalRolesForAccount(accountData ?? {});
+  const professionalRoles = nightjarTeam ? [] : professionalRolesForAccount(accountData ?? {});
   const storedProfileSettings = normaliseProfileTypeSettings(data.profileTypeSettings);
   const hasExplicitProfileSettings = Number(data.profileTypeSettingsRevision ?? 0) > 0;
   const publicProfileTypes = resolveVisibleProfileTypes(
