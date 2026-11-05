@@ -1547,7 +1547,6 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
       adjustmentIds: adjustments.docs.map((doc) => doc.id),
       preparedByAdminUserId: admin.uid,
       preparedAt: FieldValue.serverTimestamp(),
-      policyVersion: 1,
     });
     tx.set(financeControlRef, { revision: controlRevision + 1, payoutPrepared: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     for (const payout of calculated.payouts) {
