@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { evaluateRoleCommitments, qualifiesForCreatorPool } from './commitment-eligibility';
+import { evaluateRoleCommitments, qualifiesForCreatorPool, isCommitmentTaskReviewable } from './commitment-eligibility';
 
 test('one completed approved role is enough when another role is still in progress', () => {
   const result = qualifiesForCreatorPool([
@@ -54,4 +54,11 @@ test('an approved exception with an audit reason can qualify', () => {
   });
   assert.equal(result.qualifies, true);
   assert.equal(result.state, 'excused');
+});
+
+test('only currently submitted evidence can be reviewed', () => {
+  assert.equal(isCommitmentTaskReviewable('submitted'), true);
+  for (const state of ['not_started', 'in_progress', 'approved', 'rejected', 'excused', 'cancelled', null, undefined]) {
+    assert.equal(isCommitmentTaskReviewable(state), false);
+  }
 });
