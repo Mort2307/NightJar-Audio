@@ -62,3 +62,29 @@ test('tax payment retry compares amount, reference, date and period without requ
   assert.equal(isSameManualPayment(original, { ...original, amountPence: 5001 }), false);
   assert.equal(isSameManualPayment(original, { ...original, paidAt: '2026-11-06' }), false);
 });
+
+
+import { isSameManualPayment } from './finance-settlement';
+
+test('manual payment retry is idempotent only when every original detail matches', () => {
+  const original = {
+    periodId: '2026-11', userId: 'contributor-1',
+    amountPence: 1250, reference: 'BANK-REF-1001', paidAt: '2026-11-05',
+  };
+  assert.equal(isSameManualPayment(original, original), true);
+  assert.equal(isSameManualPayment(original, { ...original, amountPence: 1251 }), false);
+  assert.equal(isSameManualPayment(original, { ...original, paidAt: '2026-11-06' }), false);
+  assert.equal(isSameManualPayment(original, { ...original, reference: 'BANK-REF-1002' }), false);
+  assert.equal(isSameManualPayment(original, { ...original, userId: 'contributor-2' }), false);
+  assert.equal(isSameManualPayment(original, { ...original, periodId: '2026-10' }), false);
+});
+
+test('tax payment retry compares amount, reference, date and period without requiring a payee', () => {
+  const original = {
+    periodId: '2026-11', amountPence: 5000,
+    reference: 'HMRC-REF-1001', paidAt: '2026-11-05',
+  };
+  assert.equal(isSameManualPayment(original, original), true);
+  assert.equal(isSameManualPayment(original, { ...original, amountPence: 5001 }), false);
+  assert.equal(isSameManualPayment(original, { ...original, paidAt: '2026-11-06' }), false);
+});
