@@ -1667,6 +1667,9 @@ export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (
     throw new HttpsError('resource-exhausted', 'The open commitment period ' + openPeriods.docs[oversizedPeriod].id + ' exceeds the safe 1,000-assignment review view. Contact Nightjar engineering for pagination.');
   }
   const assignmentDocs = assignmentSnapshots.flatMap((snapshot) => snapshot.docs);
+  const queueUserIds = [...new Set(assignmentDocs.map((doc) => cleanText(doc.data().userId, 160)).filter(Boolean))];
+  const presenterEntries = await Promise.all(queueUserIds.map(async (userId) => [userId, await accountPresentation(userId)] as const));
+  const presenterByUser = new Map(presenterEntries);
   const queue = await Promise.all(assignmentDocs.map(async (doc) => {
     const data = doc.data();
     const pendingTasks = (Array.isArray(data.tasks) ? data.tasks : [])
@@ -1678,8 +1681,8 @@ export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (
       const item = evidenceDoc.data() ?? {};
       return { taskId: task.id, evidenceId, note: cleanText(item.note, 2000), evidenceUrl: cleanText(item.evidenceUrl, 500) || null, submittedAt: toIso(item.submittedAt) };
     })));
-    const presenter = await accountPresentation(String(data.userId ?? ''));
-    return { assignmentId: doc.id, userId: data.userId, displayName: presenter.displayName, periodId: data.periodId, role: data.role, pendingTasks, evidence };
+    const presenter = presenterByUser.get(String(data.userId ?? ''));
+    return { assignmentId: doc.id, userId: data.userId, displayName: presenter?.displayName ?? 'Nightjar member', periodId: data.periodId, role: data.role, pendingTasks, evidence };
   })).then((items) => items.filter(Boolean));
   return { queue };
 });;
