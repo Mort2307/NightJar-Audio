@@ -1058,7 +1058,7 @@ export const submitCommitmentEvidence = onCall({ region: REGION }, async (reques
       throw new HttpsError('failed-precondition', 'This task no longer accepts evidence.');
     }
     const evidence = { note, evidenceUrl: evidenceUrl || null, submittedByUserId: identity.uid, submittedAt: FieldValue.serverTimestamp() };
-    tasks[index] = { ...tasks[index], state: 'submitted', evidenceIds: [...new Set([...(tasks[index].evidenceIds ?? []), evidenceRef.id])] };
+    tasks[index] = { ...tasks[index], state: 'submitted', latestEvidenceId: evidenceRef.id, evidenceIds: [...new Set([...(tasks[index].evidenceIds ?? []), evidenceRef.id])] };
     tx.create(evidenceRef, evidence);
     tx.create(eventRef, { type: 'evidence_submitted', taskId, actorUserId: identity.uid, at: FieldValue.serverTimestamp() });
     tx.update(assignmentRef, { tasks, updatedAt: FieldValue.serverTimestamp() });
@@ -1674,7 +1674,7 @@ export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (
     const data = doc.data();
     const pendingTasks = (Array.isArray(data.tasks) ? data.tasks : [])
       .filter((task: Record<string, any>) => task.state === 'submitted')
-      .map((task: Record<string, any>) => ({ id: task.id, title: task.title, evidenceIds: task.evidenceIds ?? [] }));
+      .map((task: Record<string, any>) => ({ id: task.id, title: task.title, evidenceIds: task.latestEvidenceId ? [task.latestEvidenceId] : (Array.isArray(task.evidenceIds) ? task.evidenceIds.slice(-1) : []) }));
     if (!pendingTasks.length) return null;
     const evidence = await Promise.all(pendingTasks.flatMap((task) => task.evidenceIds.map(async (evidenceId: string) => {
       const evidenceDoc = await doc.ref.collection('evidence').doc(evidenceId).get();
