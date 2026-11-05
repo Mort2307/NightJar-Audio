@@ -178,15 +178,16 @@ const adminSetTaxEstimateCall = httpsCallable<{
   periodId: string; category: 'corporation_tax' | 'income_tax' | 'vat' | 'paye_ni' | 'other';
   taxableBasePence: number; rateBasisPoints: number; sourceReference: string; note: string;
 }, {
-  saved: boolean; periodId: string; taxableBasePence: number; rateBasisPoints: number;
+  saved: boolean; duplicate: boolean; periodId: string; taxableBasePence: number; rateBasisPoints: number;
   estimatedTaxPence: number; category: string; sourceReference: string;
 }>(functions, 'adminSetTaxEstimate');
 const adminSetTaxReserveCall = httpsCallable<{ periodId: string; reservePence: number; note: string }, { saved: boolean; periodId: string; reservePence: number }>(functions, 'adminSetTaxReserve');
 const adminSetConfirmedTaxLiabilityCall = httpsCallable<{ periodId: string; liabilityPence: number; accountantReference: string }, { saved: boolean; periodId: string; liabilityPence: number }>(functions, 'adminSetConfirmedTaxLiability');
 const adminRecordTaxPaymentCall = httpsCallable<{ periodId: string; amountPence: number; reference: string; paidAt: string }, { recorded: boolean; duplicate: boolean; paymentId: string; paidPence?: number }>(functions, 'adminRecordTaxPayment');
 const adminGetTaxLedgerCall = httpsCallable<{ periodId: string }, {
-  ledger: null | { periodId: string; reservePence?: number; reserveNote?: string; confirmedLiabilityPence?: number; accountantReference?: string; paidPence?: number; estimate?: { category: string; taxableBasePence: number; rateBasisPoints: number; estimatedTaxPence: number; sourceReference: string; note: string } };
+  ledger: null | { periodId: string; reservePence?: number; reserveNote?: string; confirmedLiabilityPence?: number; accountantReference?: string; paidPence?: number };
   payments: Array<{ id: string; amountPence: number; reference: string; paidAt: string }>;
+  estimates: Array<{ id: string; category: string; taxableBasePence: number; rateBasisPoints: number; estimatedTaxPence: number; sourceReference: string; note: string; recordedAt: unknown }>;
 }>(functions, 'adminGetTaxLedger');
 const getMyCreatorCompensationCall = httpsCallable<void, { compensation: Array<{
   periodId: string; periodStatus: string; creatorPoolPercent: number; eligibleCreatorCount: number;
