@@ -11,7 +11,7 @@ Development continues on `feat/profile-commitments-compensation-centre`. A separ
 |---|---|---|
 | Profile Types | Authenticated settings persistence with revision checks; approved-role gating; public/unlisted/private projections; directory filtering; member controls in the existing Profile Studio | Live acceptance of each profile type and visibility state on desktop and Android |
 | Commitments | Versioned role templates; monthly periods; admin assignment; member evidence submission; admin review and documented exceptions; server-side role eligibility; member progress panel; admin Commitment Control Centre mounted in Contributors | Assignments are currently administered manually by account UID; evidence accepts a note and/or external HTTPS reference, not Nightjar-hosted file uploads; live member/admin acceptance |
-| Compensation | Manual Stripe settlement-report entry and reconciliation; refunds, chargebacks, fees, VAT and adjustments; 50% Creator Pool; deterministic equal shares by individual; approved payout ledger; manual payment references; separate tax reserve/liability/payment ledger; member-only compensation history; admin Compensation Control Centre mounted in Contributors | Automatic Stripe settlement ingestion and bank transfers are not implemented; the remaining 50% allocation and accountant-approved tax treatment remain separate owner/accountant decisions |
+| Compensation | Manual Stripe settlement-report entry and reconciliation; refunds, chargebacks, fees, VAT and adjustments; immutable effective-dated policy for Creator, NightJar, Meg & Mike and optional tax reserve allocations; exact integer-pence allocation; deterministic equal creator shares by individual; approved payout ledger; manual payment references; separate reserve/liability/payment records; member-only compensation history | Automatic Stripe settlement ingestion, live Stripe price changes and bank transfers remain outside this build; Mike must choose the actual percentage split; tax liability and payment treatment require accountant confirmation |
 | Experience | Member and admin workflows connected to the existing Nightjar app, with Midnight Gold styling and loading/error/empty states in the new control surfaces | Complete manual desktop/Android acceptance, accessibility review and final usability corrections |
 | Security | Server-authoritative role, evidence, eligibility and finance callables; admin-only financial controls; integer-pence calculations; idempotent payment references; CI contract and emulator coverage | Final production acceptance and controlled verification against the live app |
 
@@ -53,7 +53,7 @@ These systems must preserve Nightjar's existing rule-driven behaviour and become
 ### Admin-facing
 1. **Profile Review** — moderation/public visibility view and profile-type diagnostics, separate from professional applications and approval.
 2. **Commitment Control** — versioned role templates, effective dates, period assignments, task definitions, evidence review, exception/reassignment reason, eligibility preview and immutable audit history.
-3. **Compensation Control Centre** — source reconciliation, eligible net revenue bridge, 50% Creator Pool, equal-share calculation, allocation waterfall, pending review, manual payment records, tax reserve/liability/payment ledger, period close and adjustment workflow.
+3. **Compensation Control Centre** — source reconciliation, eligible net revenue bridge, versioned subscription-price assumption, Creator/NightJar/Meg & Mike allocations plus an optional tax reserve, exact equal-share calculation, pending review, manual payment records, separate tax reserve/liability/payment ledger, period close and adjustment workflow.
 
 ### Critical workflow logic
 
@@ -65,7 +65,7 @@ These systems must preserve Nightjar's existing rule-driven behaviour and become
 | Member submits task evidence | Assignment belongs to caller; period open; task is assigned | Store evidence reference and mark submitted | Awaiting review; not complete yet |
 | Reviewer approves evidence | Admin/authorised reviewer; evidence belongs to assignment | Append review event and update task state | Progress recalculated by trusted backend |
 | Period eligibility is calculated | Active account; approved role; effective assignment; all applicable mandatory tasks approved or explicitly excused with audited reason | Evaluate each role, then OR across approved roles | One person qualifies once if any one role is complete |
-| Monthly compensation is prepared | Reconciled eligible net revenue and effective policy exist; period not closed | Calculate 50% Creator Pool and deduplicated equal shares in pence | Draft payout ledger ready for review |
+| Monthly compensation is prepared | Reconciled eligible net revenue and an effective four-pool policy exist; period is closed | Apply the saved Creator percentage, split the Creator Pool equally by individual, and snapshot NightJar, Meg & Mike and optional tax reserve amounts | Draft payout ledger ready for review |
 | Admin records a payment | Admin; payout exists; positive amount; reference/date supplied | Append payment record and reconcile balance | Status becomes paid only when fully reconciled |
 | Admin records a tax payment | Admin; tax ledger liability exists; reference/date/amount supplied | Append payment against liability | Reserve is not mistaken for tax paid |
 
@@ -100,7 +100,7 @@ The branch now includes the following implementation beyond the original preview
 - A separate manual tax ledger records a cash reserve, accountant-confirmed liability and actual tax payments. It does not calculate a tax rate or infer a legal entity.
 - No bank transfer or Stripe Connect payout is initiated.
 
-- Each payout period stores its policy version/effective date, subscription-price planning value and all three pool percentages/amounts as a calculation snapshot. The three pools use integer-pence largest-remainder rounding, so the allocation reconciles exactly.
+- Each payout period stores its policy version/effective date, subscription-price planning value and all four allocation percentages/amounts as a calculation snapshot. The three operating pools and optional tax reserve use integer-pence largest-remainder rounding, so the allocation reconciles exactly.
 - The monthly subscription price is planning-only for new subscribers; saving a finance policy does not create/update Stripe Prices or alter existing customer billing agreements. Historical payout snapshots are not recalculated by later policies.
 - Reusing a manual creator or tax payment reference is idempotent only when the period, amount, date, reference and (for creator payments) recipient match. A conflicting retry is rejected and must use a new correction reference.
 - The subscription-price field is not used to infer cash receipts. Only reconciled settlement records feed the pool calculation.
@@ -132,7 +132,7 @@ The current revenue intake is a controlled manual Stripe payout/balance-report i
 - The existing public profile callable already derives approved roles and verified credits server-side, and `PublicProfile` already distinguishes Credited Listener from professional approval. It currently returns the stored `roleProfiles` map as a public payload, so per-profile visibility must be enforced in the callable projection before new visibility controls are exposed.
 - The current compensation implementation is `capped_equal_rate`: paid Creator slots, subscriber rate bands, monthly caps and capacity/stress checks. This conflicts with the agreed commitment-qualified equal-share pool and must not be silently mixed with it.
 - The current Finance Lab is a local-storage scenario simulator. It is not an authoritative ledger and must remain visibly separate from live financial records.
-- The existing commercial allocation currently reconciles Creator, company-profit and business-fund percentages to 100%. The new design needs a separately defined tax reserve and a clear allocation waterfall so tax is not double-counted or confused with distributable net revenue.
+- The effective-dated policy now reconciles Creator, NightJar operations, Meg & Mike and optional tax reserve percentages to exactly 100%. The optional reserve is a bookkeeping allocation of cash; it does not calculate tax, confirm a liability or record a payment.
 
 ## System 1 — Profile Type Manager
 ### Product rules
@@ -168,7 +168,7 @@ Allowed types are a fixed allowlist. Role permissions are never inferred from th
 ### Product rules
 - Financial calculations use authoritative payment-provider and settlement records, not Finance Lab assumptions or guessed subscriber counts.
 - Separate gross billings, discounts, refunds, chargebacks, processor fees, VAT collected/payable, settlement cash, eligible net subscription revenue, operating costs, tax estimates and taxable profit.
-- The agreed initial policy is a 50% Creator Pool share of eligible net revenue. The remaining 50% must be configured among Nightjar operating pool and Meg & Mike pool; tax reserve is modelled as a separately visible cash reserve/waterfall item, not silently treated as a tax rate or as additional distributable revenue.
+- The admin can configure Creator, NightJar and Meg & Mike percentages and optionally carve out a tax reserve percentage; all four values must total exactly 100%. The initial screen suggests 50% Creator and 0% reserve, but does not save or enforce a final allocation until the owner enters the remaining percentages. The tax reserve is a bookkeeping bucket, not an estimate of the legal tax liability.
 - Allocation percentages must reconcile before an effective-dated change can be saved. Show a before/after preview and preserve historical periods.
 - The Creator Pool is divided equally between eligible individuals, not by popularity, listens, followers or role count. Each eligible person receives one share per period.
 - All money is stored and calculated in integer pence. Any indivisible remainder is allocated deterministically and shown in the reconciliation.
@@ -206,5 +206,5 @@ Required acceptance evidence:
 
 ## Outstanding owner/accountant decisions
 - Confirm the legal operating entity and accountant-approved tax categories/rules before tax estimates are enabled.
-- Confirm whether the tax reserve is carved out before the 50/remaining allocation split or funded from the Nightjar operating pool. The interface will show both scenarios but cannot silently choose one.
+- The allocation policy makes any tax reserve an explicit fourth percentage within the 100% total; it is not deducted a second time from Creator or NightJar after the waterfall. The separate tax payment ledger still requires accountant-confirmed liability before a payment can be recorded.
 - Confirm whether existing subscribers retain their current Stripe price until they consent/renew, or whether any future price change is intended to apply at renewal under the applicable billing terms.
