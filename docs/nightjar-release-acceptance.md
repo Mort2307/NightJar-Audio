@@ -1,11 +1,11 @@
-# NightJar PR #206 — release acceptance matrix
+# NightJar — release acceptance matrix
 
 **Status: user confirmed Didit and notifications work (16 October 2026). Other workstreams remain unverified; this is not a blanket sign-off of all 16 items.**
 
 Automated CI validates builds, contracts and emulated Firestore rules/slot contention. It **does not** verify real identity providers, production account permissions, push delivery to actual devices, or the 16 workstreams end-to-end. Do not create new Didit sessions merely to perform this smoke test. Use existing approved test accounts, mock data, and recorded decision receipts.
 
 ## Acceptance instructions
-Use NightJar's PR Hosting preview with approved tester accounts on Android APK/PWA, iOS web/PWA and desktop browser. Preserve the existing Didit approvals and maintain the 18+ gate. Record the date, test account **role only**, platform and result (PASS/FAIL/BLOCKED) for each workflow; never put personal identities, ID documents or live access tokens in this document.
+There is no separate Firebase staging project and no PR Hosting preview in this release path. CI is deliberately no-deploy. Run desktop, Android APK/PWA and iOS web/PWA acceptance against the live NightJar app only after the owner has explicitly approved the relevant controlled production release. Use the designated approved test accounts and non-sensitive test content; preserve existing Didit approvals and maintain the 18+ gate. Do not start another paid Didit session to complete a checklist. Record the date, test account **role only**, platform and result (PASS/FAIL/BLOCKED) for each workflow; never put personal identities, ID documents or live access tokens in this document.
 
 | # | Workstream | Required hands-on evidence | State |
 |---|---|---|---|
@@ -32,7 +32,7 @@ Use NightJar's PR Hosting preview with approved tester accounts on Android APK/P
 - A listener with a verified credit stays a listener; uploader-supplied contributor IDs are never treated as proof.
 - Only the claim participant or server-authenticated owner can open `getCreditClaim`; reviewer cannot be claimant or uploader.
 - Existing Didit approval is not replaced and no extra paid verification is issued by credit workflows.
-- New callables and indexes deploy via exact, small backend batches BEFORE live Hosting.
+- New callables, indexes and rules deploy in exact, audited backend batches as part of an owner-approved controlled release; test the matching live workflow after its required backend dependencies are ready.
 
 ## Production go/no-go
 Release owner signs off each workstream, backend deployment run IDs, index readiness and Didit verification behavior. If any critical issue or untested workflow remains, **do not merge or deploy**. Preview deployment is not a production launch.
