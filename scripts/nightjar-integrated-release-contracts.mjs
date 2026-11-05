@@ -170,9 +170,10 @@ assert.deepEqual(contributorSystemsFollowup.files.map(item=>item.path).sort(),['
   'contributor systems follow-up may change only the admin workspace integration and its workspace contract');
 for(const item of contributorSystemsFollowup.files){
   assert.match(item.sha,/^[0-9a-f]{40}$/);
-  const previous=overrides.get(item.path);
-  assert.ok(previous,'contributor systems integration must anchor to the latest approved App');
-  assert.equal(item.baselineSha,previous.sha,'do not rewrite the approved creative-partners App baseline');
+  const previous=overrides.get(item.path) ??
+    manifest.includes.flatMap(pr=>pr.files).find(entry=>entry.path===item.path);
+  assert.ok(previous,'contributor systems integration must anchor to an approved source');
+  assert.equal(item.baselineSha,previous.sha,'do not rewrite the approved App or workspace-contract baseline');
   overrides.set(item.path,item);
 }
 
