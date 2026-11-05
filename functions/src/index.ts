@@ -19,6 +19,7 @@ import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeReco
 import { evaluateRoleCommitments, isCommitmentTaskReviewable, type RoleCommitmentAssessment } from './commitment-eligibility';
 import { allocateCreatorPool, type CreatorPoolMember } from './creator-pool';
 import { calculateCreatorPoolPence, calculateEligibleNetRevenuePence, isSameManualPayment } from './finance-settlement';
+import { allocateFinanceRevenuePoolsPence, validateFinanceAllocationPolicy } from './finance-policy';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -1234,6 +1235,72 @@ const safePence = (value: unknown, label: string) => {
 const settlementDocumentId = (provider: string, externalId: string) =>
   createHash('sha256').update(provider + ':' + externalId).digest('hex');
 
+const financePolicyRef = (policyId: string) => db.collection('financePolicies').doc(policyId);
+
+export const adminCreateFinancePolicy = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const effectiveFrom = cleanText(input.effectiveFrom, 10);
+  if (!validIsoCalendarDate(effectiveFrom) || effectiveFrom.slice(8) !== '01') {
+    throw new HttpsError('invalid-argument', 'Finance policies must start on the first day of a calendar month.');
+  }
+  const now = new Date();
+  const currentMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
+  if (effectiveFrom < currentMonthStart) {
+    throw new HttpsError('failed-precondition', 'Finance policies cannot be backdated. Choose the current or a future month.');
+  }
+  const policyInput = {
+    subscriptionPricePence: safePence(input.subscriptionPricePence, 'Planning subscription price'),
+    creatorPoolPercent: Number(input.creatorPoolPercent),
+    nightjarPoolPercent: Number(input.nightjarPoolPercent),
+    ownerPoolPercent: Number(input.ownerPoolPercent),
+  };
+  let policy;
+  try {
+    policy = validateFinanceAllocationPolicy(policyInput);
+  } catch (error) {
+    throw new HttpsError('invalid-argument', error instanceof Error ? error.message : 'Finance allocation policy is invalid.');
+  }
+  const periodId = effectiveFrom.slice(0, 7);
+  const ref = financePolicyRef(effectiveFrom);
+  const latestQuery = db.collection('financePolicies').orderBy('effectiveFrom', 'desc').limit(1);
+  return db.runTransaction(async (tx) => {
+    const [existing, latest, commitmentPeriod, payoutPeriod] = await Promise.all([
+      tx.get(ref), tx.get(latestQuery), tx.get(commitmentPeriodRef(periodId)), tx.get(creatorPayoutPeriodRef(periodId)),
+    ]);
+    if (existing.exists) throw new HttpsError('already-exists', 'A finance policy already exists for this effective month.');
+    const latestPolicy = latest.docs[0]?.data();
+    if (latestPolicy && String(latestPolicy.effectiveFrom ?? '') >= effectiveFrom) {
+      throw new HttpsError('failed-precondition', 'A new finance policy must take effect after the latest saved policy. Previous policy versions remain unchanged.');
+    }
+    if (commitmentPeriod.exists && commitmentPeriod.data()?.status === 'closed') {
+      throw new HttpsError('failed-precondition', 'This assessment period is already closed. Set the new policy for a later month.');
+    }
+    if (payoutPeriod.exists) {
+      throw new HttpsError('failed-precondition', 'A payout ledger already exists for this month. Its policy cannot be changed.');
+    }
+    const version = Math.max(0, Number(latestPolicy?.version ?? 0)) + 1;
+    tx.create(ref, {
+      policyId: effectiveFrom,
+      effectiveFrom,
+      version,
+      currency: 'GBP',
+      ...policy,
+      priceScope: 'planning_only_new_subscribers',
+      status: 'active',
+      createdByAdminUserId: admin.uid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return { saved: true, policyId: effectiveFrom, effectiveFrom, version, ...policy, priceScope: 'planning_only_new_subscribers' };
+  });
+});
+
+export const adminListFinancePolicies = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('financePolicies').orderBy('effectiveFrom', 'desc').limit(100).get();
+  return { policies: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
 export const adminRecordRevenueSettlement = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -1397,7 +1464,24 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   if (!Number.isSafeInteger(eligibleNetRevenuePence) || eligibleNetRevenuePence < 0) {
     throw new HttpsError('failed-precondition', 'Reconciled revenue and adjustments must produce a non-negative safe total.');
   }
-  const creatorPoolPence = calculateCreatorPoolPence(eligibleNetRevenuePence, 50);
+  const financePolicySnapshot = await db.collection('financePolicies')
+    .where('effectiveFrom', '<=', periodId + '-01').orderBy('effectiveFrom', 'desc').limit(1).get();
+  const policyDocument = financePolicySnapshot.docs[0];
+  if (!policyDocument) throw new HttpsError('failed-precondition', 'No finance allocation policy is effective for this period. Save a complete 100% allocation policy before preparing compensation.');
+  let financePolicy;
+  try {
+    const data = policyDocument.data();
+    financePolicy = validateFinanceAllocationPolicy({
+      subscriptionPricePence: safePence(data.subscriptionPricePence, 'Planning subscription price'),
+      creatorPoolPercent: Number(data.creatorPoolPercent),
+      nightjarPoolPercent: Number(data.nightjarPoolPercent),
+      ownerPoolPercent: Number(data.ownerPoolPercent),
+    });
+  } catch (error) {
+    throw new HttpsError('failed-precondition', error instanceof Error ? error.message : 'The effective finance policy is invalid.');
+  }
+  const financePoolAllocation = allocateFinanceRevenuePoolsPence(eligibleNetRevenuePence, financePolicy);
+  const creatorPoolPence = financePoolAllocation.creatorPoolPence;
   const assignmentsByUser = new Map<string, Array<Record<string, any>>>();
   for (const doc of assignments.docs) {
     const data = doc.data();
@@ -1447,7 +1531,14 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
     const calculated = allocateCreatorPool(creatorPoolPence, members);
     tx.create(payoutPeriod, {
       periodId, status: 'draft', currency: 'GBP',
-      eligibleNetRevenuePence, creatorPoolPercent: 50, creatorPoolPence,
+      eligibleNetRevenuePence, creatorPoolPercent: financePolicy.creatorPoolPercent, creatorPoolPence,
+      nightjarPoolPercent: financePolicy.nightjarPoolPercent,
+      nightjarPoolPence: financePoolAllocation.nightjarPoolPence,
+      ownerPoolPercent: financePolicy.ownerPoolPercent,
+      ownerPoolPence: financePoolAllocation.ownerPoolPence,
+      subscriptionPricePence: financePolicy.subscriptionPricePence,
+      policyVersion: Number(policyDocument.data()?.version ?? 1),
+      policyEffectiveFrom: String(policyDocument.data()?.effectiveFrom ?? ''),
       eligibleCreatorCount: calculated.eligibleCreatorCount,
       totalAllocatedPence: calculated.totalAllocatedPence,
       unallocatedCreatorPoolPence: calculated.unallocatedPence,
@@ -1456,7 +1547,7 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
       adjustmentIds: adjustments.docs.map((doc) => doc.id),
       preparedByAdminUserId: admin.uid,
       preparedAt: FieldValue.serverTimestamp(),
-      policyVersion: 1,
+      policyVersion: Number(policyDocument.data()?.version ?? 1),
     });
     tx.set(financeControlRef, { revision: controlRevision + 1, payoutPrepared: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     for (const payout of calculated.payouts) {
