@@ -1028,7 +1028,7 @@ export const getMyCommitments = onCall({ region: REGION }, async (request) => {
     return {
       id: doc.id, periodId: data.periodId, role: data.role,
       templateVersion: data.templateVersion, status: data.status,
-      approvedException: data.approvedException === true,
+      approvedException: data.approvedException === true && cleanText(data.exceptionReason, 1000).length >= 8,
       exceptionReason: cleanText(data.exceptionReason, 1000) || null,
       tasks: Array.isArray(data.tasks) ? data.tasks : [],
       periodStatus: period.data()?.status ?? 'missing',
@@ -1691,7 +1691,7 @@ export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (
       return { taskId: task.id, evidenceId, note: cleanText(item.note, 2000), evidenceUrl: cleanText(item.evidenceUrl, 500) || null, submittedAt: toIso(item.submittedAt) };
     })));
     const presenter = presenterByUser.get(String(data.userId ?? ''));
-    return { assignmentId: doc.id, userId: data.userId, displayName: presenter?.displayName ?? 'Nightjar member', periodId: data.periodId, role: data.role, pendingTasks, evidence, exceptionApproved: data.approvedException === true, exceptionReason: cleanText(data.exceptionReason, 1000) || null };
+    return { assignmentId: doc.id, userId: data.userId, displayName: presenter?.displayName ?? 'Nightjar member', periodId: data.periodId, role: data.role, pendingTasks, evidence, exceptionApproved: data.approvedException === true && cleanText(data.exceptionReason, 1000).length >= 8, exceptionReason: cleanText(data.exceptionReason, 1000) || null };
   })).then((items) => items.filter(Boolean));
   return { queue };
 });;
