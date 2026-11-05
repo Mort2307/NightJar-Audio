@@ -29,3 +29,24 @@ export const calculateCreatorPoolPence = (eligibleNetRevenuePence: number, perce
   return Math.floor(eligibleNetRevenuePence / 100) * percent
     + Math.floor((eligibleNetRevenuePence % 100) * percent / 100);
 };
+
+export type ManualPaymentIdentity = {
+  periodId: string;
+  amountPence: number;
+  reference: string;
+  paidAt: string;
+  userId?: string;
+};
+
+export type RecordedManualPayment = Partial<ManualPaymentIdentity>;
+
+/** Reused references are safe retries only when the immutable payment details match. */
+export const isSameManualPayment = (
+  existing: RecordedManualPayment,
+  requested: ManualPaymentIdentity,
+): boolean =>
+  existing.periodId === requested.periodId &&
+  existing.amountPence === requested.amountPence &&
+  existing.reference === requested.reference &&
+  existing.paidAt === requested.paidAt &&
+  (requested.userId === undefined || existing.userId === requested.userId);
