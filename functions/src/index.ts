@@ -12682,6 +12682,21 @@ export const updateCollaborationStatus = onCall({ region: REGION }, async (reque
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
+  if (status === 'withdrawn' && data.assignmentType === 'private_writer_assignment') {
+    const scriptId = cleanText(data.scriptId, 160);
+    if (scriptId) {
+      await scriptRef(scriptId).collection('permissions').doc(String(data.recipientUserId)).set({
+        recipientUserId: data.recipientUserId,
+        allowCopy: false,
+        allowExport: false,
+        revokedAt: new Date().toISOString(),
+        revokedReason: 'private_assignment_withdrawn',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      await revokeReaderSessions(String(data.recipientUserId), scriptId, 'private_assignment_withdrawn');
+    }
+  }
+
   const otherUserId = data.writerUserId === identity.uid ? data.recipientUserId : data.writerUserId;
   if (otherUserId) {
     await createNotification(String(otherUserId), {
