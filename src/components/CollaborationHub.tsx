@@ -238,7 +238,7 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
           </div>
           {proposal.message && <p className="collaboration-message">{proposal.message}</p>}
           <dl className="collaboration-meta">
-            <div><dt>Payment</dt><dd>{proposal.paymentProposal || 'Not specified'}</dd></div>
+            <div><dt>Writer payment proposal</dt><dd>{proposal.paymentProposal || 'Not specified'}</dd></div>
             <div><dt className="nj-term-label">Licence <ContextHelp topic="licence-choice"/></dt><dd>{proposal.licenceSummary || 'Not specified'}</dd></div>
           </dl>
           {proposal.responseNote && <p className="collaboration-response"><strong>Response:</strong> {proposal.responseNote}</p>}
