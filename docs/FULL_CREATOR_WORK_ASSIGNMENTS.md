@@ -27,7 +27,9 @@ The existing Writer → Creator manuscript-card assignment remains separate and 
 - Every asset adapter checks the authenticated owner's correct owner field server-side.
 - Artwork adapters verify the referenced imageAssets record's owner, moderation state, kind and target ID. Cross-type image IDs are rejected.
 - Assignment records are stored in creatorWorkAssignments; list callables return only records where the caller is owner or recipient.
-- Acceptance checks the immutable asset revision again inside the Firestore transaction. Changed work requires a fresh invitation.
+- Owner eligibility is matched to the asset type; recipient eligibility is matched to the requested contribution task, including multi-role accounts and an explicit general creative-contribution task.
+- Acceptance checks the immutable asset revision and current recipient role again inside the Firestore transaction. Changed work requires a fresh invitation.
+- Optional rights/permitted-use terms and private credit candidates are stored on the assignment; they do not create public credits or override release approval.
 - Original export is not granted; no download action is exposed. Audio/image preview URLs are signed for five minutes. Browser, screen or audio capture cannot be technically prevented and must not be represented as impossible.
 - Script text is returned only after an accepted assignment and current revision check.
 - Withdrawal changes the authoritative assignment state; future open calls are denied. Previously issued signed URLs expire within five minutes.
