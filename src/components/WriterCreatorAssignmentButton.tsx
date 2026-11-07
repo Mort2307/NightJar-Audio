@@ -5,7 +5,7 @@ import { pendingPrivateCreateId, clearPrivateCreateId } from '../platform/client
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 
 type Props = {
-  script: { id: string; title?: string | null; version?: number; status?: string | null };
+  script: { id: string; title?: string | null; version?: number; status?: string | null; sourceFile?: { fileName?: string | null } | null };
   notify: (message: string) => void;
   simulationMode?: boolean;
 };
@@ -31,6 +31,7 @@ export default function WriterCreatorAssignmentButton({ script, notify, simulati
   const [paymentProposal, setPaymentProposal] = useState('');
   const [licenceSummary, setLicenceSummary] = useState('');
   const [workType, setWorkType] = useState<'' | 'voluntary' | 'private_commission' | 'nightjar_original'>('');
+  const [allowOriginalExport, setAllowOriginalExport] = useState(false);
   const [review, setReview] = useState(false);
   const dialogRef = useRef<HTMLElement | null>(null);
   const closeComposer = useCallback(() => { if (!sending) setOpen(false); }, [sending]);
@@ -78,6 +79,7 @@ const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
       setPaymentProposal('');
       setLicenceSummary('');
       setWorkType('');
+      setAllowOriginalExport(false);
     }
   }, [open]);
 
@@ -98,6 +100,7 @@ const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
           licenceSummary,
           assignmentType: 'private_writer_assignment',
           workType,
+          allowOriginalExport,
           scriptVersion: Number(script.version ?? 1),
           clientRequestId: requestId,
         });
@@ -154,6 +157,7 @@ const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
             <label className="nj-assignment-field">Private note <textarea value={message} onChange={(event)=>setMessage(event.target.value)} rows={3} maxLength={2400} placeholder="Tell the selected Creator what you have in mind…"/></label>
             <label className="nj-assignment-field">Proposed Writer payment <input value={paymentProposal} onChange={(event)=>setPaymentProposal(event.target.value)} maxLength={800} placeholder="Optional · e.g. £150 Writer commission, or to be discussed"/></label>
             <label className="nj-assignment-field">Rights / licence summary <input value={licenceSummary} onChange={(event)=>setLicenceSummary(event.target.value)} maxLength={1200} placeholder="Optional · record the proposed rights arrangement"/></label>
+            {script.sourceFile?.fileName && <label className="nj-assignment-export-option"><input type="checkbox" checked={allowOriginalExport} onChange={(event)=>setAllowOriginalExport(event.target.checked)}/> Allow the selected Creator to download the uploaded original file. Leave unticked to keep the original protected.</label>}
             <p className="nj-assignment-privacy">This is a private invitation, not a public listing. The Writer and selected VA/Creator are linked for future release credits. No ownership transfer or payment is triggered by sending it.</p>
             <footer className="nj-assignment-actions">
               <button type="button" className="ghost-button" onClick={()=>setOpen(false)}>Cancel</button>
@@ -166,6 +170,7 @@ const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
               <p><span>Arrangement</span><strong>{workType === 'voluntary' ? 'Voluntary submission' : workType === 'private_commission' ? 'Private commission' : 'NightJar Original'}</strong></p>
               <p><span>Writer payment proposal</span><strong>{paymentProposal.trim() || 'Not specified'}</strong></p>
               <p><span>Rights summary</span><strong>{licenceSummary.trim() || 'Not specified'}</strong></p>
+              {script.sourceFile?.fileName && <p><span>Original file</span><strong>{allowOriginalExport ? 'Download permitted' : 'Protected · no download'}</strong></p>}
               <p><span>Credits linked</span><strong>Writer · {selected?.name} (VA/Creator)</strong></p>
             </div>
             <p className="nj-assignment-privacy">Only {selected?.name} receives this assignment. They can accept or decline it in their private Collaborations workspace. The script is not published or listed.</p>
