@@ -12624,6 +12624,11 @@ export const respondCreatorWorkAssignment = onCall({ region: REGION }, async (re
       throw new HttpsError('aborted', 'This invitation has already changed. Refresh your workspace.');
     }
     if (status === 'accepted') {
+      const acceptingAccountSnapshot = await tx.get(accountRef(identity.uid));
+      const acceptingAccount = acceptingAccountSnapshot.data() ?? {};
+      if (acceptingAccount.status !== 'active' || !professionalRolesForAccount(acceptingAccount).length) {
+        throw new HttpsError('permission-denied', 'An active, approved professional role is required to accept this work.');
+      }
       const assetRef = creatorWorkAssetRef(prior.assetType as CreatorWorkAssetType, String(prior.assetId));
       const assetSnapshot = await tx.get(assetRef);
       const assetData = assetSnapshot.data();
@@ -12688,6 +12693,12 @@ export const openCreatorWorkAssignmentAsset = onCall({ region: REGION }, async (
   if (!assignment || (assignment.ownerUserId !== identity.uid && assignment.recipientUserId !== identity.uid) ||
       !['accepted','in_production','completed'].includes(String(assignment.status))) {
     throw new HttpsError('not-found','Accepted private work access was not found.');
+  }
+  if (assignment.recipientUserId === identity.uid) {
+    const recipientAccount = (await accountRef(identity.uid).get()).data() ?? {};
+    if (recipientAccount.status !== 'active' || !professionalRolesForAccount(recipientAccount).length) {
+      throw new HttpsError('permission-denied','An active, approved professional role is required to open this work.');
+    }
   }
   const asset = await resolveCreatorWorkAsset(assignment.assetType as CreatorWorkAssetType, String(assignment.assetId), String(assignment.ownerUserId), assignment.assetSlot ?? null);
   if (asset.revision !== assignment.assetRevision) throw new HttpsError('failed-precondition','This work has changed since it was assigned. Ask the owner to issue a new version invitation.');
