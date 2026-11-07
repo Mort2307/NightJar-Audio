@@ -47,6 +47,10 @@ jobs:
         working-directory: functions
         run: npm run check
 
+      - name: Test Profile Types, Commitments, Creator Pool and Finance calculations
+        working-directory: functions
+        run: npm run test:systems
+
       - name: Determine backend change scope
         id: scope
         run: node scripts/ci-release-scope.mjs

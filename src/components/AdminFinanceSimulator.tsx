@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Calculator, Coins, RefreshCw, Save, ShieldCheck, SlidersHorizontal, Trash2, UsersRound, WalletCards } from 'lucide-react';
 import type { CommercialSettings } from '../platform/firebase-commercial';
+import AdminSystemsPreview from './AdminSystemsPreview';
+import CommitmentControlCentre from './CommitmentControlCentre';
+import CompensationControlCentre from './CompensationControlCentre';
 
 type Props = {
   settings: CommercialSettings;
@@ -320,9 +323,9 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
   return <section className="admin-finance-simulator">
     <div className="admin-finance-simulator-hero">
       <div>
-        <span className="mini-label">ADMIN / FINANCE LAB</span>
+        <span className="mini-label">ADMIN / FINANCE LAB · LEGACY SCENARIO</span>
         <h3>Model the fairest Nightjar baseline before committing to it.</h3>
-        <p>Change subscribers, price, VAT, payment costs, the three main revenue pots and the share paid to each professional role. Every output recalculates immediately; nothing here changes live billing or payout policy.</p>
+        <p>This retained sandbox models the earlier role-weighted/capped scenario. It is not the new commitment-qualified equal-share policy and is not an authoritative ledger. Change subscribers, price, VAT and cost assumptions to compare scenarios; nothing here changes live billing or payouts.</p>
       </div>
       <div className="admin-finance-simulator-actions">
         <button className="secondary-button" onClick={loadCommercialAssumptions}><WalletCards size={14}/> Load current Nightjar assumptions</button>
@@ -331,6 +334,8 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
         <button className="ghost-button" onClick={resetNightjarScenario}><RefreshCw size={14}/> Reset 10k / £6.99 scenario</button>
       </div>
     </div>
+
+    <div className="demo-warning admin-note"><ShieldCheck size={17}/><div><strong>LEGACY PLANNING MODEL — NOT LIVE COMPENSATION POLICY</strong><span>The role caps, 50/20/30 scenario split and corporation-tax controls below are historical planning assumptions only. They do not define the new 50% Creator Pool or Nightjar/Meg & Mike allocation. Do not use the tax output as a Nightjar tax estimate; the legal structure and accountant-approved treatment are still to be confirmed.</span></div></div>
 
     <div className="finance-sim-status-row">
       <span className={splitsValid ? 'status-pill' : 'status-pill muted'}>{splitsValid ? 'Main pots = 100%' : 'Main pots = ' + model.primaryPercentTotal.toFixed(2) + '%'}</span>
@@ -461,5 +466,8 @@ export default function AdminFinanceSimulator({ settings, currentPaidSubscribers
         <div><span>VAT / sales tax</span><strong>{gbp(model.vatCollected)}</strong><small>{gbp(model.vatCollected * 12)} annualised statutory sales-tax component</small></div>
       </div>
     </section>
+    <AdminSystemsPreview />
+    <CommitmentControlCentre />
+    <CompensationControlCentre />
   </section>;
 }

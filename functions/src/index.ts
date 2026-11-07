@@ -15,6 +15,12 @@ import { hasPaidEntitlement } from './entitlements';
 import { canUseBetaListening } from './entitlements';
 import { buildVerifiedCreditCallables } from './verified-credits';
 import { buildNightjarQualityCallables } from './nightjar-quality';
+import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes, type NightjarProfileType } from './profile-types';
+import { evaluateRoleCommitments, isCommitmentTaskReviewable, type RoleCommitmentAssessment } from './commitment-eligibility';
+import { allocateCreatorPool, type CreatorPoolMember } from './creator-pool';
+import { calculateEligibleNetRevenuePence, isSameManualPayment } from './finance-settlement';
+import { allocateFinanceRevenuePoolsPence, validateFinanceAllocationPolicy } from './finance-policy';
+import { calculateTaxEstimatePence } from './finance-tax-estimate';
 export { diditWebhook, processDiditWebhook } from './didit';
 export {notifyPublishedAudio,notifyPublishedScript,notifyPublishedArtwork,notifyNewFollower} from './publication-notifications';
 export { beginPasskeyRegistration, finishPasskeyRegistration, beginPasskeySignIn, finishPasskeySignIn, listMyPasskeys, removeMyPasskey } from './passkeys';
@@ -801,6 +807,1095 @@ const validateHandle = (value: string) => {
 };
 
 const profileRef = (uid: string) => db.collection('profiles').doc(uid);
+
+const profileTypeSettingsSnapshot = (data: Record<string, any> | undefined) => ({
+  revision: Math.max(0, Number(data?.profileTypeSettingsRevision ?? 0)),
+  settings: normaliseProfileTypeSettings(data?.profileTypeSettings),
+});
+
+export const getMyProfileTypeSettings = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const snapshot = await profileRef(identity.uid).get();
+  return profileTypeSettingsSnapshot(snapshot.data());
+});
+
+export const saveMyProfileTypeSettings = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const expectedRevision = Number(input.expectedRevision);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new HttpsError('invalid-argument', 'Invalid profile settings version.');
+  }
+  if (!input.settings || typeof input.settings !== 'object' || Array.isArray(input.settings)) {
+    throw new HttpsError('invalid-argument', 'Profile type settings are required.');
+  }
+  const raw = input.settings as Record<string, unknown>;
+  if (Object.keys(raw).some((key) => !isNightjarProfileType(key))) {
+    throw new HttpsError('invalid-argument', 'One or more profile types are not supported.');
+  }
+  const accountSnapshot = await accountRef(identity.uid).get();
+  const approvedRoles = professionalRolesForAccount(accountSnapshot.data() ?? {});
+  for (const [type, value] of Object.entries(raw)) {
+    if (type === 'listener' || !value || typeof value !== 'object' || Array.isArray(value)) continue;
+    if ((value as Record<string, unknown>).enabled === true && !approvedRoles.includes(type as AccountRole)) {
+      throw new HttpsError('failed-precondition', 'A professional profile can only be enabled after that role is approved.');
+    }
+  }
+  const settings: Partial<Record<NightjarProfileType, ReturnType<typeof normaliseProfileTypeRecord>>> = {};
+  for (const type of NIGHTJAR_PROFILE_TYPES) {
+    const value = raw[type];
+    if (value === undefined) continue;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new HttpsError('invalid-argument', 'A profile type setting is invalid.');
+    }
+    const record = value as Record<string, unknown>;
+    if (record.enabled !== undefined && typeof record.enabled !== 'boolean') {
+      throw new HttpsError('invalid-argument', 'Profile enabled state must be true or false.');
+    }
+    if (record.visibility !== undefined && !['public', 'private', 'unlisted'].includes(String(record.visibility))) {
+      throw new HttpsError('invalid-argument', 'Choose public, unlisted or private visibility.');
+    }
+    settings[type] = normaliseProfileTypeRecord(type, record as never);
+  }
+  const ref = profileRef(identity.uid);
+  return db.runTransaction(async (tx) => {
+    const current = profileTypeSettingsSnapshot((await tx.get(ref)).data());
+    if (current.revision !== expectedRevision) {
+      return { saved: false, ...current };
+    }
+    const revision = current.revision + 1;
+    tx.set(ref, {
+      profileTypeSettings: settings,
+      profileTypeSettingsRevision: revision,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { saved: true, revision, settings };
+  });
+});
+
+const COMMITMENT_ROLES = ['creator', 'writer', 'editor', 'artist'] as const;
+type CommitmentRole = typeof COMMITMENT_ROLES[number];
+const isCommitmentRole = (value: unknown): value is CommitmentRole =>
+  typeof value === 'string' && (COMMITMENT_ROLES as readonly string[]).includes(value);
+const commitmentPeriodRef = (periodId: string) => db.collection('commitmentPeriods').doc(periodId);
+const commitmentTemplateRef = (templateId: string) => db.collection('commitmentTemplates').doc(templateId);
+const commitmentAssignmentRef = (assignmentId: string) => db.collection('commitmentAssignments').doc(assignmentId);
+const validCommitmentPeriodId = (value: unknown): value is string =>
+  typeof value === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+const validIsoCalendarDate = (value: unknown): value is string =>
+  typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && !Number.isNaN(Date.parse(value))
+  && new Date(value + 'T00:00:00.000Z').toISOString().slice(0, 10) === value;
+const validCommitmentDocId = (value: unknown): value is string =>
+  typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(value);
+const commitmentAssignmentId = (periodId: string, userId: string, role: CommitmentRole) =>
+  [periodId, userId, role].join('__');
+
+export const adminCreateCommitmentTemplate = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const role = input.role;
+  const effectiveFrom = cleanText(input.effectiveFrom, 10);
+  if (!isCommitmentRole(role) || !validIsoCalendarDate(effectiveFrom)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid creative role and effective date.');
+  }
+  if (!Array.isArray(input.tasks) || input.tasks.length < 1 || input.tasks.length > 40) {
+    throw new HttpsError('invalid-argument', 'A commitment template needs between 1 and 40 tasks.');
+  }
+  const seen = new Set<string>();
+  const tasks = input.tasks.map((raw) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new HttpsError('invalid-argument', 'A commitment task is invalid.');
+    const task = raw as Record<string, unknown>;
+    const id = cleanText(task.id, 60);
+    const title = cleanText(task.title, 120);
+    const description = cleanText(task.description, 500);
+    const mandatory = task.mandatory === true;
+    const dueDay = task.dueDay === undefined || task.dueDay === null ? null : Number(task.dueDay);
+    if (!/^[A-Za-z0-9_-]{1,60}$/.test(id) || !title || seen.has(id)
+      || (task.mandatory !== true && task.mandatory !== false)
+      || (dueDay !== null && (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31))) {
+      throw new HttpsError('invalid-argument', 'A commitment task has an invalid ID, title, mandatory flag or due day.');
+    }
+    seen.add(id);
+    return { id, title, description, mandatory, dueDay, state: 'not_started' as const };
+  });
+  if (!tasks.some((task) => task.mandatory)) throw new HttpsError('invalid-argument', 'A role template needs at least one mandatory task.');
+  const existingTemplates = await db.collection('commitmentTemplates').where('role', '==', role).get();
+  const latestVersion = existingTemplates.docs.reduce((latest, doc) => Math.max(latest, Number(doc.data()?.version ?? 0)), 0);
+  const version = latestVersion + 1;
+  const templateId = role + '__v' + version;
+  const ref = commitmentTemplateRef(templateId);
+  await ref.create({
+    role, version, effectiveFrom, tasks, status: 'published',
+    createdByAdminUserId: admin.uid,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { templateId, role, version, effectiveFrom, tasks };
+});
+
+export const adminCreateCommitmentPeriod = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const startDate = cleanText(input.startDate, 10);
+  const endDate = cleanText(input.endDate, 10);
+  if (!validCommitmentPeriodId(periodId) || !validIsoCalendarDate(startDate) || !validIsoCalendarDate(endDate)
+    || startDate.slice(0, 7) !== periodId || endDate.slice(0, 7) !== periodId || startDate > endDate) {
+    throw new HttpsError('invalid-argument', 'Choose a valid monthly commitment period and date range.');
+  }
+  const ref = commitmentPeriodRef(periodId);
+  return db.runTransaction(async (tx) => {
+    const existing = await tx.get(ref);
+    if (existing.exists) throw new HttpsError('already-exists', 'This commitment period already exists.');
+    tx.create(ref, {
+      periodId, startDate, endDate, status: 'open', activityRevision: 0,
+      createdByAdminUserId: admin.uid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return { created: true, periodId, startDate, endDate, status: 'open' };
+  });
+});
+
+export const adminAssignCommitmentTemplate = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const requestedUserId = cleanText(input.userId, 160);
+  const email = cleanEmail(input.email);
+  const role = input.role;
+  const templateId = cleanText(input.templateId, 100);
+  if (!validCommitmentPeriodId(periodId) || (!validCommitmentDocId(requestedUserId) && !validEmailAddress(email))
+    || !isCommitmentRole(role) || !/^(creator|writer|editor|artist)__v\d+$/.test(templateId)) {
+    throw new HttpsError('invalid-argument', 'Period, member email or account UID, role and template are required.');
+  }
+  let userId = requestedUserId;
+  if (!userId) {
+    const matches = await db.collection('accounts').where('email', '==', email).limit(2).get();
+    if (matches.size !== 1) throw new HttpsError('not-found', 'No unique Nightjar account matched that email address. Check the address or use the account UID.');
+    userId = matches.docs[0].id;
+  }
+  const periodRef = commitmentPeriodRef(periodId);
+  const templateRef = commitmentTemplateRef(templateId);
+  const accountDocument = accountRef(userId);
+  const assignmentRef = commitmentAssignmentRef(commitmentAssignmentId(periodId, userId, role));
+  return db.runTransaction(async (tx) => {
+    const [periodSnap, templateSnap, accountSnap, assignmentSnap] = await Promise.all([
+      tx.get(periodRef), tx.get(templateRef), tx.get(accountDocument), tx.get(assignmentRef),
+    ]);
+    const period = periodSnap.data() ?? {};
+    const template = templateSnap.data() ?? {};
+    const account = accountSnap.data() ?? {};
+    if (!periodSnap.exists || period.status !== 'open') throw new HttpsError('failed-precondition', 'The commitment period is missing or closed.');
+    if (!templateSnap.exists || template.status !== 'published' || template.role !== role
+      || String(template.effectiveFrom ?? '') > String(period.startDate ?? '')) {
+      throw new HttpsError('failed-precondition', 'The selected template is not effective for this period.');
+    }
+    if (!accountSnap.exists || account.status !== 'active' || !professionalRolesForAccount(account).includes(role as AccountRole)) {
+      throw new HttpsError('failed-precondition', 'This member does not have an active approved role for this assignment.');
+    }
+    if (assignmentSnap.exists) throw new HttpsError('already-exists', 'This member already has an assignment for this role and period.');
+    const periodStart = String(period.startDate ?? '');
+    const [periodYear, periodMonth] = periodStart.split('-').map(Number);
+    const daysInPeriod = new Date(Date.UTC(periodYear, periodMonth, 0)).getUTCDate();
+    const tasks = (Array.isArray(template.tasks) ? template.tasks : []).map((task: Record<string, any>) => {
+      const dueDay = task.dueDay === null || task.dueDay === undefined ? null : Math.min(daysInPeriod, Math.max(1, Number(task.dueDay)));
+      const dueAt = dueDay ? new Date(Date.UTC(periodYear, periodMonth - 1, dueDay)).toISOString().slice(0, 10) : null;
+      return {
+        id: cleanText(task.id, 60), title: cleanText(task.title, 120),
+        description: cleanText(task.description, 500), mandatory: task.mandatory === true,
+        dueDay, dueAt, state: 'not_started', evidenceIds: [],
+      };
+    });
+    if (!tasks.length) throw new HttpsError('failed-precondition', 'The selected template has no tasks.');
+    tx.update(periodRef, { activityRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+    tx.create(assignmentRef, {
+      periodId, userId, role, templateId, templateVersion: Number(template.version ?? 1),
+      templateSnapshot: tasks.map(({ id, title, description, mandatory, dueDay }) => ({ id, title, description, mandatory, dueDay })),
+      tasks, status: 'open', assignedByAdminUserId: admin.uid,
+      assignedAt: FieldValue.serverTimestamp(),
+    });
+    return { assigned: true, assignmentId: assignmentRef.id, periodId, role, taskCount: tasks.length };
+  });
+});
+
+export const getMyCommitments = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const snapshot = await db.collection('commitmentAssignments').where('userId', '==', identity.uid).limit(100).get();
+  const assignments = await Promise.all(snapshot.docs.map(async (doc) => {
+    const data = doc.data();
+    const period = await commitmentPeriodRef(String(data.periodId ?? '')).get();
+    return {
+      id: doc.id, periodId: data.periodId, role: data.role,
+      templateVersion: data.templateVersion, status: data.status,
+      approvedException: data.approvedException === true && cleanText(data.exceptionReason, 1000).length >= 8,
+      exceptionReason: cleanText(data.exceptionReason, 1000) || null,
+      tasks: Array.isArray(data.tasks) ? data.tasks : [],
+      periodStatus: period.data()?.status ?? 'missing',
+      startDate: period.data()?.startDate ?? null,
+      endDate: period.data()?.endDate ?? null,
+    };
+  }));
+  return { assignments: assignments.sort((a, b) => String(b.periodId).localeCompare(String(a.periodId))) };
+});
+
+export const submitCommitmentEvidence = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const assignmentId = cleanText(input.assignmentId, 180);
+  const taskId = cleanText(input.taskId, 60);
+  const note = cleanText(input.note, 2000);
+  const evidenceUrl = validPublicUrl(input.evidenceUrl);
+  if (!/^[A-Za-z0-9_-]{1,180}$/.test(assignmentId) || !/^[A-Za-z0-9_-]{1,60}$/.test(taskId) || (!note && !evidenceUrl)) {
+    throw new HttpsError('invalid-argument', 'Provide a task and either an evidence note or a public evidence link.');
+  }
+  const assignmentRef = commitmentAssignmentRef(assignmentId);
+  const evidenceRef = assignmentRef.collection('evidence').doc();
+  const eventRef = assignmentRef.collection('events').doc();
+  return db.runTransaction(async (tx) => {
+    const assignmentSnap = await tx.get(assignmentRef);
+    const assignment = assignmentSnap.data() ?? {};
+    if (!assignmentSnap.exists || assignment.userId !== identity.uid) throw new HttpsError('not-found', 'Commitment assignment not found.');
+    if (assignment.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment assignment is not open.');
+    const periodSnap = await tx.get(commitmentPeriodRef(String(assignment.periodId ?? '')));
+    if (!periodSnap.exists || periodSnap.data()?.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment period is closed.');
+    const tasks = Array.isArray(assignment.tasks) ? [...assignment.tasks] : [];
+    const index = tasks.findIndex((task: Record<string, any>) => task.id === taskId);
+    if (index < 0) throw new HttpsError('not-found', 'Commitment task not found.');
+    if (['approved', 'cancelled', 'excused'].includes(String(tasks[index].state))) {
+      throw new HttpsError('failed-precondition', 'This task no longer accepts evidence.');
+    }
+    const evidence = { note, evidenceUrl: evidenceUrl || null, submittedByUserId: identity.uid, submittedAt: FieldValue.serverTimestamp() };
+    tasks[index] = { ...tasks[index], state: 'submitted', latestEvidenceId: evidenceRef.id, evidenceIds: [...new Set([...(tasks[index].evidenceIds ?? []), evidenceRef.id])] };
+    tx.create(evidenceRef, evidence);
+    tx.create(eventRef, { type: 'evidence_submitted', taskId, actorUserId: identity.uid, at: FieldValue.serverTimestamp() });
+    tx.update(assignmentRef, { tasks, updatedAt: FieldValue.serverTimestamp() });
+    tx.update(periodSnap.ref, { activityRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+    return { submitted: true, evidenceId: evidenceRef.id, taskState: 'submitted' };
+  });
+});
+
+export const adminReviewCommitmentTask = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const assignmentId = cleanText(input.assignmentId, 180);
+  const taskId = cleanText(input.taskId, 60);
+  const decision = input.decision;
+  const reason = cleanText(input.reason, 1000);
+  if (!/^[A-Za-z0-9_-]{1,180}$/.test(assignmentId) || !/^[A-Za-z0-9_-]{1,60}$/.test(taskId)
+    || !['approved', 'rejected', 'cancelled', 'excused'].includes(String(decision))) {
+    throw new HttpsError('invalid-argument', 'Choose a valid assignment, task and review decision.');
+  }
+  if (['cancelled', 'excused', 'rejected'].includes(String(decision)) && reason.length < 8) {
+    throw new HttpsError('invalid-argument', 'A reason of at least eight characters is required for this decision.');
+  }
+  const assignmentRef = commitmentAssignmentRef(assignmentId);
+  const eventRef = assignmentRef.collection('events').doc();
+  return db.runTransaction(async (tx) => {
+    const assignmentSnap = await tx.get(assignmentRef);
+    const assignment = assignmentSnap.data() ?? {};
+    if (!assignmentSnap.exists || assignment.status !== 'open') throw new HttpsError('not-found', 'Open commitment assignment not found.');
+    const periodSnap = await tx.get(commitmentPeriodRef(String(assignment.periodId ?? '')));
+    if (!periodSnap.exists || periodSnap.data()?.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment period is closed.');
+    const tasks = Array.isArray(assignment.tasks) ? [...assignment.tasks] : [];
+    const index = tasks.findIndex((task: Record<string, any>) => task.id === taskId);
+    if (index < 0) throw new HttpsError('not-found', 'Commitment task not found.');
+    if (!isCommitmentTaskReviewable(tasks[index].state)) {
+      throw new HttpsError('failed-precondition', 'Only evidence currently awaiting review can be reviewed. Ask the member to resubmit after a rejection.');
+    }
+    if (decision === 'approved' && !(Array.isArray(tasks[index].evidenceIds) && tasks[index].evidenceIds.length)) {
+      throw new HttpsError('failed-precondition', 'Evidence must be submitted before approval.');
+    }
+    tasks[index] = { ...tasks[index], state: decision, reviewedByAdminUserId: admin.uid, reviewedAt: FieldValue.serverTimestamp(), reviewReason: reason || null };
+    tx.create(eventRef, { type: 'task_reviewed', taskId, decision, reason: reason || null, actorUserId: admin.uid, at: FieldValue.serverTimestamp() });
+    tx.update(assignmentRef, { tasks, updatedAt: FieldValue.serverTimestamp() });
+    tx.update(periodSnap.ref, { activityRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+    return { reviewed: true, taskId, state: decision };
+  });
+});
+
+export const adminSetCommitmentException = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const assignmentId = cleanText(input.assignmentId, 180);
+  const reason = cleanText(input.reason, 1000);
+  if (!/^[A-Za-z0-9_-]{1,180}$/.test(assignmentId) || reason.length < 8) {
+    throw new HttpsError('invalid-argument', 'An assignment and a documented exception reason are required.');
+  }
+  const assignmentRef = commitmentAssignmentRef(assignmentId);
+  const eventRef = assignmentRef.collection('events').doc();
+  await db.runTransaction(async (tx) => {
+    const assignmentSnap = await tx.get(assignmentRef);
+    const assignment = assignmentSnap.data() ?? {};
+    if (!assignmentSnap.exists || assignment.status !== 'open') throw new HttpsError('not-found', 'Open commitment assignment not found.');
+    if (assignment.approvedException === true) throw new HttpsError('already-exists', 'A documented eligibility exception is already recorded for this assignment.');
+    const periodSnap = await tx.get(commitmentPeriodRef(String(assignment.periodId ?? '')));
+    if (!periodSnap.exists || periodSnap.data()?.status !== 'open') throw new HttpsError('failed-precondition', 'This commitment period is closed.');
+    tx.update(assignmentRef, { approvedException: true, exceptionReason: reason, exceptionApprovedByAdminUserId: admin.uid, exceptionApprovedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    tx.update(periodSnap.ref, { activityRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+    tx.create(eventRef, { type: 'eligibility_exception_approved', reason, actorUserId: admin.uid, at: FieldValue.serverTimestamp() });
+  });
+  return { saved: true, assignmentId };
+});
+
+export const getMyCommitmentEligibility = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId === undefined ? null : input.periodId;
+  if (periodId !== null && !validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Invalid commitment period.');
+  const [accountSnap, assignmentSnap] = await Promise.all([
+    accountRef(identity.uid).get(),
+    db.collection('commitmentAssignments').where('userId', '==', identity.uid).limit(100).get(),
+  ]);
+  const account = accountSnap.data() ?? {};
+  const approvedRoles = String(account.status ?? 'active') === 'active' ? professionalRolesForAccount(account) : [];
+  const allAssignments = assignmentSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Array<Record<string, any>>;
+  let selectedPeriodId = periodId as string | null;
+  if (!selectedPeriodId) {
+    const periodIds = [...new Set(allAssignments.map((item) => cleanText(item.periodId, 16)).filter(Boolean))];
+    const periodDocs = await Promise.all(periodIds.map((id) => commitmentPeriodRef(id).get()));
+    const availablePeriods = periodDocs
+      .filter((doc) => doc.exists)
+      .map((doc) => ({ id: doc.id, status: doc.data()?.status, startDate: String(doc.data()?.startDate ?? '') }))
+      .sort((a, b) => b.startDate.localeCompare(a.startDate));
+    selectedPeriodId = availablePeriods.find((period) => period.status === 'open')?.id ?? availablePeriods[0]?.id ?? null;
+  }
+  const assignments = allAssignments
+    .filter((item) => selectedPeriodId && item.periodId === selectedPeriodId && approvedRoles.includes(item.role as AccountRole));
+  const assessments: RoleCommitmentAssessment[] = assignments.map((item: any) => ({
+    role: item.role,
+    assigned: true,
+    effective: true,
+    tasks: (Array.isArray(item.tasks) ? item.tasks : []).map((task: any) => ({
+      id: cleanText(task.id, 60), mandatory: task.mandatory === true, state: task.state,
+    })),
+    approvedException: item.approvedException === true,
+    exceptionReason: item.exceptionReason ?? null,
+  }));
+  const roleResults = assessments.map((assessment) => evaluateRoleCommitments(assessment));
+  const qualifyingRole = roleResults.find((result) => result.qualifies)?.role ?? null;
+  return { periodId: selectedPeriodId, approvedRoles, roleResults, eligible: Boolean(qualifyingRole), qualifyingRole };
+});
+
+export const adminListCommitmentTemplates = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('commitmentTemplates').orderBy('createdAt', 'desc').limit(100).get();
+  return { templates: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
+export const adminListCommitmentPeriods = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('commitmentPeriods').orderBy('startDate', 'desc').limit(36).get();
+  return { periods: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
+export const adminCloseCommitmentPeriod = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid commitment period.');
+  const ref = commitmentPeriodRef(periodId);
+  const before = await ref.get();
+  if (!before.exists) throw new HttpsError('not-found', 'Commitment period not found.');
+  if (before.data()?.status === 'closed') return { closed: true, periodId, alreadyClosed: true };
+  const activityRevision = Number(before.data()?.activityRevision ?? 0);
+  if (!Number.isSafeInteger(activityRevision) || activityRevision < 0 || activityRevision >= Number.MAX_SAFE_INTEGER) {
+    throw new HttpsError('failed-precondition', 'This commitment period has an invalid activity revision and cannot be safely closed.');
+  }
+  const assignments = await db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5001).get();
+  if (assignments.size > 5000) throw new HttpsError('resource-exhausted', 'This period exceeds the 5,000-assignment closure limit. Contact Nightjar engineering before closing it.');
+  const pendingReviewCount = assignments.docs.reduce((count, doc) =>
+    count + (Array.isArray(doc.data().tasks) ? doc.data().tasks.filter((task: Record<string, any>) => task.state === 'submitted').length : 0), 0);
+  if (pendingReviewCount > 0) throw new HttpsError('failed-precondition', 'Review all submitted evidence before closing this assessment period.');
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Commitment period not found.');
+    if (snapshot.data()?.status === 'closed') return { closed: true, periodId, alreadyClosed: true };
+    if (Number(snapshot.data()?.activityRevision ?? 0) !== activityRevision) {
+      throw new HttpsError('aborted', 'Commitment activity changed while the period was being checked. Refresh and close it again.');
+    }
+    tx.update(ref, { status: 'closed', activityRevision: activityRevision + 1, closedByAdminUserId: admin.uid, closedAt: FieldValue.serverTimestamp() });
+    return { closed: true, periodId, alreadyClosed: false };
+  });
+});
+
+
+
+const revenueSettlementRef = (settlementId: string) => db.collection('financeRevenueSettlements').doc(settlementId);
+const financePeriodControlRef = (periodId: string) => db.collection('financePeriodControls').doc(periodId);
+const creatorPayoutPeriodRef = (periodId: string) => db.collection('creatorPayoutPeriods').doc(periodId);
+const creatorPayoutRef = (periodId: string, userId: string) => creatorPayoutPeriodRef(periodId).collection('payouts').doc(userId);
+const safePence = (value: unknown, label: string) => {
+  const amount = Number(value);
+  if (!Number.isSafeInteger(amount) || amount < 0) throw new HttpsError('invalid-argument', label + ' must be a non-negative whole number of pence.');
+  return amount;
+};
+const settlementDocumentId = (provider: string, externalId: string) =>
+  createHash('sha256').update(provider + ':' + externalId).digest('hex');
+
+const financePolicyRef = (policyId: string) => db.collection('financePolicies').doc(policyId);
+
+export const adminCreateFinancePolicy = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const effectiveFrom = cleanText(input.effectiveFrom, 10);
+  if (!validIsoCalendarDate(effectiveFrom) || effectiveFrom.slice(8) !== '01') {
+    throw new HttpsError('invalid-argument', 'Finance policies must start on the first day of a calendar month.');
+  }
+  const now = new Date();
+  const currentMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
+  if (effectiveFrom < currentMonthStart) {
+    throw new HttpsError('failed-precondition', 'Finance policies cannot be backdated. Choose the current or a future month.');
+  }
+  const policyInput = {
+    subscriptionPricePence: safePence(input.subscriptionPricePence, 'Planning subscription price'),
+    creatorPoolPercent: Number(input.creatorPoolPercent),
+    nightjarPoolPercent: Number(input.nightjarPoolPercent),
+    ownerPoolPercent: Number(input.ownerPoolPercent),
+    taxReservePercent: Number(input.taxReservePercent),
+  };
+  let policy;
+  try {
+    policy = validateFinanceAllocationPolicy(policyInput);
+  } catch (error) {
+    throw new HttpsError('invalid-argument', error instanceof Error ? error.message : 'Finance allocation policy is invalid.');
+  }
+  const periodId = effectiveFrom.slice(0, 7);
+  const ref = financePolicyRef(effectiveFrom);
+  const latestQuery = db.collection('financePolicies').orderBy('effectiveFrom', 'desc').limit(1);
+  return db.runTransaction(async (tx) => {
+    const [existing, latest, commitmentPeriod, payoutPeriod] = await Promise.all([
+      tx.get(ref), tx.get(latestQuery), tx.get(commitmentPeriodRef(periodId)), tx.get(creatorPayoutPeriodRef(periodId)),
+    ]);
+    if (existing.exists) throw new HttpsError('already-exists', 'A finance policy already exists for this effective month.');
+    const latestPolicy = latest.docs[0]?.data();
+    if (latestPolicy && String(latestPolicy.effectiveFrom ?? '') >= effectiveFrom) {
+      throw new HttpsError('failed-precondition', 'A new finance policy must take effect after the latest saved policy. Previous policy versions remain unchanged.');
+    }
+    if (commitmentPeriod.exists && commitmentPeriod.data()?.status === 'closed') {
+      throw new HttpsError('failed-precondition', 'This assessment period is already closed. Set the new policy for a later month.');
+    }
+    if (payoutPeriod.exists) {
+      throw new HttpsError('failed-precondition', 'A payout ledger already exists for this month. Its policy cannot be changed.');
+    }
+    const version = Math.max(0, Number(latestPolicy?.version ?? 0)) + 1;
+    tx.create(ref, {
+      policyId: effectiveFrom,
+      effectiveFrom,
+      version,
+      currency: 'GBP',
+      ...policy,
+      priceScope: 'planning_only_new_subscribers',
+      status: 'active',
+      createdByAdminUserId: admin.uid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return { saved: true, policyId: effectiveFrom, effectiveFrom, version, ...policy, priceScope: 'planning_only_new_subscribers' };
+  });
+});
+
+export const adminListFinancePolicies = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const snapshot = await db.collection('financePolicies').orderBy('effectiveFrom', 'desc').limit(100).get();
+  return { policies: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
+export const adminRecordRevenueSettlement = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const provider = input.provider === 'stripe' ? 'stripe' : null;
+  const externalId = cleanText(input.externalId, 160);
+  const settledAt = cleanText(input.settledAt, 10);
+  const sourceReference = cleanText(input.sourceReference, 500);
+  if (!validCommitmentPeriodId(periodId) || !provider || !/^[A-Za-z0-9_-]{1,160}$/.test(externalId)
+    || !validIsoCalendarDate(settledAt) || settledAt.slice(0, 7) !== periodId || sourceReference.length < 4) {
+    throw new HttpsError('invalid-argument', 'Provide a period, Stripe payout or balance reference, settlement date and source report reference.');
+  }
+  const grossPence = safePence(input.grossPence, 'Gross amount');
+  if (grossPence < 1) throw new HttpsError('invalid-argument', 'A settled Stripe entry must contain positive gross receipts.');
+  const refundPence = safePence(input.refundPence, 'Refunds');
+  const chargebackPence = safePence(input.chargebackPence, 'Chargebacks');
+  const processorFeePence = safePence(input.processorFeePence, 'Processor fees');
+  const vatPence = safePence(input.vatPence, 'VAT');
+  const otherDeductionsPence = safePence(input.otherDeductionsPence ?? 0, 'Other deductions');
+  let eligibleNetRevenuePence: number;
+  try {
+    eligibleNetRevenuePence = calculateEligibleNetRevenuePence({
+      grossPence, refundPence, chargebackPence, processorFeePence, vatPence, otherDeductionsPence,
+    });
+  } catch (error) {
+    throw new HttpsError('invalid-argument', error instanceof Error ? error.message : 'Invalid settlement deductions.');
+  }
+  const settlementId = settlementDocumentId(provider, externalId);
+  const ref = revenueSettlementRef(settlementId);
+  await db.runTransaction(async (tx) => {
+    const [existing, payoutPeriod, control] = await Promise.all([
+      tx.get(ref), tx.get(creatorPayoutPeriodRef(periodId)), tx.get(financePeriodControlRef(periodId)),
+    ]);
+    if (payoutPeriod.exists || control.data()?.payoutPrepared === true) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
+    if (existing.exists) throw new HttpsError('already-exists', 'This Stripe settlement reference has already been recorded.');
+    tx.create(ref, {
+      settlementId, periodId, provider, externalId, settledAt, sourceReference,
+      grossPence, refundPence, chargebackPence, processorFeePence, vatPence,
+      otherDeductionsPence, eligibleNetRevenuePence,
+      status: 'pending_reconciliation',
+      recordedByAdminUserId: admin.uid,
+      recordedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(financePeriodControlRef(periodId), { revision: Number(control.data()?.revision ?? 0) + 1, payoutPrepared: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
+  return { recorded: true, settlementId, eligibleNetRevenuePence, status: 'pending_reconciliation' };
+});
+
+export const adminReconcileRevenueSettlement = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const settlementId = cleanText(input.settlementId, 80);
+  const reconciliationNote = cleanText(input.reconciliationNote, 1000);
+  if (!/^[a-f0-9]{64}$/.test(settlementId) || reconciliationNote.length < 8) {
+    throw new HttpsError('invalid-argument', 'A settlement and a reconciliation note are required.');
+  }
+  const ref = revenueSettlementRef(settlementId);
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const data = snapshot.data() ?? {};
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Revenue settlement not found.');
+    const periodId = String(data.periodId ?? '');
+    const [payoutPeriod, control] = await Promise.all([
+      tx.get(creatorPayoutPeriodRef(periodId)), tx.get(financePeriodControlRef(periodId)),
+    ]);
+    if (payoutPeriod.exists || control.data()?.payoutPrepared === true) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
+    if (data.status !== 'pending_reconciliation') throw new HttpsError('failed-precondition', 'Only pending settlements can be reconciled.');
+    tx.update(ref, {
+      status: 'reconciled', reconciliationNote,
+      reconciledByAdminUserId: admin.uid, reconciledAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(financePeriodControlRef(periodId), { revision: Number(control.data()?.revision ?? 0) + 1, payoutPrepared: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return { reconciled: true, settlementId, eligibleNetRevenuePence: data.eligibleNetRevenuePence };
+  });
+});
+
+export const adminListRevenueSettlements = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid finance period.');
+  const snapshot = await db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(501).get();
+  if (snapshot.size > 500) throw new HttpsError('resource-exhausted', 'This settlement register exceeds the safe 500-entry view. Contact Nightjar engineering for pagination.');
+  return { settlements: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
+export const adminRecordRevenueAdjustment = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const amountPence = Number(input.amountPence);
+  const reason = cleanText(input.reason, 1000);
+  const sourceReference = cleanText(input.sourceReference, 500);
+  if (!validCommitmentPeriodId(periodId) || !Number.isSafeInteger(amountPence) || amountPence === 0
+    || reason.length < 8 || sourceReference.length < 4) {
+    throw new HttpsError('invalid-argument', 'Provide a non-zero signed pence adjustment, reason and source reference.');
+  }
+  const adjustmentId = createHash('sha256').update(periodId + ':adjustment:' + sourceReference).digest('hex');
+  const ref = db.collection('financeRevenueAdjustments').doc(adjustmentId);
+  await db.runTransaction(async (tx) => {
+    const [existing, payoutPeriod, control] = await Promise.all([
+      tx.get(ref), tx.get(creatorPayoutPeriodRef(periodId)), tx.get(financePeriodControlRef(periodId)),
+    ]);
+    if (payoutPeriod.exists || control.data()?.payoutPrepared === true) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
+    if (existing.exists) throw new HttpsError('already-exists', 'This adjustment source reference has already been recorded.');
+    tx.create(ref, {
+      adjustmentId, periodId, amountPence, reason, sourceReference,
+      createdByAdminUserId: admin.uid, createdAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(financePeriodControlRef(periodId), { revision: Number(control.data()?.revision ?? 0) + 1, payoutPrepared: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
+  return { recorded: true, adjustmentId, amountPence };
+});
+
+export const adminListRevenueAdjustments = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid finance period.');
+  const snapshot = await db.collection('financeRevenueAdjustments').where('periodId', '==', periodId).limit(501).get();
+  if (snapshot.size > 500) throw new HttpsError('resource-exhausted', 'This adjustment register exceeds the safe 500-entry view. Contact Nightjar engineering for pagination.');
+  return { adjustments: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+});
+
+export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid monthly period.');
+  const financeControlRef = financePeriodControlRef(periodId);
+  const controlSnapshot = await financeControlRef.get();
+  const controlRevision = Number(controlSnapshot.data()?.revision ?? 0);
+  if (controlSnapshot.data()?.payoutPrepared === true) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
+  const [commitmentPeriod, settlements, adjustments, assignments, existingPayoutPeriod] = await Promise.all([
+    commitmentPeriodRef(periodId).get(),
+    db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(501).get(),
+    db.collection('financeRevenueAdjustments').where('periodId', '==', periodId).limit(501).get(),
+    db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5001).get(),
+    creatorPayoutPeriodRef(periodId).get(),
+  ]);
+  if (!commitmentPeriod.exists || commitmentPeriod.data()?.status !== 'closed') {
+    throw new HttpsError('failed-precondition', 'Close the commitment assessment period after all reviews before preparing compensation.');
+  }
+  if (existingPayoutPeriod.exists) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
+  if (settlements.size > 500 || adjustments.size > 500 || assignments.size > 5000) {
+    throw new HttpsError('resource-exhausted', 'This period exceeds the safe finance preparation limits. Contact Nightjar engineering before preparing compensation.');
+  }
+  if (!settlements.size || settlements.docs.some((doc) => doc.data().status !== 'reconciled')) {
+    throw new HttpsError('failed-precondition', 'Every Stripe settlement must be recorded and reconciled before calculating payouts.');
+  }
+  const settlementNetPence = settlements.docs.reduce((sum, doc) => {
+    const next = sum + safePence(doc.data().eligibleNetRevenuePence, 'Eligible net revenue');
+    if (!Number.isSafeInteger(next)) throw new HttpsError('failed-precondition', 'Reconciled settlement totals exceed the safe calculation range.');
+    return next;
+  }, 0);
+  const adjustmentNetPence = adjustments.docs.reduce((sum, doc) => {
+    const amount = Number(doc.data().amountPence ?? 0);
+    if (!Number.isSafeInteger(amount)) throw new HttpsError('failed-precondition', 'A revenue adjustment is invalid.');
+    const next = sum + amount;
+    if (!Number.isSafeInteger(next)) throw new HttpsError('failed-precondition', 'Revenue adjustment totals exceed the safe calculation range.');
+    return next;
+  }, 0);
+  const eligibleNetRevenuePence = settlementNetPence + adjustmentNetPence;
+  if (!Number.isSafeInteger(eligibleNetRevenuePence) || eligibleNetRevenuePence < 0) {
+    throw new HttpsError('failed-precondition', 'Reconciled revenue and adjustments must produce a non-negative safe total.');
+  }
+  const financePolicySnapshot = await db.collection('financePolicies')
+    .where('effectiveFrom', '<=', periodId + '-01').orderBy('effectiveFrom', 'desc').limit(1).get();
+  const policyDocument = financePolicySnapshot.docs[0];
+  if (!policyDocument) throw new HttpsError('failed-precondition', 'No finance allocation policy is effective for this period. Save a complete 100% allocation policy before preparing compensation.');
+  let financePolicy;
+  try {
+    const data = policyDocument.data();
+    financePolicy = validateFinanceAllocationPolicy({
+      subscriptionPricePence: safePence(data.subscriptionPricePence, 'Planning subscription price'),
+      creatorPoolPercent: Number(data.creatorPoolPercent),
+      nightjarPoolPercent: Number(data.nightjarPoolPercent),
+      ownerPoolPercent: Number(data.ownerPoolPercent),
+      taxReservePercent: Number(data.taxReservePercent),
+    });
+  } catch (error) {
+    throw new HttpsError('failed-precondition', error instanceof Error ? error.message : 'The effective finance policy is invalid.');
+  }
+  const financePoolAllocation = allocateFinanceRevenuePoolsPence(eligibleNetRevenuePence, financePolicy);
+  const creatorPoolPence = financePoolAllocation.creatorPoolPence;
+  const assignmentsByUser = new Map<string, Array<Record<string, any>>>();
+  for (const doc of assignments.docs) {
+    const data = doc.data();
+    const userId = cleanText(data.userId, 160);
+    if (!userId) continue;
+    const rows = assignmentsByUser.get(userId) ?? [];
+    rows.push(data);
+    assignmentsByUser.set(userId, rows);
+  }
+  const userIds = [...assignmentsByUser.keys()];
+  if (userIds.length > 450) throw new HttpsError('resource-exhausted', 'This period exceeds the single-transaction payout preparation limit. Contact Nightjar engineering before closing this period.');
+  const payoutPeriod = creatorPayoutPeriodRef(periodId);
+  const allocation = await db.runTransaction(async (tx) => {
+    const [existing, control] = await Promise.all([tx.get(payoutPeriod), tx.get(financeControlRef)]);
+    if (existing.exists || control.data()?.payoutPrepared === true) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
+    if (Number(control.data()?.revision ?? 0) !== controlRevision) {
+      throw new HttpsError('aborted', 'Revenue changed while this calculation was being prepared. Refresh the settlement register and try again.');
+    }
+    // Re-read every member account inside the payout transaction. Eligibility
+    // must reflect current account status and approved roles at ledger creation,
+    // not a potentially stale snapshot taken before this transaction began.
+    const accountSnapshots = await Promise.all(userIds.map((userId) => tx.get(accountRef(userId))));
+    const accountByUser = new Map(accountSnapshots.map((snapshot) => [snapshot.id, snapshot.data() ?? {}]));
+    const members: CreatorPoolMember[] = [];
+    const qualifyingRoleByUser = new Map<string, string>();
+    for (const userId of userIds) {
+      const account = accountByUser.get(userId) ?? {};
+      if (String(account.status ?? '') !== 'active') continue;
+      const approvedRoles = professionalRolesForAccount(account);
+      const userAssignments = assignmentsByUser.get(userId) ?? [];
+      const assessments: RoleCommitmentAssessment[] = userAssignments
+        .filter((assignment) => approvedRoles.includes(assignment.role as AccountRole) && isCommitmentRole(assignment.role))
+        .map((assignment) => ({
+          role: assignment.role,
+          assigned: true,
+          effective: true,
+          tasks: (Array.isArray(assignment.tasks) ? assignment.tasks : []).map((task: Record<string, any>) => ({
+            id: cleanText(task.id, 60), mandatory: task.mandatory === true, state: task.state,
+          })),
+          approvedException: assignment.approvedException === true,
+          exceptionReason: assignment.exceptionReason ?? null,
+        }));
+      const completedCommitmentRoles = assessments.filter((assessment) => evaluateRoleCommitments(assessment).qualifies).map((assessment) => assessment.role);
+      if (completedCommitmentRoles.length) qualifyingRoleByUser.set(userId, completedCommitmentRoles[0]);
+      members.push({ userId, accountStatus: 'active', approvedRoles, completedCommitmentRoles });
+    }
+    const calculated = allocateCreatorPool(creatorPoolPence, members);
+    tx.create(payoutPeriod, {
+      periodId, status: 'draft', currency: 'GBP',
+      eligibleNetRevenuePence, creatorPoolPercent: financePolicy.creatorPoolPercent, creatorPoolPence,
+      nightjarPoolPercent: financePolicy.nightjarPoolPercent,
+      nightjarPoolPence: financePoolAllocation.nightjarPoolPence,
+      ownerPoolPercent: financePolicy.ownerPoolPercent,
+      ownerPoolPence: financePoolAllocation.ownerPoolPence,
+      taxReservePercent: financePolicy.taxReservePercent,
+      taxReservePoolPence: financePoolAllocation.taxReservePoolPence,
+      subscriptionPricePence: financePolicy.subscriptionPricePence,
+      policyVersion: Number(policyDocument.data()?.version ?? 1),
+      policyEffectiveFrom: String(policyDocument.data()?.effectiveFrom ?? ''),
+      eligibleCreatorCount: calculated.eligibleCreatorCount,
+      totalAllocatedPence: calculated.totalAllocatedPence,
+      unallocatedCreatorPoolPence: calculated.unallocatedPence,
+      nonCreatorRemainderPence: eligibleNetRevenuePence - creatorPoolPence,
+      settlementIds: settlements.docs.map((doc) => doc.id),
+      adjustmentIds: adjustments.docs.map((doc) => doc.id),
+      preparedByAdminUserId: admin.uid,
+      preparedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(financeControlRef, { revision: controlRevision + 1, payoutPrepared: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    for (const payout of calculated.payouts) {
+      tx.create(creatorPayoutRef(periodId, payout.userId), {
+        periodId, userId: payout.userId, amountPence: payout.amountPence,
+        paidPence: 0, outstandingPence: payout.amountPence,
+        qualifyingRole: qualifyingRoleByUser.get(payout.userId) ?? null,
+        status: 'pending', createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    return calculated;
+  });
+  return {
+    prepared: true, periodId, eligibleNetRevenuePence, creatorPoolPercent: financePolicy.creatorPoolPercent,
+    nightjarPoolPercent: financePolicy.nightjarPoolPercent,
+    nightjarPoolPence: financePoolAllocation.nightjarPoolPence,
+    ownerPoolPercent: financePolicy.ownerPoolPercent,
+    ownerPoolPence: financePoolAllocation.ownerPoolPence,
+    taxReservePercent: financePolicy.taxReservePercent,
+    taxReservePoolPence: financePoolAllocation.taxReservePoolPence,
+    subscriptionPricePence: financePolicy.subscriptionPricePence,
+    policyVersion: Number(policyDocument.data()?.version ?? 1),
+    policyEffectiveFrom: String(policyDocument.data()?.effectiveFrom ?? ''),
+    creatorPoolPence, eligibleCreatorCount: allocation.eligibleCreatorCount,
+    totalAllocatedPence: allocation.totalAllocatedPence,
+    unallocatedCreatorPoolPence: allocation.unallocatedPence,
+    nonCreatorRemainderPence: eligibleNetRevenuePence - creatorPoolPence,
+    payouts: allocation.payouts,
+  };
+});
+
+export const adminGetCreatorPayoutPeriod = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid payout period.');
+  const ref = creatorPayoutPeriodRef(periodId);
+  const [period, payouts] = await Promise.all([ref.get(), ref.collection('payouts').orderBy('userId').limit(500).get()]);
+  if (!period.exists) throw new HttpsError('not-found', 'Creator Pool calculation not found.');
+  return {
+    period: { periodId, ...period.data() },
+    payouts: await Promise.all(payouts.docs.map(async (doc) => ({ userId: doc.id, displayName: (await accountPresentation(doc.id)).displayName, ...doc.data() }))),
+  };
+});
+
+export const adminApproveCreatorPayoutPeriod = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid payout period.');
+  const ref = creatorPayoutPeriodRef(periodId);
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Creator Pool calculation not found.');
+    if (snapshot.data()?.status !== 'draft') throw new HttpsError('failed-precondition', 'Only a draft Creator Pool calculation can be approved.');
+    tx.update(ref, { status: 'approved', approvedByAdminUserId: admin.uid, approvedAt: FieldValue.serverTimestamp() });
+    return { approved: true, periodId };
+  });
+});
+
+export const adminRecordCreatorPayment = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const userId = cleanText(input.userId, 160);
+  const amountPence = safePence(input.amountPence, 'Payment amount');
+  const reference = cleanText(input.reference, 160);
+  const paidAt = cleanText(input.paidAt, 10);
+  if (!validCommitmentPeriodId(periodId) || !validCommitmentDocId(userId) || amountPence < 1
+    || reference.length < 4 || !validIsoCalendarDate(paidAt)) {
+    throw new HttpsError('invalid-argument', 'Provide a period, member, positive payment amount, payment reference and payment date.');
+  }
+  const periodRef = creatorPayoutPeriodRef(periodId);
+  const payoutRef = creatorPayoutRef(periodId, userId);
+  const paymentId = createHash('sha256').update(periodId + ':' + userId + ':' + reference).digest('hex');
+  const paymentRef = periodRef.collection('payments').doc(paymentId);
+  return db.runTransaction(async (tx) => {
+    const [periodSnap, payoutSnap, paymentSnap] = await Promise.all([tx.get(periodRef), tx.get(payoutRef), tx.get(paymentRef)]);
+    const period = periodSnap.data() ?? {};
+    const payout = payoutSnap.data() ?? {};
+    if (!periodSnap.exists || period.status !== 'approved') throw new HttpsError('failed-precondition', 'Approve the payout period before recording payments.');
+    if (!payoutSnap.exists) throw new HttpsError('not-found', 'Creator payout not found.');
+    if (paymentSnap.exists) {
+      if (!isSameManualPayment(paymentSnap.data() ?? {}, { periodId, userId, amountPence, reference, paidAt })) {
+        throw new HttpsError('already-exists', 'This payment reference is already recorded with different details. Use a new reference for a correction.');
+      }
+      return { recorded: true, duplicate: true, paymentId };
+    }
+    const outstanding = safePence(payout.outstandingPence, 'Outstanding amount');
+    if (amountPence > outstanding) throw new HttpsError('failed-precondition', 'Payment exceeds the outstanding balance.');
+    const nextPaid = safePence(safePence(payout.paidPence, 'Paid amount') + amountPence, 'Updated paid amount');
+    const nextOutstanding = outstanding - amountPence;
+    tx.create(paymentRef, {
+      paymentId, periodId, userId, amountPence, reference, paidAt,
+      recordedByAdminUserId: admin.uid, recordedAt: FieldValue.serverTimestamp(),
+    });
+    tx.update(payoutRef, {
+      paidPence: nextPaid, outstandingPence: nextOutstanding,
+      status: nextOutstanding === 0 ? 'paid' : 'part_paid',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { recorded: true, duplicate: false, paymentId, paidPence: nextPaid, outstandingPence: nextOutstanding };
+  });
+});
+
+
+const taxLedgerRef = (periodId: string) => db.collection('taxLedger').doc(periodId);
+
+export const adminSetTaxEstimate = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const category = cleanText(input.category, 40);
+  const allowedCategories = ['corporation_tax', 'income_tax', 'vat', 'paye_ni', 'other'];
+  const taxableBasePence = safePence(input.taxableBasePence, 'Taxable base');
+  const rateBasisPoints = Number(input.rateBasisPoints);
+  const sourceReference = cleanText(input.sourceReference, 300);
+  const note = cleanText(input.note, 1000);
+  if (!validCommitmentPeriodId(periodId)
+    || !allowedCategories.includes(category)
+    || taxableBasePence < 1
+    || !Number.isInteger(rateBasisPoints) || rateBasisPoints < 0 || rateBasisPoints > 10000
+    || sourceReference.length < 4 || note.length < 8) {
+    throw new HttpsError('invalid-argument', 'Provide a tax period, category, positive taxable base, explicit rate from 0% to 100%, source reference and estimate note.');
+  }
+  const estimate = calculateTaxEstimatePence({ taxableBasePence, rateBasisPoints });
+  const ledgerRef = taxLedgerRef(periodId);
+  const estimateId = createHash('sha256')
+    .update(periodId + ':estimate:' + category + ':' + sourceReference)
+    .digest('hex');
+  const estimateRef = ledgerRef.collection('estimates').doc(estimateId);
+  const estimateRecord = {
+    estimateId, periodId, category, taxableBasePence, rateBasisPoints,
+    estimatedTaxPence: estimate.estimatedTaxPence, sourceReference, note,
+    recordedByAdminUserId: admin.uid, recordedAt: FieldValue.serverTimestamp(),
+  };
+  const duplicate = await db.runTransaction(async (tx) => {
+    const existing = await tx.get(estimateRef);
+    if (existing.exists) {
+      const previous = existing.data() ?? {};
+      if (previous.taxableBasePence !== taxableBasePence
+        || previous.rateBasisPoints !== rateBasisPoints
+        || previous.estimatedTaxPence !== estimate.estimatedTaxPence
+        || previous.note !== note) {
+        throw new HttpsError('already-exists', 'This tax estimate source reference is already recorded with different assumptions. Use a new reference for a revised estimate.');
+      }
+      return true;
+    }
+    tx.create(estimateRef, estimateRecord);
+    return false;
+  });
+  return { saved: true, duplicate, periodId, ...estimate, category, sourceReference };
+});
+export const adminSetTaxReserve = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const reservePence = safePence(input.reservePence, 'Tax reserve');
+  const note = cleanText(input.note, 1000);
+  if (!validCommitmentPeriodId(periodId) || note.length < 8) {
+    throw new HttpsError('invalid-argument', 'Choose a period and document the reason for the cash reserve.');
+  }
+  const ref = taxLedgerRef(periodId);
+  const entryId = createHash('sha256').update(periodId + ':reserve:' + reservePence + ':' + note).digest('hex');
+  const entryRef = ref.collection('reserveEntries').doc(entryId);
+  const result = await db.runTransaction(async (tx) => {
+    const [ledgerSnap, entrySnap] = await Promise.all([tx.get(ref), tx.get(entryRef)]);
+    if (entrySnap.exists) {
+      const prior = entrySnap.data() ?? {};
+      if (prior.reservePence !== reservePence || prior.note !== note) {
+        throw new HttpsError('already-exists', 'This reserve entry reference conflicts with an existing record.');
+      }
+      return { duplicate: true };
+    }
+    tx.create(entryRef, {
+      entryId, periodId, reservePence, note,
+      recordedByAdminUserId: admin.uid, recordedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(ref, {
+      periodId, reservePence, reserveNote: note,
+      reserveSetByAdminUserId: admin.uid, reserveUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { duplicate: false };
+  });
+  return { saved: true, duplicate: result.duplicate, periodId, reservePence };
+});
+
+export const adminSetConfirmedTaxLiability = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const liabilityPence = safePence(input.liabilityPence, 'Confirmed tax liability');
+  const accountantReference = cleanText(input.accountantReference, 500);
+  if (!validCommitmentPeriodId(periodId) || accountantReference.length < 4) {
+    throw new HttpsError('invalid-argument', 'Provide the period and an accountant or HMRC source reference.');
+  }
+  const ref = taxLedgerRef(periodId);
+  const entryId = createHash('sha256').update(periodId + ':liability:' + liabilityPence + ':' + accountantReference).digest('hex');
+  const entryRef = ref.collection('liabilityEntries').doc(entryId);
+  const result = await db.runTransaction(async (tx) => {
+    const [existing, entry] = await Promise.all([tx.get(ref), tx.get(entryRef)]);
+    const paidPence = safePence(existing.data()?.paidPence ?? 0, 'Tax paid');
+    if (liabilityPence < paidPence) throw new HttpsError('failed-precondition', 'Confirmed liability cannot be lower than tax payments already recorded.');
+    if (entry.exists) {
+      const prior = entry.data() ?? {};
+      if (prior.liabilityPence !== liabilityPence || prior.accountantReference !== accountantReference) {
+        throw new HttpsError('already-exists', 'This liability confirmation conflicts with an existing record.');
+      }
+      return { duplicate: true };
+    }
+    tx.create(entryRef, {
+      entryId, periodId, liabilityPence, accountantReference,
+      recordedByAdminUserId: admin.uid, recordedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(ref, {
+      periodId, confirmedLiabilityPence: liabilityPence,
+      accountantReference, liabilityConfirmedByAdminUserId: admin.uid,
+      liabilityConfirmedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { duplicate: false };
+  });
+  return { saved: true, duplicate: result.duplicate, periodId, liabilityPence };
+});
+
+export const adminRecordTaxPayment = onCall({ region: REGION }, async (request) => {
+  const admin = requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const amountPence = safePence(input.amountPence, 'Tax payment');
+  const reference = cleanText(input.reference, 160);
+  const paidAt = cleanText(input.paidAt, 10);
+  if (!validCommitmentPeriodId(periodId) || amountPence < 1 || reference.length < 4
+    || !validIsoCalendarDate(paidAt)) {
+    throw new HttpsError('invalid-argument', 'Provide a period, positive payment, reference and payment date.');
+  }
+  const ledgerRef = taxLedgerRef(periodId);
+  const paymentId = createHash('sha256').update(periodId + ':tax:' + reference).digest('hex');
+  const paymentRef = ledgerRef.collection('payments').doc(paymentId);
+  return db.runTransaction(async (tx) => {
+    const [ledgerSnap, paymentSnap] = await Promise.all([tx.get(ledgerRef), tx.get(paymentRef)]);
+    const ledger = ledgerSnap.data() ?? {};
+    if (!ledgerSnap.exists || !Number.isSafeInteger(ledger.confirmedLiabilityPence)) {
+      throw new HttpsError('failed-precondition', 'An accountant-confirmed tax liability must be recorded before tax payments are reconciled.');
+    }
+    if (paymentSnap.exists) {
+      if (!isSameManualPayment(paymentSnap.data() ?? {}, { periodId, amountPence, reference, paidAt })) {
+        throw new HttpsError('already-exists', 'This tax payment reference is already recorded with different details. Use a new reference for a correction.');
+      }
+      return { recorded: true, duplicate: true, paymentId };
+    }
+    const paidPence = safePence(ledger.paidPence ?? 0, 'Tax paid');
+    const liabilityPence = safePence(ledger.confirmedLiabilityPence, 'Confirmed tax liability');
+    if (amountPence > liabilityPence - paidPence) throw new HttpsError('failed-precondition', 'Tax payment exceeds the outstanding confirmed liability.');
+    tx.create(paymentRef, {
+      paymentId, periodId, amountPence, reference, paidAt,
+      recordedByAdminUserId: admin.uid, recordedAt: FieldValue.serverTimestamp(),
+    });
+    const nextPaidPence = safePence(paidPence + amountPence, 'Updated tax paid amount');
+    tx.set(ledgerRef, {
+      paidPence: nextPaidPence,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { recorded: true, duplicate: false, paymentId, paidPence: nextPaidPence };
+  });
+});
+
+export const adminGetTaxLedger = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
+  if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid tax period.');
+  const ref = taxLedgerRef(periodId);
+  const [ledger, payments, estimates, reserveEntries, liabilityEntries] = await Promise.all([
+    ref.get(),
+    ref.collection('payments').orderBy('recordedAt', 'desc').limit(100).get(),
+    ref.collection('estimates').orderBy('recordedAt', 'desc').limit(100).get(),
+    ref.collection('reserveEntries').orderBy('recordedAt', 'desc').limit(100).get(),
+    ref.collection('liabilityEntries').orderBy('recordedAt', 'desc').limit(100).get(),
+  ]);
+  return {
+    ledger: ledger.exists ? { periodId, ...ledger.data() } : null,
+    payments: payments.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    estimates: estimates.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    reserveEntries: reserveEntries.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    liabilityEntries: liabilityEntries.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+  };
+});
+export const getMyCreatorCompensation = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const periods = await db.collection('creatorPayoutPeriods').orderBy('preparedAt', 'desc').limit(24).get();
+  const records = await Promise.all(periods.docs.map(async (doc) => {
+    const period = doc.data();
+    const payout = await creatorPayoutRef(doc.id, identity.uid).get();
+    if (!payout.exists) return null;
+    const payments = await doc.ref.collection('payments').where('userId', '==', identity.uid).limit(50).get();
+    return {
+      periodId: doc.id, periodStatus: period.status,
+      creatorPoolPercent: period.creatorPoolPercent,
+      eligibleCreatorCount: period.eligibleCreatorCount,
+      amountPence: payout.data()?.amountPence ?? 0,
+      paidPence: payout.data()?.paidPence ?? 0,
+      outstandingPence: payout.data()?.outstandingPence ?? 0,
+      status: payout.data()?.status ?? 'pending',
+      qualifyingRole: payout.data()?.qualifyingRole ?? null,
+      payments: payments.docs.map((payment) => ({
+        amountPence: payment.data().amountPence,
+        reference: payment.data().reference,
+        paidAt: payment.data().paidAt,
+      })),
+    };
+  }));
+  return { compensation: records.filter(Boolean) };
+});
+export const adminListCommitmentReviewQueue = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const openPeriods = await db.collection('commitmentPeriods').where('status', '==', 'open').limit(37).get();
+  if (openPeriods.size > 36) throw new HttpsError('resource-exhausted', 'More than 36 commitment periods are open. Close older periods before reviewing the queue.');
+  const assignmentSnapshots = await Promise.all(openPeriods.docs.map((period) =>
+    db.collection('commitmentAssignments').where('periodId', '==', period.id).limit(1001).get(),
+  ));
+  const oversizedPeriod = assignmentSnapshots.findIndex((snapshot) => snapshot.size > 1000);
+  if (oversizedPeriod >= 0) {
+    throw new HttpsError('resource-exhausted', 'The open commitment period ' + openPeriods.docs[oversizedPeriod].id + ' exceeds the safe 1,000-assignment review view. Contact Nightjar engineering for pagination.');
+  }
+  const assignmentDocs = assignmentSnapshots.flatMap((snapshot) => snapshot.docs);
+  const queueUserIds = [...new Set(assignmentDocs.map((doc) => cleanText(doc.data().userId, 160)).filter(Boolean))];
+  const presenterEntries = await Promise.all(queueUserIds.map(async (userId) => [userId, await accountPresentation(userId)] as const));
+  const presenterByUser = new Map(presenterEntries);
+  const queue = await Promise.all(assignmentDocs.map(async (doc) => {
+    const data = doc.data();
+    const pendingTasks = (Array.isArray(data.tasks) ? data.tasks : [])
+      .filter((task: Record<string, any>) => task.state === 'submitted')
+      .map((task: Record<string, any>) => ({ id: task.id, title: task.title, evidenceIds: task.latestEvidenceId ? [task.latestEvidenceId] : (Array.isArray(task.evidenceIds) ? task.evidenceIds.slice(-1) : []) }));
+    const evidence = await Promise.all(pendingTasks.flatMap((task) => task.evidenceIds.map(async (evidenceId: string) => {
+      const evidenceDoc = await doc.ref.collection('evidence').doc(evidenceId).get();
+      const item = evidenceDoc.data() ?? {};
+      return { taskId: task.id, evidenceId, note: cleanText(item.note, 2000), evidenceUrl: cleanText(item.evidenceUrl, 500) || null, submittedAt: toIso(item.submittedAt) };
+    })));
+    const presenter = presenterByUser.get(String(data.userId ?? ''));
+    return { assignmentId: doc.id, userId: data.userId, displayName: presenter?.displayName ?? 'Nightjar member', periodId: data.periodId, role: data.role, pendingTasks, evidence, exceptionApproved: data.approvedException === true && cleanText(data.exceptionReason, 1000).length >= 8, exceptionReason: cleanText(data.exceptionReason, 1000) || null };
+  })).then((items) => items.filter(Boolean));
+  return { queue };
+});;
+
+
 
 const profileTagUsageCollection = () => db.collection('profileTagCreatorUsage');
 
@@ -2061,6 +3156,19 @@ export const saveMyProfile = onCall({ region: REGION }, async (request) => {
   };
 });
 
+const profileTypePublicToAudience = (
+  accountData: Record<string, any>,
+  profileData: Record<string, any> | undefined,
+  type: NightjarProfileType,
+  directory = false,
+) => {
+  if (!profileData || profileData.publicProfile === false) return false;
+  const approvedRoles = professionalRolesForAccount(accountData);
+  const settings = normaliseProfileTypeSettings(profileData.profileTypeSettings);
+  const hasExplicitSettings = Number(profileData.profileTypeSettingsRevision ?? 0) > 0;
+  return resolveVisibleProfileTypes(approvedRoles, settings, hasExplicitSettings, { directory }).includes(type);
+};
+
 const publicProfilePayload = (
   userId: string,
   accountData: Record<string, any>,
@@ -2068,15 +3176,28 @@ const publicProfilePayload = (
 ) => {
   const nightjarTeam = accountData.role === 'admin';
   if (!data || (nightjarTeam ? data.adminCommunityVisible !== true : data.publicProfile === false)) return null;
-  const roles = professionalRolesForAccount(accountData);
+  const approvedRoles = professionalRolesForAccount(accountData);
+  const settings = normaliseProfileTypeSettings(data.profileTypeSettings);
+  const hasExplicitSettings = Number(data.profileTypeSettingsRevision ?? 0) > 0;
+  // Directory results include public profiles only. Unlisted profiles remain
+  // reachable by direct profile URL through getPublicProfile, not discovery.
+  const publicTypes = resolveVisibleProfileTypes(approvedRoles, settings, hasExplicitSettings, { directory: true });
+  const publicProfessionalRoles = publicTypes.filter((type) => type !== 'listener') as AccountRole[];
   const activeRole = cleanText(accountData.role, 30);
-  const publicRole = activeRole === 'listener' || roles.includes(activeRole as AccountRole)
+  const publicRole = publicTypes.includes(activeRole as NightjarProfileType)
     ? activeRole
-    : (roles[0] ?? 'listener');
+    : (publicTypes.find((type) => type !== 'listener') ?? 'listener');
+  const storedRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+  const publicRoleProfiles = Object.fromEntries(
+    publicTypes
+      .map((type) => [type, storedRoleProfiles[type]])
+      .filter(([, value]) => value && typeof value === 'object'),
+  );
   return {
     userId,
     role: publicRole,
-    roles: nightjarTeam ? ['listener'] : ['listener', ...roles],
+    roles: nightjarTeam ? ['listener'] : publicTypes,
+    profileTypes: publicTypes,
     nightjarTeam,
     displayName: data.displayName ?? 'Nightjar member',
     name: data.displayName ?? 'Nightjar member',
@@ -2086,8 +3207,8 @@ const publicProfilePayload = (
     welcomeMessage: data.welcomeMessage ?? null,
     pronouns: data.pronouns ?? null,
     avatarUrl: data.avatarStatus === 'approved' ? data.avatarUrl ?? null : null,
-      bannerUrl: data.bannerStatus === 'approved' ? data.bannerUrl ?? null : null,
-      ...publicProfileImageFrames(data),
+    bannerUrl: data.bannerStatus === 'approved' ? data.bannerUrl ?? null : null,
+    ...publicProfileImageFrames(data),
     avatarStatus: data.avatarStatus ?? null,
     avatarInitials: data.avatarInitials ?? null,
     initials: data.avatarInitials ?? null,
@@ -2096,8 +3217,16 @@ const publicProfilePayload = (
     favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
     favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
     favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
-    roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
-    ...roleProfileSlice(data, publicRole),
+    roleProfiles: publicRoleProfiles,
+    ...roleProfileSlice({
+      ...data,
+      roleProfiles: publicRoleProfiles,
+      ...(publicRole === 'listener' ? {
+        roleFocus: [], roleSpecialties: [], roleSecondary: [],
+        roleAvailability: null, roleHeadline: null, roleBio: null,
+        roleDetailOne: null, roleDetailTwo: null, portfolioNote: null,
+      } : {}),
+    }, publicRole),
   };
 };
 
@@ -2180,6 +3309,10 @@ export const listCreators = onCall({ region: REGION }, async (request) => {
     .filter((doc) => doc.data().status === 'active' && professionalRolesForAccount(doc.data() ?? {}).includes('creator'))
     .map((doc) => {
       const profileData = profileByUser.get(doc.id) ?? {};
+      const profileSettings = normaliseProfileTypeSettings(profileData.profileTypeSettings);
+      const hasExplicitSettings = Number(profileData.profileTypeSettingsRevision ?? 0) > 0;
+      const creatorSetting = profileSettings.creator;
+      if (hasExplicitSettings && !(creatorSetting?.enabled === true && creatorSetting.visibility === 'public')) return null;
       const base = publicProfilePayload(doc.id, doc.data() ?? {}, profileData);
       if (!base) return null;
       const seconds = verified.byCreator.get(doc.id) ?? 0;
@@ -2245,11 +3378,20 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       const nightjarTeam = accountData.role === 'admin';
       if (!data || (nightjarTeam ? data.adminCommunityVisible !== true : data.publicProfile === false)) return null;
       const professionalRoles = professionalRolesForAccount(accountData);
+      const profileSettings = normaliseProfileTypeSettings(data.profileTypeSettings);
+      const hasExplicitSettings = Number(data.profileTypeSettingsRevision ?? 0) > 0;
+      const publicProfileTypes = resolveVisibleProfileTypes(professionalRoles, profileSettings, hasExplicitSettings, { directory: true });
       const activeRole = cleanText(accountData.role, 30);
-      const role = activeRole === 'listener' || professionalRoles.includes(activeRole as AccountRole)
+      const role = publicProfileTypes.includes(activeRole as NightjarProfileType)
         ? activeRole
-        : (professionalRoles[0] ?? 'listener');
-      const roleSlice = roleProfileSlice(data, role);
+        : (publicProfileTypes.find((type) => type !== 'listener') ?? 'listener');
+      const storedRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+      const publicRoleProfiles = Object.fromEntries(publicProfileTypes.map((type) => [type, storedRoleProfiles[type]]).filter(([, value]) => value && typeof value === 'object'));
+      const roleSlice = roleProfileSlice({
+        ...data,
+        roleProfiles: publicRoleProfiles,
+        ...(role === 'listener' ? { roleFocus: [], roleSpecialties: [], roleSecondary: [], roleAvailability: null, roleDetailOne: null, roleDetailTwo: null, portfolioNote: null } : {}),
+      }, role);
       const releaseCount = releaseCountByCreator.get(doc.id) ?? 0;
       const publishedWorkCount = publishedScriptsByWriter.get(doc.id) ?? 0;
       const creditedReleaseCount = creditCountByUser.get(doc.id) ?? 0;
@@ -2257,7 +3399,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
       return {
         userId: doc.id,
         role,
-        roles: nightjarTeam ? ['listener'] : ['listener', ...professionalRoles],
+        roles: nightjarTeam ? ['listener'] : publicProfileTypes,
         approvedProfessionalRoles: nightjarTeam ? [] : professionalRoles,
         nightjarTeam,
         displayName: data.displayName ?? 'Nightjar member',
@@ -2278,7 +3420,7 @@ export const listPublicProfiles = onCall({ region: REGION }, async (request) => 
         favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
         favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
         favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
-        roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
+        roleProfiles: publicRoleProfiles,
         ...roleSlice,
         releaseCount,
         publishedWorkCount,
@@ -2348,10 +3490,20 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     })
     .map(doc => ({ id:doc.id, releaseId:doc.data().releaseId, releaseRole:doc.data().releaseRole }));
   const professionalRoles = professionalRolesForAccount(accountData ?? {});
+  if (nightjarTeam) professionalRoles.splice(0, professionalRoles.length);
+  const storedProfileSettings = normaliseProfileTypeSettings(data.profileTypeSettings);
+  const hasExplicitProfileSettings = Number(data.profileTypeSettingsRevision ?? 0) > 0;
+  const publicProfileTypes = resolveVisibleProfileTypes(
+    professionalRoles,
+    storedProfileSettings,
+    hasExplicitProfileSettings,
+    { ownerPreview },
+  );
+  const publicProfessionalRoles = publicProfileTypes.filter((type) => type !== 'listener') as AccountRole[];
   const activePublicRole = cleanText(accountData?.role, 30);
-  const role = activePublicRole === 'listener' || professionalRoles.includes(activePublicRole as AccountRole)
+  const role = publicProfileTypes.includes(activePublicRole as NightjarProfileType)
     ? activePublicRole
-    : (professionalRoles[0] ?? 'listener');
+    : (publicProfileTypes.find((type) => type !== 'listener') ?? 'listener');
   const linksSnapshot = await socialLinkCollection(userId).limit(100).get();
   const publicSocialLinks = linksSnapshot.docs.filter(doc=>!doc.data().deleted).slice(0,12).map((doc)=>{
     const link=socialLinkPayload(doc.id,doc.data());
@@ -2392,7 +3544,12 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       .sort((a,b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
   }
 
-  const publicRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+  const storedRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+  const publicRoleProfiles = Object.fromEntries(
+    publicProfileTypes
+      .map((type) => [type, storedRoleProfiles[type]])
+      .filter(([, value]) => value && typeof value === 'object'),
+  );
   const listenerFeaturedIds = cleanStringList(
     publicRoleProfiles.listener?.featuredPortfolioIds ?? (!professionalRoles.length ? data.featuredPortfolioIds : []),
     6,
@@ -2424,6 +3581,9 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
     6,
   );
   const selectedPortfolioIds = rolePortfolioIds(role);
+  const selectedPublicRoleProfile = (publicRoleProfiles[role] && typeof publicRoleProfiles[role] === 'object')
+    ? publicRoleProfiles[role]
+    : (role === 'listener' ? {} : data);
   const orderForRole = <T extends { id: string }>(items: T[], targetRole: string) => {
     const ids = rolePortfolioIds(targetRole);
     if (!ids.length) return items.slice(0, 3);
@@ -2474,6 +3634,7 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       // Professional approval originates from account privileges, never
       // release credits or self-authored profile fields. Applies to ALL tabs.
       approvedProfessionalRoles: professionalRoles,
+      profileTypes: publicProfileTypes.map((type) => ({ type, visibility: ownerPreview ? (storedProfileSettings[type]?.visibility ?? 'private') : (storedProfileSettings[type]?.visibility ?? 'public') })),
       verifiedCredits,
       bio: data.bio ?? null,
       welcomeMessage: data.welcomeMessage ?? null,
@@ -2489,13 +3650,13 @@ export const getPublicProfile = onCall({ region: REGION }, async (request) => {
       favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
       favouriteTropes: Array.isArray(data.favouriteTropes) ? data.favouriteTropes : [],
       favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
-      roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
-      roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
-      roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
-      roleAvailability: data.roleAvailability ?? null,
-      roleDetailOne: data.roleDetailOne ?? null,
-      roleDetailTwo: data.roleDetailTwo ?? null,
-      portfolioNote: data.portfolioNote ?? null,
+      roleFocus: Array.isArray(selectedPublicRoleProfile.roleFocus) ? selectedPublicRoleProfile.roleFocus : [],
+      roleSpecialties: Array.isArray(selectedPublicRoleProfile.roleSpecialties) ? selectedPublicRoleProfile.roleSpecialties : [],
+      roleSecondary: Array.isArray(selectedPublicRoleProfile.roleSecondary) ? selectedPublicRoleProfile.roleSecondary : [],
+      roleAvailability: selectedPublicRoleProfile.roleAvailability ?? null,
+      roleDetailOne: selectedPublicRoleProfile.roleDetailOne ?? null,
+      roleDetailTwo: selectedPublicRoleProfile.roleDetailTwo ?? null,
+      portfolioNote: selectedPublicRoleProfile.portfolioNote ?? null,
       roleProfiles: data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {},
       featuredPortfolioIds: selectedPortfolioIds,
       featuredWork,
@@ -2538,7 +3699,8 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
 
   const profile = await profileRef(creatorUserId).get();
   const data = profile.data();
-  if (!data || data.publicProfile === false) throw new HttpsError('not-found', 'Creator profile not found.');
+  if (!data) throw new HttpsError('not-found', 'Creator profile not found.');
+  if (!profileTypePublicToAudience(account.data() ?? {}, data, 'creator', false)) throw new HttpsError('not-found', 'Creator profile not found.');
   const [viewerSubscription, betaTester] = await Promise.all([
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
     betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
@@ -2551,7 +3713,10 @@ export const getCreatorProfile = onCall({ region: REGION }, async (request) => {
     .sort((a, b) => String(b.releaseDate ?? '').localeCompare(String(a.releaseDate ?? '')));
 
   const completedCollaborations = await completedCollaborationCountFor(creatorUserId);
-  const creatorRoleProfile = roleProfileSlice(data, 'creator');
+  const creatorSettings = normaliseProfileTypeSettings(data.profileTypeSettings);
+  const creatorVisibleTypes = resolveVisibleProfileTypes(professionalRolesForAccount(account.data() ?? {}), creatorSettings, Number(data.profileTypeSettingsRevision ?? 0) > 0, {});
+  const creatorRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+  const creatorRoleProfile = roleProfileSlice({ ...data, roleProfiles: Object.fromEntries(creatorVisibleTypes.map((type) => [type, creatorRoleProfiles[type]]).filter(([, value]) => value && typeof value === 'object')) }, 'creator');
 
   return {
     creator: {
@@ -4852,7 +6017,8 @@ const spotlightForRole = async (role: 'creator' | 'writer' | 'editor' | 'artist'
       .map(async (doc) => {
         const profile = await profileRef(doc.id).get();
         const data = profile.data();
-        if (!data || data.publicProfile === false) return null;
+        if (!data) return null;
+        if (!profileTypePublicToAudience(doc.data() ?? {}, data, role, true)) return null;
         return {
           kind: role,
           name: data.displayName ?? (role === 'editor' ? 'Nightjar Audio Editor' : role === 'artist' ? 'Nightjar Artist' : 'Nightjar member'),
@@ -11196,8 +12362,19 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
       const profile = await profileRef(doc.id).get();
       const data = profile.data();
       if (!data || data.publicProfile === false) return null;
-      const roles = professionalRolesForAccount(doc.data() ?? {});
+      const approvedRoles = professionalRolesForAccount(doc.data() ?? {});
+      const visibleTypes = resolveVisibleProfileTypes(
+        approvedRoles,
+        normaliseProfileTypeSettings(data.profileTypeSettings),
+        Number(data.profileTypeSettingsRevision ?? 0) > 0,
+        { directory: true },
+      );
+      const roles = visibleTypes.filter((type) => type !== 'listener');
+      if (!roles.length) return null;
       const role = roles[0] ?? null;
+      const storedRoleProfiles = data.roleProfiles && typeof data.roleProfiles === 'object' ? data.roleProfiles : {};
+      const visibleRoleProfiles = Object.fromEntries(roles.map((type) => [type, storedRoleProfiles[type]]).filter(([, value]) => value && typeof value === 'object'));
+      const roleSlice = roleProfileSlice({ ...data, roleProfiles: visibleRoleProfiles }, role);
       return {
         userId: doc.id,
         role,
@@ -11209,10 +12386,10 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
       bannerUrl: data.bannerStatus === 'approved' ? data.bannerUrl ?? null : null,
         favouriteTags: Array.isArray(data.favouriteTags) ? data.favouriteTags : [],
         favouriteCategories: Array.isArray(data.favouriteCategories) ? data.favouriteCategories : [],
-        roleFocus: Array.isArray(data.roleFocus) ? data.roleFocus : [],
-        roleSpecialties: Array.isArray(data.roleSpecialties) ? data.roleSpecialties : [],
-        roleSecondary: Array.isArray(data.roleSecondary) ? data.roleSecondary : [],
-        roleAvailability: data.roleAvailability ?? null,
+        roleFocus: Array.isArray(roleSlice.roleFocus) ? roleSlice.roleFocus : [],
+        roleSpecialties: Array.isArray(roleSlice.roleSpecialties) ? roleSlice.roleSpecialties : [],
+        roleSecondary: Array.isArray(roleSlice.roleSecondary) ? roleSlice.roleSecondary : [],
+        roleAvailability: roleSlice.roleAvailability ?? null,
         completedCollaborations: completedByUser.get(doc.id) ?? 0,
         activityBadges: publicActivityBadges(String(role ?? ''), {
           releases: releaseCountByCreator.get(doc.id) ?? 0,
@@ -15088,7 +16265,7 @@ export const getVoiceCallingCard = onCall({ region: REGION }, async (request) =>
   if (!creatorId) throw new HttpsError('invalid-argument','Creator required.');
   const [account, profile] = await Promise.all([accountRef(creatorId).get(), profileRef(creatorId).get()]);
   if (account.data()?.status !== 'active' || !professionalRolesForAccount(account.data() ?? {}).includes('creator')
-    || !profile.exists || (profile.data()?.publicProfile === false && identity.uid !== creatorId)) return { release: null, releaseId: null };
+    || !profile.exists || (!profileTypePublicToAudience(account.data() ?? {}, profile.data(), 'creator', false) && identity.uid !== creatorId)) return { release: null, releaseId: null };
   const releaseId = cleanText(profile.data()?.voiceCallingCardReleaseId, 160);
   if (!releaseId) return { release: null, releaseId: null };
   const doc = await releaseRef(releaseId).get();

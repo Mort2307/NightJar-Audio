@@ -1925,6 +1925,45 @@ jobs:
           gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Owner-only private profile moderation backend verified before Hosting."
 
+      # The three contributor systems require their exact callable backend to be live
+      # before Hosting exposes the new profile, commitment and compensation screens.
+      # Split the 31 exports into two batches because the backend workflow caps
+      # each selected deployment at 20 functions.
+      - name: Deploy profile, commitment and compensation backend before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-three-systems-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/nightjar-integrated-release-contracts.mjs
+          deploy_selected_batch() {
+            local names="$1" start run_id
+            start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+              -f ref=main \
+              -f 'inputs[scope]=functions:selected' \
+              -f "inputs[function_names]=$names" \
+              -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+            run_id=""
+            for attempt in $(seq 1 48); do
+              run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+                | jq -r --arg head "${GITHUB_SHA}" --arg start "$start" \
+                  '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+              if [[ -n "$run_id" ]]; then break; fi
+              sleep 10
+            done
+            if [[ -z "$run_id" ]]; then
+              echo "::error::Contributor systems backend batch was not observed; Hosting blocked."
+              exit 1
+            fi
+            echo "Contributor systems backend batch: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${run_id}"
+            gh run watch "$run_id" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          }
+          deploy_selected_batch 'getMyProfileTypeSettings,saveMyProfileTypeSettings,adminCreateCommitmentTemplate,adminCreateCommitmentPeriod,adminAssignCommitmentTemplate,getMyCommitments,submitCommitmentEvidence,adminReviewCommitmentTask,adminSetCommitmentException,getMyCommitmentEligibility,adminListCommitmentTemplates,adminListCommitmentPeriods,adminCloseCommitmentPeriod,adminCreateFinancePolicy,adminListFinancePolicies,adminRecordRevenueSettlement'
+          deploy_selected_batch 'adminReconcileRevenueSettlement,adminListRevenueSettlements,adminRecordRevenueAdjustment,adminListRevenueAdjustments,adminPrepareCreatorPayoutPeriod,adminGetCreatorPayoutPeriod,adminApproveCreatorPayoutPeriod,adminRecordCreatorPayment,adminSetTaxEstimate,adminSetTaxReserve,adminSetConfirmedTaxLiability,adminRecordTaxPayment,adminGetTaxLedger,getMyCreatorCompensation,adminListCommitmentReviewQueue'
+          echo "All 31 profile, commitment and compensation functions verified before Hosting."
+
       - name: Deploy Hosting live
         id: deploy
         uses: FirebaseExtended/action-hosting-deploy@v0

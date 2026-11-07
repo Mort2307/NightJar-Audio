@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Bell, Check, Heart, ImagePlus, ShieldCheck, Sparkles, Star, UserCircle2 } from 'lucide-react';
 import SearchableMultiSelect from './SearchableMultiSelect';
 import { nightjarHandleError, normaliseNightjarHandle, suggestNightjarHandle } from '../platform/profile-handle';
@@ -9,9 +9,11 @@ import ContextHelp from './ContextHelp';
 import LegalAgreementPanel from './LegalAgreementPanel';
 import ProfileSectionBoundary from './ProfileSectionBoundary';
 import ImageFramingEditor from './ImageFramingEditor';
+import MyCommitmentsPanel from './MyCommitmentsPanel';
 import FramedApprovedImage from './FramedApprovedImage';
 import type {ImageFraming} from '../platform/image-framing';
 import { PROFILE_CATEGORY_OPTIONS, PROFILE_TROPE_OPTIONS } from '../data/nightjarTaxonomy';
+import { nightjarAccount, type NightjarProfileType, type NightjarProfileTypeSettings, type NightjarProfileVisibility } from '../platform/firebase-account';
 
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 
@@ -40,6 +42,20 @@ type Props = {
   simulationMode?:boolean;
   onOpenEditorStudio?: () => void;
 };
+
+const PROFILE_TYPE_LABELS: Record<NightjarProfileType, string> = {
+  listener: 'Listener',
+  creator: 'VA Creator',
+  writer: 'Writer',
+  editor: 'Audio Editor',
+  artist: 'Artist',
+};
+const PROFILE_TYPE_ORDER: NightjarProfileType[] = ['listener', 'creator', 'writer', 'editor', 'artist'];
+const defaultProfileTypeSettings = (roles: AccountRole[] | undefined, activeRole: AccountRole | null): NightjarProfileTypeSettings =>
+  Object.fromEntries(PROFILE_TYPE_ORDER.map((type) => {
+    const approved = type === 'listener' || (Array.isArray(roles) ? roles.includes(type) : activeRole === type);
+    return [type, { type, enabled: approved, visibility: approved ? 'public' : 'private', schemaVersion: 1 as const }];
+  })) as NightjarProfileTypeSettings;
 
 const roleLabel = (role: AccountRole | null) => {
   if (role === 'creator') return 'VA Creator';
@@ -82,6 +98,63 @@ export default function UserProfileStudio({
 }: Props) {
   const [framingUpload,setFramingUpload]=useState<{file:File;shape:'portrait'|'banner'}|null>(null);
   const [approvedFraming,setApprovedFraming]=useState<{kind:'avatar'|'banner';assetId:string;src:string}|null>(null);
+  const [profileTypeSettings, setProfileTypeSettings] = useState<NightjarProfileTypeSettings>(() => defaultProfileTypeSettings(roles, role));
+  const [profileTypeRevision, setProfileTypeRevision] = useState(0);
+  const [profileTypeLoading, setProfileTypeLoading] = useState(!simulationMode);
+  const [profileTypeSaving, setProfileTypeSaving] = useState(false);
+  const [profileTypeDirty, setProfileTypeDirty] = useState(false);
+  const [profileTypeError, setProfileTypeError] = useState('');
+  useEffect(() => {
+    if (simulationMode) { setProfileTypeLoading(false); return; }
+    let active = true;
+    nightjarAccount.getProfileTypeSettings().then((result) => {
+      if (!active) return;
+      setProfileTypeRevision(result.revision);
+      setProfileTypeSettings(result.revision > 0
+        ? result.settings
+        : defaultProfileTypeSettings(roles, role));
+      setProfileTypeDirty(false);
+      setProfileTypeError('');
+    }).catch(() => {
+      if (active) setProfileTypeError('Profile visibility settings could not be loaded. Your existing profile has not been changed.');
+    }).finally(() => { if (active) setProfileTypeLoading(false); });
+    return () => { active = false; };
+  }, [simulationMode, role, roles?.join('|')]);
+  const updateProfileType = (type: NightjarProfileType, patch: { enabled?: boolean; visibility?: NightjarProfileVisibility }) => {
+    setProfileTypeSettings((current) => ({
+      ...current,
+      [type]: {
+        type,
+        enabled: patch.enabled ?? current[type]?.enabled ?? false,
+        visibility: patch.visibility ?? current[type]?.visibility ?? 'private',
+        schemaVersion: 1,
+      },
+    }));
+    setProfileTypeDirty(true);
+  };
+  const saveProfileTypeSettings = async () => {
+    if (simulationMode || profileTypeSaving || !profileTypeDirty) return;
+    setProfileTypeSaving(true);
+    setProfileTypeError('');
+    try {
+      const result = await nightjarAccount.saveProfileTypeSettings(profileTypeSettings, profileTypeRevision);
+      if (!result.saved) {
+        setProfileTypeRevision(result.revision);
+        setProfileTypeSettings(result.settings);
+        setProfileTypeDirty(false);
+        setProfileTypeError('These settings changed on another device. The latest saved version has been loaded; review and edit again if needed.');
+      } else {
+        setProfileTypeRevision(result.revision);
+        setProfileTypeSettings(result.settings);
+        setProfileTypeDirty(false);
+        notify('Profile visibility settings saved.');
+      }
+    } catch (error) {
+      setProfileTypeError(error instanceof Error ? error.message : 'Profile visibility settings could not be saved.');
+    } finally {
+      setProfileTypeSaving(false);
+    }
+  };
   const handleProblem = nightjarHandleError(profile.handle);
   const suggestedHandle = handleProblem ? suggestNightjarHandle(profile.handle) : '';
   const displayName = String(profile.displayName || userName || userEmail?.split('@')[0] || 'Nightjar member');
@@ -121,6 +194,27 @@ export default function UserProfileStudio({
         <small>{profileCompletion >= 85 ? 'Your profile feels established.' : profileCompletion >= 60 ? 'Looking good — a few details will make it richer.' : 'Build this into a profile people remember.'}</small>
       </div>
     </section>
+
+    <section className="panel nj-profile-types-panel">
+      <div className="premium-user-card-head"><div><span className="mini-label">PROFILE TYPES</span><h2>One account. Your creative identities.</h2><p>Choose which approved profile sections are active and how each is shared. Professional approval is managed separately.</p></div><ShieldCheck size={18}/></div>
+      {profileTypeLoading ? <p role="status">Loading profile visibility…</p> : <>
+        <div className="nj-profile-types-list">
+          {PROFILE_TYPE_ORDER.map((type) => {
+            const setting = profileTypeSettings[type] ?? { type, enabled: false, visibility: 'private' as const, schemaVersion: 1 as const };
+            const approved = type === 'listener' || (Array.isArray(roles) ? roles.includes(type) : role === type);
+            return <div className="nj-profile-type-setting" key={type}>
+              <div className="nj-profile-type-setting-copy"><strong>{PROFILE_TYPE_LABELS[type]}</strong><small>{approved ? 'Available on this account' : 'Requires professional role approval'}</small></div>
+              <label className="nj-profile-type-enable"><input type="checkbox" checked={setting.enabled} disabled={!approved} onChange={(event) => updateProfileType(type, { enabled: event.target.checked })}/> Active</label>
+              <label className="nj-profile-type-visibility">Visibility<select value={approved ? setting.visibility : 'private'} disabled={!approved || !setting.enabled} onChange={(event) => updateProfileType(type, { visibility: event.target.value as NightjarProfileVisibility })}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label>
+            </div>;
+          })}
+        </div>
+        {profileTypeError && <p className="nj-profile-type-error" role="alert">{profileTypeError}</p>}
+        <div className="nj-profile-type-actions"><small>Unlisted profiles are available by direct link but are not intended for public discovery. Private profiles are not returned to other members.</small><button type="button" className="primary-button" disabled={!profileTypeDirty || profileTypeSaving || simulationMode} onClick={() => void saveProfileTypeSettings()}>{profileTypeSaving ? 'Saving…' : 'Save profile visibility'}</button></div>
+      </>}
+    </section>
+
+    {!simulationMode && <MyCommitmentsPanel/>}
 
     <div className="premium-user-value-strip">
       <div><UserCircle2 size={16}/><span><strong>Personal identity</strong><small>One profile across Nightjar</small></span></div>

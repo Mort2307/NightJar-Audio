@@ -27,6 +27,22 @@ const roleCall = httpsCallable<{ role: 'creator' | 'listener' | 'writer' | 'edit
 
 export type NightjarProfessionalRole = 'creator' | 'writer' | 'editor' | 'artist';
 
+export type NightjarProfileType = 'listener' | NightjarProfessionalRole;
+export type NightjarProfileVisibility = 'public' | 'private' | 'unlisted';
+export type NightjarProfileTypeSetting = {
+  type: NightjarProfileType;
+  enabled: boolean;
+  visibility: NightjarProfileVisibility;
+  schemaVersion: 1;
+};
+export type NightjarProfileTypeSettings = Partial<Record<NightjarProfileType, NightjarProfileTypeSetting>>;
+export type NightjarProfileTypeSettingsResult = {
+  revision: number;
+  settings: NightjarProfileTypeSettings;
+};
+const getProfileTypeSettingsCall = httpsCallable<void, NightjarProfileTypeSettingsResult>(functions, 'getMyProfileTypeSettings');
+const saveProfileTypeSettingsCall = httpsCallable<{ expectedRevision: number; settings: NightjarProfileTypeSettings }, ({ saved: true; revision: number; settings: NightjarProfileTypeSettings } | { saved: false; revision: number; settings: NightjarProfileTypeSettings })>(functions, 'saveMyProfileTypeSettings');
+
 export type ProfessionalRoleState = {
   listener: true;
   approvedProfessionalRoles: NightjarProfessionalRole[];
@@ -69,6 +85,118 @@ const setActiveRoleCall = httpsCallable<{ role: 'listener' | NightjarProfessiona
 
 const stageRoleCall = httpsCallable<{ role?: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; roles?: ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[]; referralCode?: string; legalAcceptances?: Array<{ id: string; version: string; accepted: true }> }, { role: 'creator' | 'listener' | 'writer' | 'editor' | 'artist'; roles: ('creator' | 'listener' | 'writer' | 'editor' | 'artist')[]; professionalRoles: NightjarProfessionalRole[]; staged: boolean }>(functions, 'stageRegistrationIntent');
 
+
+export type NightjarCommitmentRole = NightjarProfessionalRole;
+export type NightjarCommitmentTaskState = 'not_started' | 'in_progress' | 'submitted' | 'approved' | 'rejected' | 'excused' | 'cancelled';
+export type NightjarCommitmentTask = {
+  id: string; title: string; description?: string; mandatory: boolean; dueDay?: number | null; dueAt?: string | null;
+  state: NightjarCommitmentTaskState; evidenceIds?: string[]; reviewReason?: string | null;
+};
+export type NightjarCommitmentAssignment = {
+  id: string; periodId: string; role: NightjarCommitmentRole; templateVersion: number;
+  status: string; tasks: NightjarCommitmentTask[]; periodStatus: string; startDate: string | null; endDate: string | null;
+  approvedException: boolean; exceptionReason: string | null;
+};
+const getMyCommitmentsCall = httpsCallable<void, { assignments: NightjarCommitmentAssignment[] }>(functions, 'getMyCommitments');
+const getMyCommitmentEligibilityCall = httpsCallable<{ periodId?: string }, {
+  periodId: string | null; approvedRoles: NightjarCommitmentRole[];
+  roleResults: Array<{ role: NightjarCommitmentRole; assigned: boolean; applicableMandatoryCount: number; completedMandatoryCount: number; completionPercent: number | null; qualifies: boolean; state: string }>;
+  eligible: boolean; qualifyingRole: NightjarCommitmentRole | null;
+}>(functions, 'getMyCommitmentEligibility');
+const submitCommitmentEvidenceCall = httpsCallable<{ assignmentId: string; taskId: string; note?: string; evidenceUrl?: string }, { submitted: boolean; evidenceId: string; taskState: string }>(functions, 'submitCommitmentEvidence');
+const adminCreateCommitmentTemplateCall = httpsCallable<{ role: NightjarCommitmentRole; effectiveFrom: string; tasks: Array<{ id: string; title: string; description?: string; mandatory: boolean; dueDay?: number | null }> }, { templateId: string; role: NightjarCommitmentRole; version: number; effectiveFrom: string }>(functions, 'adminCreateCommitmentTemplate');
+const adminCreateCommitmentPeriodCall = httpsCallable<{ periodId: string; startDate: string; endDate: string }, { created: boolean; periodId: string; startDate: string; endDate: string; status: string }>(functions, 'adminCreateCommitmentPeriod');
+const adminAssignCommitmentTemplateCall = httpsCallable<{ periodId: string; userId?: string; email?: string; role: NightjarCommitmentRole; templateId: string }, { assigned: boolean; assignmentId: string; periodId: string; role: NightjarCommitmentRole; taskCount: number }>(functions, 'adminAssignCommitmentTemplate');
+const adminReviewCommitmentTaskCall = httpsCallable<{ assignmentId: string; taskId: string; decision: 'approved' | 'rejected' | 'cancelled' | 'excused'; reason?: string }, { reviewed: boolean; taskId: string; state: string }>(functions, 'adminReviewCommitmentTask');
+const adminSetCommitmentExceptionCall = httpsCallable<{ assignmentId: string; reason: string }, { saved: boolean; assignmentId: string }>(functions, 'adminSetCommitmentException');
+const adminListCommitmentReviewQueueCall = httpsCallable<void, { queue: Array<{ assignmentId: string; userId: string; displayName: string; periodId: string; role: NightjarCommitmentRole; exceptionApproved: boolean; exceptionReason: string | null; pendingTasks: Array<{ id: string; title: string; evidenceIds: string[] }>; evidence: Array<{ taskId: string; evidenceId: string; note: string; evidenceUrl: string | null; submittedAt: string | null }> }> }>(functions, 'adminListCommitmentReviewQueue');
+const adminListCommitmentTemplatesCall = httpsCallable<void, { templates: Array<{ id: string; role: NightjarCommitmentRole; version: number; effectiveFrom: string; tasks: NightjarCommitmentTask[]; status: string }> }>(functions, 'adminListCommitmentTemplates');
+const adminListCommitmentPeriodsCall = httpsCallable<void, { periods: Array<{ id: string; startDate: string; endDate: string; status: string }> }>(functions, 'adminListCommitmentPeriods');
+const adminCloseCommitmentPeriodCall = httpsCallable<{ periodId: string }, { closed: boolean; periodId: string; alreadyClosed: boolean }>(functions, 'adminCloseCommitmentPeriod');
+export type NightjarFinancePolicy = {
+  id: string;
+  policyId: string;
+  effectiveFrom: string;
+  version: number;
+  currency: 'GBP';
+  subscriptionPricePence: number;
+  creatorPoolPercent: number;
+  nightjarPoolPercent: number;
+  ownerPoolPercent: number;
+  taxReservePercent: number;
+  priceScope: 'planning_only_new_subscribers';
+  status: string;
+};
+
+const adminCreateFinancePolicyCall = httpsCallable<{
+  effectiveFrom: string;
+  subscriptionPricePence: number;
+  creatorPoolPercent: number;
+  nightjarPoolPercent: number;
+  ownerPoolPercent: number;
+  taxReservePercent: number;
+}, {
+  saved: boolean; policyId: string; effectiveFrom: string; version: number;
+  subscriptionPricePence: number; creatorPoolPercent: number; nightjarPoolPercent: number; ownerPoolPercent: number; taxReservePercent: number;
+  priceScope: 'planning_only_new_subscribers';
+}>(functions, 'adminCreateFinancePolicy');
+const adminListFinancePoliciesCall = httpsCallable<void, { policies: NightjarFinancePolicy[] }>(functions, 'adminListFinancePolicies');
+const adminRecordRevenueSettlementCall = httpsCallable<{
+  periodId: string; provider: 'stripe'; externalId: string; settledAt: string; sourceReference: string;
+  grossPence: number; refundPence: number; chargebackPence: number; processorFeePence: number; vatPence: number; otherDeductionsPence?: number;
+}, { recorded: boolean; settlementId: string; eligibleNetRevenuePence: number; status: string }>(functions, 'adminRecordRevenueSettlement');
+const adminReconcileRevenueSettlementCall = httpsCallable<{ settlementId: string; reconciliationNote: string }, { reconciled: boolean; settlementId: string; eligibleNetRevenuePence: number }>(functions, 'adminReconcileRevenueSettlement');
+const adminListRevenueSettlementsCall = httpsCallable<{ periodId: string }, { settlements: Array<{
+  id: string; periodId: string; provider: string; externalId: string; settledAt: string; sourceReference: string;
+  grossPence: number; refundPence: number; chargebackPence: number; processorFeePence: number; vatPence: number;
+  otherDeductionsPence: number; eligibleNetRevenuePence: number; status: string;
+}> }>(functions, 'adminListRevenueSettlements');
+const adminRecordRevenueAdjustmentCall = httpsCallable<{ periodId: string; amountPence: number; reason: string; sourceReference: string }, { recorded: boolean; adjustmentId: string; amountPence: number }>(functions, 'adminRecordRevenueAdjustment');
+const adminListRevenueAdjustmentsCall = httpsCallable<{ periodId: string }, { adjustments: Array<{ id: string; amountPence: number; reason: string; sourceReference: string }> }>(functions, 'adminListRevenueAdjustments');
+const adminPrepareCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
+  prepared: boolean; periodId: string; eligibleNetRevenuePence: number;
+  creatorPoolPercent: number; creatorPoolPence: number; nightjarPoolPercent: number; nightjarPoolPence: number;
+  ownerPoolPercent: number; ownerPoolPence: number; taxReservePercent: number; taxReservePoolPence: number;
+  subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string;
+  eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number;
+  payouts: Array<{ userId: string; amountPence: number }>;
+}>(functions, 'adminPrepareCreatorPayoutPeriod');
+const adminGetCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
+  period: {
+    periodId: string; status: string; eligibleNetRevenuePence: number;
+    creatorPoolPercent: number; creatorPoolPence: number; nightjarPoolPercent: number; nightjarPoolPence: number;
+    ownerPoolPercent: number; ownerPoolPence: number; taxReservePercent: number; taxReservePoolPence: number;
+  subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string;
+    eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number;
+  };
+  payouts: Array<{ userId: string; displayName: string; amountPence: number; paidPence: number; outstandingPence: number; qualifyingRole: NightjarCommitmentRole | null; status: string }>;
+}>(functions, 'adminGetCreatorPayoutPeriod');
+const adminApproveCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, { approved: boolean; periodId: string }>(functions, 'adminApproveCreatorPayoutPeriod');
+const adminRecordCreatorPaymentCall = httpsCallable<{ periodId: string; userId: string; amountPence: number; reference: string; paidAt: string }, { recorded: boolean; duplicate: boolean; paymentId: string; paidPence?: number; outstandingPence?: number }>(functions, 'adminRecordCreatorPayment');
+
+const adminSetTaxEstimateCall = httpsCallable<{
+  periodId: string; category: 'corporation_tax' | 'income_tax' | 'vat' | 'paye_ni' | 'other';
+  taxableBasePence: number; rateBasisPoints: number; sourceReference: string; note: string;
+}, {
+  saved: boolean; duplicate: boolean; periodId: string; taxableBasePence: number; rateBasisPoints: number;
+  estimatedTaxPence: number; category: string; sourceReference: string;
+}>(functions, 'adminSetTaxEstimate');
+const adminSetTaxReserveCall = httpsCallable<{ periodId: string; reservePence: number; note: string }, { saved: boolean; periodId: string; reservePence: number }>(functions, 'adminSetTaxReserve');
+const adminSetConfirmedTaxLiabilityCall = httpsCallable<{ periodId: string; liabilityPence: number; accountantReference: string }, { saved: boolean; periodId: string; liabilityPence: number }>(functions, 'adminSetConfirmedTaxLiability');
+const adminRecordTaxPaymentCall = httpsCallable<{ periodId: string; amountPence: number; reference: string; paidAt: string }, { recorded: boolean; duplicate: boolean; paymentId: string; paidPence?: number }>(functions, 'adminRecordTaxPayment');
+const adminGetTaxLedgerCall = httpsCallable<{ periodId: string }, {
+  ledger: null | { periodId: string; reservePence?: number; reserveNote?: string; confirmedLiabilityPence?: number; accountantReference?: string; paidPence?: number };
+  payments: Array<{ id: string; amountPence: number; reference: string; paidAt: string }>;
+  estimates: Array<{ id: string; category: string; taxableBasePence: number; rateBasisPoints: number; estimatedTaxPence: number; sourceReference: string; note: string; recordedAt: unknown }>;
+  reserveEntries: Array<{ id: string; reservePence: number; note: string; recordedAt: unknown; recordedByAdminUserId: string }>;
+  liabilityEntries: Array<{ id: string; liabilityPence: number; accountantReference: string; recordedAt: unknown; recordedByAdminUserId: string }>;
+}>(functions, 'adminGetTaxLedger');
+const getMyCreatorCompensationCall = httpsCallable<void, { compensation: Array<{
+  periodId: string; periodStatus: string; creatorPoolPercent: number; eligibleCreatorCount: number;
+  amountPence: number; paidPence: number; outstandingPence: number; status: string; qualifyingRole: string | null;
+  payments: Array<{ amountPence: number; reference: string; paidAt: string }>;
+}> }>(functions, 'getMyCreatorCompensation');
+
 export const nightjarAccount = {
   async registrationAccess(email: string) {
     return (await registrationStatusCall({ email: email.trim() })).data;
@@ -91,6 +219,139 @@ export const nightjarAccount = {
     const roles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles];
     const result = await stageRoleCall({ roles, legalAcceptances, ...(referralCode ? { referralCode } : {}) });
     return result.data;
+  },
+
+  async getMyCommitments() {
+    return (await getMyCommitmentsCall()).data;
+  },
+
+  async getMyCommitmentEligibility(periodId?: string) {
+    return (await getMyCommitmentEligibilityCall(periodId ? { periodId } : {})).data;
+  },
+
+  async submitCommitmentEvidence(input: { assignmentId: string; taskId: string; note?: string; evidenceUrl?: string }) {
+    return (await submitCommitmentEvidenceCall(input)).data;
+  },
+
+  async adminCreateCommitmentTemplate(input: { role: NightjarCommitmentRole; effectiveFrom: string; tasks: Array<{ id: string; title: string; description?: string; mandatory: boolean; dueDay?: number | null }> }) {
+    return (await adminCreateCommitmentTemplateCall(input)).data;
+  },
+
+  async adminCreateCommitmentPeriod(input: { periodId: string; startDate: string; endDate: string }) {
+    return (await adminCreateCommitmentPeriodCall(input)).data;
+  },
+
+  async adminAssignCommitmentTemplate(input: { periodId: string; userId?: string; email?: string; role: NightjarCommitmentRole; templateId: string }) {
+    return (await adminAssignCommitmentTemplateCall(input)).data;
+  },
+
+  async adminReviewCommitmentTask(input: { assignmentId: string; taskId: string; decision: 'approved' | 'rejected' | 'cancelled' | 'excused'; reason?: string }) {
+    return (await adminReviewCommitmentTaskCall(input)).data;
+  },
+
+  async adminSetCommitmentException(input: { assignmentId: string; reason: string }) {
+    return (await adminSetCommitmentExceptionCall(input)).data;
+  },
+
+  async adminListCommitmentTemplates() {
+    return (await adminListCommitmentTemplatesCall()).data;
+  },
+
+  async adminListCommitmentPeriods() {
+    return (await adminListCommitmentPeriodsCall()).data;
+  },
+
+  async adminCreateFinancePolicy(input: {
+    effectiveFrom: string; subscriptionPricePence: number; creatorPoolPercent: number;
+    nightjarPoolPercent: number; ownerPoolPercent: number; taxReservePercent: number;
+  }) {
+    return (await adminCreateFinancePolicyCall(input)).data;
+  },
+
+  async adminListFinancePolicies() {
+    return (await adminListFinancePoliciesCall()).data;
+  },
+
+  async adminRecordRevenueSettlement(input: {
+    periodId: string; provider: 'stripe'; externalId: string; settledAt: string; sourceReference: string;
+    grossPence: number; refundPence: number; chargebackPence: number; processorFeePence: number; vatPence: number; otherDeductionsPence?: number;
+  }) {
+    return (await adminRecordRevenueSettlementCall(input)).data;
+  },
+
+  async adminReconcileRevenueSettlement(input: { settlementId: string; reconciliationNote: string }) {
+    return (await adminReconcileRevenueSettlementCall(input)).data;
+  },
+
+  async adminListRevenueSettlements(periodId: string) {
+    return (await adminListRevenueSettlementsCall({ periodId })).data;
+  },
+
+  async adminRecordRevenueAdjustment(input: { periodId: string; amountPence: number; reason: string; sourceReference: string }) {
+    return (await adminRecordRevenueAdjustmentCall(input)).data;
+  },
+
+  async adminListRevenueAdjustments(periodId: string) {
+    return (await adminListRevenueAdjustmentsCall({ periodId })).data;
+  },
+
+  async adminPrepareCreatorPayoutPeriod(periodId: string) {
+    return (await adminPrepareCreatorPayoutPeriodCall({ periodId })).data;
+  },
+
+  async adminGetCreatorPayoutPeriod(periodId: string) {
+    return (await adminGetCreatorPayoutPeriodCall({ periodId })).data;
+  },
+
+  async adminApproveCreatorPayoutPeriod(periodId: string) {
+    return (await adminApproveCreatorPayoutPeriodCall({ periodId })).data;
+  },
+
+  async adminRecordCreatorPayment(input: { periodId: string; userId: string; amountPence: number; reference: string; paidAt: string }) {
+    return (await adminRecordCreatorPaymentCall(input)).data;
+  },
+
+  async adminSetTaxEstimate(input: {
+    periodId: string; category: 'corporation_tax' | 'income_tax' | 'vat' | 'paye_ni' | 'other';
+    taxableBasePence: number; rateBasisPoints: number; sourceReference: string; note: string;
+  }) {
+    return (await adminSetTaxEstimateCall(input)).data;
+  },
+
+  async adminSetTaxReserve(input: { periodId: string; reservePence: number; note: string }) {
+    return (await adminSetTaxReserveCall(input)).data;
+  },
+
+  async adminSetConfirmedTaxLiability(input: { periodId: string; liabilityPence: number; accountantReference: string }) {
+    return (await adminSetConfirmedTaxLiabilityCall(input)).data;
+  },
+
+  async adminRecordTaxPayment(input: { periodId: string; amountPence: number; reference: string; paidAt: string }) {
+    return (await adminRecordTaxPaymentCall(input)).data;
+  },
+
+  async adminGetTaxLedger(periodId: string) {
+    return (await adminGetTaxLedgerCall({ periodId })).data;
+  },
+
+  async getMyCreatorCompensation() {
+    return (await getMyCreatorCompensationCall()).data;
+  },
+
+  async adminCloseCommitmentPeriod(periodId: string) {
+    return (await adminCloseCommitmentPeriodCall({ periodId })).data;
+  },
+
+  async adminListCommitmentReviewQueue() {
+    return (await adminListCommitmentReviewQueueCall()).data;
+  },
+
+  async getProfileTypeSettings() {
+    return (await getProfileTypeSettingsCall()).data;
+  },
+
+  async saveProfileTypeSettings(settings: NightjarProfileTypeSettings, expectedRevision: number) {
+    return (await saveProfileTypeSettingsCall({ settings, expectedRevision })).data;
   },
 
   async professionalRoles() {
