@@ -15,8 +15,8 @@ export default function CreatorWorkAssignmentHub({role,notify,demoMode=false,sim
   useEffect(()=>{void load();},[role,demoMode]);
   const selected=useMemo(()=>assets.find(a=>keyOf(a)===assetKey)??null,[assets,assetKey]);
   const recipients=useMemo(()=>directory.filter(p=>p.userId&&((p.roles??[p.role]).some((r:string)=>['creator','writer','editor','artist'].includes(r)))).sort((a,b)=>String(a.name).localeCompare(String(b.name))),[directory]);
-  const incoming=assignments.filter(a=>a.recipientUserId===undefined?false:a.recipientRole===role);
-  const outgoing=assignments.filter(a=>a.ownerUserId);
+  const incoming=assignments.filter(a=>a.isRecipient===true);
+  const outgoing=assignments.filter(a=>a.isOwner===true);
   const tasks=selected?.assetType==='script'?['Writing contribution','Voice performance','Editorial review','Creative development']:selected?.assetType==='creator_release_audio'?['Voice performance','Audio editing','Mixing / mastering','Production contribution','Artwork contribution']:selected?.assetType==='artist_artwork'?['Illustration contribution','Cover artwork','Visual design','Artwork review']:['Audio editing','Mixing / mastering','Voice performance','Production feedback'];
   const send=async()=>{if(!selected||!recipientUserId||!task){notify('Choose your work, a professional and the task.');return;}setBusy(true);try{await nightjarCollaboration.sendWorkAssignment({assetType:selected.assetType,assetId:selected.assetId,assetSlot:selected.assetSlot??null,recipientUserId,task,message});setMessage('');setTask('');notify('Private invitation sent. No payment or ownership transfer has been created.');await load();}catch(e:any){notify(e?.message||'The invitation could not be sent.');}finally{setBusy(false);}};
   const respond=async(a:any,status:'accepted'|'declined')=>{try{await nightjarCollaboration.respondWorkAssignment(a.id,status);notify(status==='accepted'?'Invitation accepted.':'Invitation declined.');await load();}catch(e:any){notify(e?.message||'Your response could not be saved.');}};
