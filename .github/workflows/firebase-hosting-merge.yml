@@ -22,7 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      # Use a GitHub Actions repository variable (preferred) or secret for this PUBLIC VAPID key.
+      # Firebase web configuration values are public client config, injected at build time.
+      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY || secrets.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_VAPID_KEY: ${{ vars.VITE_FIREBASE_VAPID_KEY || secrets.VITE_FIREBASE_VAPID_KEY }}
     steps:
       - uses: actions/checkout@v4
@@ -35,9 +36,13 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Protect production push notifications
+      - name: Validate Firebase web configuration
         shell: bash
         run: |
+          if [[ ! "$VITE_FIREBASE_API_KEY" =~ ^AIza[0-9A-Za-z_-]{35}$ ]]; then
+            echo "::error::Nightjar Hosting deployment halted: VITE_FIREBASE_API_KEY is missing or malformed. Set the current Firebase Web API key in GitHub Actions Variables."
+            exit 1
+          fi
           if [[ ! "$VITE_FIREBASE_VAPID_KEY" =~ ^[A-Za-z0-9_-]{80,110}$ ]]; then
             echo "::error::Nightjar Hosting deployment halted: VITE_FIREBASE_VAPID_KEY is missing or malformed. Set the PUBLIC Firebase Web Push key in GitHub Actions Variables."
             exit 1
