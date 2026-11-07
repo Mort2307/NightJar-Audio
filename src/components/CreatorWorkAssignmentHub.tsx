@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, LockKeyhole, LoaderCircle, Send, ShieldCheck, X } from 'lucide-react';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
+import './creator-work-assignment-hub.css';
 
 type Props = { role:'creator'|'writer'|'editor'|'artist'; notify:(message:string)=>void; demoMode?:boolean; simulationMode?:boolean; onMessageUser?:(userId:string,assignmentId?:string)=>void };
 const labels:Record<string,string>={script:'Written work',creator_release_audio:'Audio recording / release',artist_artwork:'Artwork / illustration',editor_showcase_audio:'Audio Editor showcase audio'};
