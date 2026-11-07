@@ -12437,7 +12437,10 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
   );
   if (!eligibleRecipient) throw new HttpsError('not-found', 'Eligible approved collaborator not found.');
 
-  const ref = db.collection('collaborationProposals').doc();
+  const clientRequestId = assignmentType === 'private_writer_assignment' ? privateCreateRequestId(input) : null;
+  const ref = clientRequestId
+    ? db.collection('collaborationProposals').doc(clientRequestId)
+    : db.collection('collaborationProposals').doc();
   const record = {
     scriptId,
     scriptTitle: scriptData.title ?? 'Untitled manuscript',
@@ -12446,9 +12449,11 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
     recipientUserId,
     recipientName: recipientProfile.data()?.displayName ?? 'Nightjar collaborator',
     recipientRole: assignmentType === 'private_writer_assignment' ? 'creator' : (recipientRoles.includes('creator') ? 'creator' : recipientData?.role ?? null),
+    initiatedByUserId: identity.uid,
     assignmentType,
     workType,
     scriptVersion: Math.max(1, Number(scriptData.version ?? 1)),
+    rightsSnapshot: assignmentType === 'private_writer_assignment' ? normaliseScriptRights(scriptData.rights) : null,
     message: cleanText(input.message, 2400),
     paymentProposal: cleanText(input.paymentProposal, 800),
     licenceSummary: cleanText(input.licenceSummary, 1200),
@@ -12457,19 +12462,21 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
-  await ref.set(record);
+  const reused = await savePrivateRecordOnce(ref, record, 'writerUserId', identity.uid, clientRequestId);
 
-  await createNotification(recipientUserId, {
-    type: 'collaboration',
-    subtype: 'proposal',
-    title: assignmentType === 'private_writer_assignment' ? 'New private script assignment' : 'New collaboration proposal',
-    message: `${record.writerName} sent ${record.scriptTitle} for your consideration.`,
-    collaborationId: ref.id,
-    scriptId,
-  });
+  if (!reused) {
+    await createNotification(recipientUserId, {
+      type: 'collaboration',
+      subtype: assignmentType === 'private_writer_assignment' ? 'private_script_assignment' : 'proposal',
+      title: assignmentType === 'private_writer_assignment' ? 'New private script assignment' : 'New collaboration proposal',
+      message: `${record.writerName} sent ${record.scriptTitle} for your consideration.`,
+      collaborationId: ref.id,
+      scriptId,
+    });
+  }
 
   const saved = await ref.get();
-  return { proposal: collaborationPayload(saved.data() ?? record, ref.id) };
+  return { proposal: collaborationPayload(saved.data() ?? record, ref.id), reused };
 });
 
 export const expressScriptInterest = onCall({ region: REGION }, async (request) => {
@@ -12571,24 +12578,72 @@ export const respondCollaborationProposal = onCall({ region: REGION }, async (re
     throw new HttpsError('failed-precondition', 'This collaboration is already closed.');
   }
 
-  const responseNote = cleanText(input.responseNote, 1600);
-  await ref.set({
-    status,
-    responseNote,
-    respondedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  if (data.assignmentType === 'private_writer_assignment') {
+    if (identity.uid !== data.recipientUserId) throw new HttpsError('permission-denied', 'Only the selected Creator can respond to this assignment.');
+    if (status === 'accepted' || status === 'declined') {
+      const account = (await accountRef(identity.uid).get()).data() ?? {};
+      if (!professionalRolesForAccount(account).includes('creator')) throw new HttpsError('permission-denied', 'An approved Creator role is required.');
+      await requireAgeVerified(identity.uid);
+    }
+  }
 
-  const initiatorUserId = cleanText(data.initiatedByUserId, 160) || data.writerUserId;
-  const responderName = identity.uid === data.writerUserId ? data.writerName : data.recipientName;
+  const responseNote = cleanText(input.responseNote, 1600);
+  const committedData = await db.runTransaction(async (tx) => {
+    const current = await tx.get(ref);
+    const latest = current.data();
+    if (!latest || latest.writerUserId !== data.writerUserId || latest.recipientUserId !== data.recipientUserId) {
+      throw new HttpsError('not-found', 'Collaboration proposal not found.');
+    }
+    if (['declined','withdrawn','completed'].includes(String(latest.status ?? ''))) {
+      throw new HttpsError('failed-precondition', 'This collaboration is already closed.');
+    }
+    if (latest.assignmentType === 'private_writer_assignment' && ['accepted','declined'].includes(String(latest.status ?? ''))) {
+      throw new HttpsError('failed-precondition', 'This assignment already has a final response.');
+    }
+    if (latest.assignmentType === 'private_writer_assignment' && status === 'accepted') {
+      const scriptId = cleanText(latest.scriptId, 160);
+      const scriptRefValue = scriptRef(scriptId);
+      const scriptSnapshot = await tx.get(scriptRefValue);
+      const scriptData = scriptSnapshot.data();
+      if (!scriptData || scriptData.writerUserId !== latest.writerUserId) {
+        throw new HttpsError('not-found', 'The assigned manuscript is no longer available.');
+      }
+      if (Math.max(1, Number(scriptData.version ?? 1)) !== Math.max(1, Number(latest.scriptVersion ?? 1))) {
+        throw new HttpsError('failed-precondition', 'The manuscript has changed since this assignment was sent. Ask the Writer to send the current version.');
+      }
+      const permissionRef = scriptRefValue.collection('permissions').doc(identity.uid);
+      tx.set(permissionRef, {
+        recipientUserId: identity.uid,
+        allowCopy: false,
+        allowExport: false,
+        expiresAt: null,
+        revokedAt: null,
+        grantedBy: latest.writerUserId,
+        grantSource: 'private_writer_assignment',
+        collaborationId,
+        grantedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    tx.set(ref, {
+      status,
+      responseNote,
+      respondedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return latest;
+  });
+
+  const initiatorUserId = cleanText(committedData.initiatedByUserId, 160) || committedData.writerUserId;
+  const responderName = identity.uid === committedData.writerUserId ? committedData.writerName : committedData.recipientName;
   if (initiatorUserId && initiatorUserId !== identity.uid) {
     await createNotification(String(initiatorUserId), {
       type: 'collaboration',
       subtype: 'response',
       title: status === 'declined' ? 'Collaboration proposal declined' : 'Collaboration proposal updated',
-      message: `${responderName ?? 'A collaborator'} marked ${data.scriptTitle ?? 'your proposal'} as ${status.replace('_', ' ')}.`,
+      message: `${responderName ?? 'A collaborator'} marked ${committedData.scriptTitle ?? 'your proposal'} as ${status.replace('_', ' ')}.`,
       collaborationId,
-      scriptId: data.scriptId ?? null,
+      scriptId: committedData.scriptId ?? null,
     });
   }
 
