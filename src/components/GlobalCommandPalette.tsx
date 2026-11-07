@@ -36,12 +36,15 @@ export default function GlobalCommandPalette({ open, onClose, commands }: Props)
       const label = command.label.toLowerCase();
       const detail = (command.detail ?? '').toLowerCase();
       const keywords = (command.keywords ?? []).join(' ').toLowerCase();
+      const searchable = [label, detail, keywords].join(' ');
+      const tokens = term.split(/\s+/).filter(Boolean);
       let score = 0;
-      if (label === term) score += 8;
-      if (label.startsWith(term)) score += 5;
-      if (label.includes(term)) score += 3;
+      if (label === term) score += 12;
+      if (label.startsWith(term)) score += 7;
+      if (label.includes(term)) score += 4;
       if (detail.includes(term)) score += 2;
-      if (keywords.includes(term)) score += 2;
+      if (keywords.includes(term)) score += 3;
+      if (tokens.length > 1 && tokens.every((token) => searchable.includes(token))) score += 5 + tokens.length;
       return { command, score };
     }).filter((item) => item.score > 0)
       .sort((a, b) => b.score - a.score || a.command.label.localeCompare(b.command.label));
@@ -64,7 +67,7 @@ export default function GlobalCommandPalette({ open, onClose, commands }: Props)
             event.preventDefault();
             choose(results[0]);
           }
-        }} placeholder="Search Nightjar, people, releases or tools…" aria-label="Search Nightjar" aria-describedby="nj-command-search-hint"/>
+        }} placeholder="Search anything in Nightjar — pages, roles, settings, people or releases…" aria-label="Search Nightjar" aria-describedby="nj-command-search-hint"/>
         <kbd>ESC</kbd>
         <button className="icon-button" onClick={onClose} aria-label="Close search"><X size={16}/></button>
       </header>
@@ -75,7 +78,7 @@ export default function GlobalCommandPalette({ open, onClose, commands }: Props)
           <span className="nj-command-group">{command.group}</span>
           <ArrowRight size={14}/>
         </button>)}
-        {!results.length && <div className="nj-command-empty"><Search size={20}/><strong>No Nightjar matches.</strong><span>Try a person, release, tag, role or tool name.</span></div>}
+        {!results.length && <div className="nj-command-empty"><Search size={20}/><strong>No Nightjar matches.</strong><span>Try “apply as writer”, “profile types”, “messages”, “compensation” or a person or release.</span></div>}
       </div>
       <footer><span id="nj-command-search-hint">Enter opens the top match · Esc closes</span><span>Ctrl / ⌘ + K</span><span>Search is limited to content your current account can access.</span></footer>
     </section>

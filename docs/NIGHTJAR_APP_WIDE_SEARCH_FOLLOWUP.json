@@ -1,0 +1,11 @@
+{
+  "pr": 338,
+  "reason": "Adds account-scoped app-wide command search destinations for professional profile types and applications, account settings, and admin-only contributor commitment/compensation workspaces. Includes mobile access and natural multi-word search matching. Original RC and prior follow-up source blobs remain immutable.",
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "a16dd83da9a8275d58a6611b465d16aea1f24420",
+      "sha": "1ff5f8d0c84a1faac3b3b7231f5dfa442b18618d"
+    }
+  ]
+}
