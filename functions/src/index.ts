@@ -12416,7 +12416,7 @@ type CreatorWorkAssetType = 'script' | 'creator_release_audio' | 'artist_artwork
 const creatorWorkAssetRevision = (data: Record<string, any>) => [
   String(Math.max(0, Number(data.updatedAt?.toMillis?.() ?? 0))),
   String(Math.max(0, Number(data.metadataRevision ?? data.contentRevision ?? data.version ?? 1))),
-  String(data.audioStoragePath ?? data.imageAssetId ?? data.originalUpload?.sourceSha256 ?? ''),
+  String(data.audioStoragePath ?? data.beforeAudioStoragePath ?? '') + ':' + String(data.afterAudioStoragePath ?? data.imageAssetId ?? data.originalUpload?.sourceSha256 ?? ''),
 ].join(':');
 
 const creatorWorkAssetRef = (assetType: CreatorWorkAssetType, assetId: string) => {
@@ -12426,7 +12426,7 @@ const creatorWorkAssetRef = (assetType: CreatorWorkAssetType, assetId: string) =
   return db.collection('editorPortfolio').doc(assetId);
 };
 
-const resolveCreatorWorkAsset = async (assetType: CreatorWorkAssetType, assetId: string, ownerUserId: string) => {
+const resolveCreatorWorkAsset = async (assetType: CreatorWorkAssetType, assetId: string, ownerUserId: string, requestedSlot?: string | null) => {
   const ref = creatorWorkAssetRef(assetType, assetId);
   const snapshot = await ref.get();
   const data = snapshot.data();
@@ -12452,9 +12452,8 @@ const resolveCreatorWorkAsset = async (assetType: CreatorWorkAssetType, assetId:
     contentType = cleanText(imageData.contentType, 160) || 'image/jpeg';
   } else {
     if (data.ownerUserId !== ownerUserId || data.status === 'removed' || data.status === 'removing') throw new HttpsError('not-found', 'The selected Editor showcase could not be found.');
-    const slot = 'before';
-    storagePath = cleanText(data.beforeAudioStoragePath, 600) || cleanText(data.afterAudioStoragePath, 600);
-    assetSlot = data.beforeAudioStoragePath ? 'before' : 'after';
+    assetSlot = requestedSlot === 'after' ? 'after' : 'before';
+    storagePath = cleanText(data[assetSlot + 'AudioStoragePath'], 600);
     contentType = cleanText(data[assetSlot + 'AudioContentType'], 160) || 'audio/mpeg';
     if (!storagePath) throw new HttpsError('failed-precondition', 'This Editor showcase has no attached audio to assign.');
     title += assetSlot === 'before' ? ' · Before audio' : ' · After audio';
@@ -12482,7 +12481,7 @@ export const listMyAssignableWorkAssets = onCall({ region: REGION }, async (requ
     const snap = await db.collection('scripts').where('writerUserId', '==', identity.uid).limit(100).get();
     for (const doc of snap.docs) {
       const d = doc.data();
-      if (d.status !== 'Removed' && (String(d.content ?? '').trim() || d.originalUpload?.storagePath)) add('script', doc.id, cleanText(d.title,180) || 'Untitled manuscript', creatorWorkAssetRevision(d));
+      if (d.status !== 'Removed' && String(d.content ?? '').trim()) add('script', doc.id, cleanText(d.title,180) || 'Untitled manuscript', creatorWorkAssetRevision(d));
     }
   })());
   if (roles.includes('creator')) jobs.push((async () => {
@@ -12542,6 +12541,7 @@ export const sendCreatorWorkAssignment = onCall({ region: REGION }, async (reque
   const assetId = cleanText(input.assetId, 160);
   const recipientUserId = cleanText(input.recipientUserId, 160);
   const task = cleanText(input.task, 120);
+  const requestedSlot = cleanText(input.assetSlot, 20) || null;
   const message = cleanText(input.message, 2000);
   if (!['script','creator_release_audio','artist_artwork','editor_showcase_audio'].includes(assetType) || !assetId || !recipientUserId || recipientUserId === identity.uid || !task) {
     throw new HttpsError('invalid-argument', 'Choose your work, another professional and the task you are inviting them to do.');
@@ -12549,7 +12549,7 @@ export const sendCreatorWorkAssignment = onCall({ region: REGION }, async (reque
   const [ownerAccount, recipientAccount, ownerProfile, recipientProfile, asset] = await Promise.all([
     accountRef(identity.uid).get(), accountRef(recipientUserId).get(),
     profileRef(identity.uid).get(), profileRef(recipientUserId).get(),
-    resolveCreatorWorkAsset(assetType, assetId, identity.uid),
+    resolveCreatorWorkAsset(assetType, assetId, identity.uid, requestedSlot),
   ]);
   const ownerRoles = professionalRolesForAccount(ownerAccount.data() ?? {});
   const recipientData = recipientAccount.data() ?? {};
@@ -12602,8 +12602,8 @@ export const respondCreatorWorkAssignment = onCall({ region: REGION }, async (re
     await requireAgeVerified(identity.uid);
     await requireProfessionalLegalTerms(identity.uid);
     const account = (await accountRef(identity.uid).get()).data() ?? {};
-    if (!professionalRolesForAccount(account).length) throw new HttpsError('permission-denied', 'An approved professional role is required.');
-    const asset = await resolveCreatorWorkAsset(prior.assetType as CreatorWorkAssetType, String(prior.assetId), String(prior.ownerUserId));
+    if (account.status !== 'active' || !professionalRolesForAccount(account).length) throw new HttpsError('permission-denied', 'An active, approved professional role is required.');
+    const asset = await resolveCreatorWorkAsset(prior.assetType as CreatorWorkAssetType, String(prior.assetId), String(prior.ownerUserId), prior.assetSlot ?? null);
     if (asset.revision !== prior.assetRevision) throw new HttpsError('failed-precondition', 'The work has changed since this invitation was sent. Ask the owner to send a fresh invitation.');
   }
   await db.runTransaction(async tx => {
@@ -12659,7 +12659,7 @@ export const openCreatorWorkAssignmentAsset = onCall({ region: REGION }, async (
       !['accepted','in_production','completed'].includes(String(assignment.status))) {
     throw new HttpsError('not-found','Accepted private work access was not found.');
   }
-  const asset = await resolveCreatorWorkAsset(assignment.assetType as CreatorWorkAssetType, String(assignment.assetId), String(assignment.ownerUserId));
+  const asset = await resolveCreatorWorkAsset(assignment.assetType as CreatorWorkAssetType, String(assignment.assetId), String(assignment.ownerUserId), assignment.assetSlot ?? null);
   if (asset.revision !== assignment.assetRevision) throw new HttpsError('failed-precondition','This work has changed since it was assigned. Ask the owner to issue a new version invitation.');
   if (assignment.assetType === 'script') {
     const scriptData = asset.data;
