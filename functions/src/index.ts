@@ -11374,7 +11374,9 @@ export const openProtectedScript = onCall({ region: REGION }, async (request) =>
 
   let sourceFile: null | { fileName: string; contentType: string; sizeBytes: number; url: string; expiresAt: string } = null;
   const originalStoragePath = cleanText(script.originalUpload?.storagePath, 500);
-  if (originalStoragePath) {
+  const canReadOriginalFile = allowExport || script.writerUserId === identity.uid ||
+    (script.editorUserId === identity.uid && identity.role === 'editor') || identity.role === 'admin';
+  if (originalStoragePath && canReadOriginalFile) {
     const sourceExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
     const [url] = await getStorage().bucket().file(originalStoragePath).getSignedUrl({
       action: 'read',
@@ -12463,6 +12465,7 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
       ? [{ userId: identity.uid, role: 'writer' }, { userId: recipientUserId, role: 'creator' }]
       : [],
     rightsSnapshot: assignmentType === 'private_writer_assignment' ? normaliseScriptRights(scriptData.rights) : null,
+    allowOriginalExport: assignmentType === 'private_writer_assignment' && input.allowOriginalExport === true,
     message: cleanText(input.message, 2400),
     paymentProposal: cleanText(input.paymentProposal, 800),
     licenceSummary: cleanText(input.licenceSummary, 1200),
@@ -12625,7 +12628,7 @@ export const respondCollaborationProposal = onCall({ region: REGION }, async (re
       tx.set(permissionRef, {
         recipientUserId: identity.uid,
         allowCopy: false,
-        allowExport: false,
+        allowExport: latest.allowOriginalExport === true,
         expiresAt: null,
         revokedAt: null,
         grantedBy: latest.writerUserId,
