@@ -1,0 +1,11 @@
+{
+  "pr": 339,
+  "reason": "Adds the administrator-visible Profile Types & Applications search command and routes it to the existing admin application-review workspace. No authorization or application-write permissions are changed.",
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "1ff5f8d0c84a1faac3b3b7231f5dfa442b18618d",
+      "sha": "05931969befcd2fbc5991e16facabfec994f623f"
+    }
+  ]
+}

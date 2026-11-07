@@ -192,6 +192,21 @@ for(const item of appSearchFollowup.files){
   overrides.set(item.path,item);
 }
 
+// PR #339 makes the existing Profile Types search command available to the
+// administrator account that owns the application. Keep this as a separate,
+// exact App.tsx blob approval; do not relax any earlier release provenance.
+const adminProfileSearchFollowup=JSON.parse(string('docs/NIGHTJAR_ADMIN_PROFILE_SEARCH_FOLLOWUP.json'));
+assert.equal(adminProfileSearchFollowup.pr,339,'admin profile-type search requires its own PR review');
+assert.deepEqual(adminProfileSearchFollowup.files.map(item=>item.path),['src/App.tsx'],
+  'admin profile-type search follow-up may change only the approved App command registry');
+for(const item of adminProfileSearchFollowup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'admin profile-type search must anchor to the approved app-wide search App baseline');
+  assert.equal(item.baselineSha,previous.sha,'preserve the exact previously approved App SHA');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){
