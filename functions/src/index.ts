@@ -11374,7 +11374,9 @@ export const openProtectedScript = onCall({ region: REGION }, async (request) =>
 
   let sourceFile: null | { fileName: string; contentType: string; sizeBytes: number; url: string; expiresAt: string } = null;
   const originalStoragePath = cleanText(script.originalUpload?.storagePath, 500);
-  if (originalStoragePath) {
+  const canReadOriginalFile = allowExport || script.writerUserId === identity.uid ||
+    (script.editorUserId === identity.uid && identity.role === 'editor') || identity.role === 'admin';
+  if (originalStoragePath && canReadOriginalFile) {
     const sourceExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
     const [url] = await getStorage().bucket().file(originalStoragePath).getSignedUrl({
       action: 'read',
@@ -12076,6 +12078,11 @@ const collaborationPayload = (data: Record<string, any>, id: string) => ({
   recipientName: data.recipientName ?? 'Nightjar collaborator',
   recipientRole: data.recipientRole ?? null,
   initiatedByUserId: data.initiatedByUserId ?? data.writerUserId ?? null,
+  assignmentType: data.assignmentType ?? 'collaboration_proposal',
+  workType: data.workType ?? null,
+  scriptVersion: Number(data.scriptVersion ?? 1),
+  scriptContentRevision: Math.max(0, Number(data.scriptContentRevision ?? 0)),
+  credits: Array.isArray(data.credits) ? data.credits : [],
   message: data.message ?? '',
   paymentProposal: data.paymentProposal ?? '',
   licenceSummary: data.licenceSummary ?? '',
@@ -12402,6 +12409,361 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
   return { people };
 });
 
+
+// Asset-agnostic private work assignments. Each adapter resolves ownership and
+// storage server-side; clients never supply a storage path or owner identity.
+type CreatorWorkAssetType = 'script' | 'creator_release_audio' | 'creator_release_artwork' | 'script_artwork' | 'artist_artwork' | 'editor_showcase_audio';
+const creatorWorkAssetRevision = (data: Record<string, any>) => [
+  String(Math.max(0, Number(data.updatedAt?.toMillis?.() ?? 0))),
+  String(Math.max(0, Number(data.metadataRevision ?? data.contentRevision ?? data.version ?? 1))),
+  String(data.audioStoragePath ?? data.beforeAudioStoragePath ?? '') + ':' + String(data.afterAudioStoragePath ?? data.imageAssetId ?? data.pendingImageAssetId ?? data.artworkAssetId ?? data.pendingArtworkAssetId ?? data.originalUpload?.sourceSha256 ?? ''),
+].join(':');
+
+const creatorWorkAssetRef = (assetType: CreatorWorkAssetType, assetId: string) => {
+  if (assetType === 'script') return db.collection('scripts').doc(assetId);
+  if (assetType === 'creator_release_audio' || assetType === 'creator_release_artwork') return db.collection('releases').doc(assetId);
+  if (assetType === 'script_artwork') return db.collection('scripts').doc(assetId);
+  if (assetType === 'artist_artwork') return db.collection('artistPortfolio').doc(assetId);
+  return db.collection('editorPortfolio').doc(assetId);
+};
+
+const resolveCreatorWorkAsset = async (assetType: CreatorWorkAssetType, assetId: string, ownerUserId: string, requestedSlot?: string | null) => {
+  const ref = creatorWorkAssetRef(assetType, assetId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data) throw new HttpsError('not-found', 'The selected work could not be found.');
+  let storagePath = '';
+  let contentType = '';
+  let assetSlot: string | null = null;
+  let title = cleanText(data.title, 180) || 'Untitled work';
+  if (assetType === 'script') {
+    if (data.writerUserId !== ownerUserId || data.status === 'Removed') throw new HttpsError('not-found', 'The selected manuscript could not be found.');
+    storagePath = cleanText(data.originalUpload?.storagePath, 500);
+    contentType = cleanText(data.originalUpload?.contentType, 160);
+  } else if (assetType === 'creator_release_audio') {
+    if (data.creatorUserId !== ownerUserId || data.status === 'removed' || data.status === 'removing' || !data.audioStoragePath) throw new HttpsError('not-found', 'The selected audio release could not be found.');
+    storagePath = cleanText(data.audioStoragePath, 600);
+    contentType = cleanText(data.audioContentType, 160) || 'audio/mpeg';
+  } else if (['artist_artwork','creator_release_artwork','script_artwork'].includes(assetType)) {
+    const isArtist = assetType === 'artist_artwork';
+    const isRelease = assetType === 'creator_release_artwork';
+    const ownerField = isArtist ? data.ownerUserId : isRelease ? data.creatorUserId : data.writerUserId;
+    const approvedImageId = cleanText(isArtist ? data.imageAssetId : data.artworkAssetId, 160);
+    const pendingImageId = cleanText(isArtist ? data.pendingImageAssetId : data.pendingArtworkAssetId, 160);
+    const approvedStatus = cleanText(isArtist ? data.imageStatus : data.artworkStatus, 30);
+    const pendingStatus = cleanText(isArtist ? data.pendingImageStatus : data.pendingArtworkStatus, 30);
+    const imageId = approvedStatus === 'approved' ? approvedImageId : pendingStatus === 'pending' ? pendingImageId : '';
+    const expectedImageStatus = approvedStatus === 'approved' ? 'approved' : 'pending';
+    const expectedKind = isArtist ? 'artist_portfolio' : isRelease ? 'release_artwork' : 'script_artwork';
+    if (ownerField !== ownerUserId || data.status === 'removed' || !imageId) throw new HttpsError('not-found', 'Artwork owned by this professional could not be found.');
+    const image = await db.collection('imageAssets').doc(imageId).get();
+    const imageData = image.data() ?? {};
+    if (!image.exists || imageData.ownerUserId !== ownerUserId || imageData.status !== expectedImageStatus || imageData.kind !== expectedKind || imageData.targetId !== assetId) throw new HttpsError('not-found', 'The artwork file is no longer available.');
+    storagePath = cleanText(imageData.storagePath, 600);
+    contentType = cleanText(imageData.contentType, 160) || 'image/jpeg';
+  } else {
+    if (data.ownerUserId !== ownerUserId || data.status === 'removed' || data.status === 'removing') throw new HttpsError('not-found', 'The selected Editor showcase could not be found.');
+    assetSlot = requestedSlot === 'after' ? 'after' : 'before';
+    storagePath = cleanText(data[assetSlot + 'AudioStoragePath'], 600);
+    contentType = cleanText(data[assetSlot + 'AudioContentType'], 160) || 'audio/mpeg';
+    if (!storagePath) throw new HttpsError('failed-precondition', 'This Editor showcase has no attached audio to assign.');
+    title += assetSlot === 'before' ? ' · Before audio' : ' · After audio';
+  }
+  if (!storagePath) {
+    if (assetType === 'script' && String(data.content ?? '').trim()) {
+      // Text manuscripts are valid assignable work without an uploaded source file.
+    } else {
+      throw new HttpsError('failed-precondition', 'This work does not have an attachable source file yet.');
+    }
+  }
+  return { ref, data, title, storagePath, contentType, assetSlot, revision: creatorWorkAssetRevision(data) };
+};
+
+export const listMyAssignableWorkAssets = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const account = (await accountRef(identity.uid).get()).data() ?? {};
+  const roles = professionalRolesForAccount(account);
+  const assets: Array<Record<string, unknown>> = [];
+  const add = (assetType: CreatorWorkAssetType, id: string, title: string, revision: string, slot?: string | null) => {
+    assets.push({ assetType, assetId: id, title, revision, assetSlot: slot ?? null });
+  };
+  const jobs: Promise<void>[] = [];
+  if (roles.includes('writer')) jobs.push((async () => {
+    const snap = await db.collection('scripts').where('writerUserId', '==', identity.uid).limit(100).get();
+    for (const doc of snap.docs) {
+      const d = doc.data();
+      if (d.status !== 'Removed' && String(d.content ?? '').trim()) add('script', doc.id, cleanText(d.title,180) || 'Untitled manuscript', creatorWorkAssetRevision(d));
+      if (d.status !== 'Removed' && ((d.artworkStatus === 'approved' && d.artworkAssetId) || (d.pendingArtworkStatus === 'pending' && d.pendingArtworkAssetId))) add('script_artwork', doc.id, (cleanText(d.title,180) || 'Untitled manuscript') + ' · Cover artwork', creatorWorkAssetRevision(d));
+    }
+  })());
+  if (roles.includes('creator')) jobs.push((async () => {
+    const snap = await db.collection('releases').where('creatorUserId', '==', identity.uid).limit(100).get();
+    for (const doc of snap.docs) {
+      const d = doc.data();
+      if (!['removed','removing'].includes(String(d.status)) && d.audioStoragePath) add('creator_release_audio', doc.id, cleanText(d.title,180) || 'Untitled audio release', creatorWorkAssetRevision(d));
+      if (!['removed','removing'].includes(String(d.status)) && ((d.artworkStatus === 'approved' && d.artworkAssetId) || (d.pendingArtworkStatus === 'pending' && d.pendingArtworkAssetId))) add('creator_release_artwork', doc.id, (cleanText(d.title,180) || 'Untitled audio release') + ' · Cover artwork', creatorWorkAssetRevision(d));
+    }
+  })());
+  if (roles.includes('artist')) jobs.push((async () => {
+    const snap = await db.collection('artistPortfolio').where('ownerUserId', '==', identity.uid).limit(100).get();
+    for (const doc of snap.docs) {
+      const d = doc.data();
+      if (d.status !== 'removed' && ((d.imageStatus === 'approved' && d.imageAssetId) || (d.pendingImageStatus === 'pending' && d.pendingImageAssetId))) add('artist_artwork', doc.id, cleanText(d.title,180) || 'Untitled artwork', creatorWorkAssetRevision(d));
+    }
+  })());
+  if (roles.includes('editor')) jobs.push((async () => {
+    const snap = await db.collection('editorPortfolio').where('ownerUserId', '==', identity.uid).limit(100).get();
+    for (const doc of snap.docs) {
+      const d = doc.data();
+      if (['removed','removing'].includes(String(d.status))) continue;
+      if (d.beforeAudioStoragePath) add('editor_showcase_audio', doc.id, (cleanText(d.title,180) || 'Untitled showcase') + ' · Before audio', creatorWorkAssetRevision(d), 'before');
+      if (d.afterAudioStoragePath) add('editor_showcase_audio', doc.id, (cleanText(d.title,180) || 'Untitled showcase') + ' · After audio', creatorWorkAssetRevision(d), 'after');
+    }
+  })());
+  await Promise.all(jobs);
+  return { assets: assets.sort((a,b) => String(a.title).localeCompare(String(b.title))) };
+});
+
+export const listMyCreatorWorkAssignments = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const snapshot = await db.collection('creatorWorkAssignments').limit(1000).get();
+  const assignments = snapshot.docs
+    .filter(doc => doc.data().ownerUserId === identity.uid || doc.data().recipientUserId === identity.uid)
+    .map(doc => {
+      const d = doc.data();
+      return {
+        id: doc.id, ownerUserId: d.ownerUserId, ownerName: d.ownerName, isOwner: d.ownerUserId === identity.uid,
+        recipientUserId: d.recipientUserId, recipientName: d.recipientName, isRecipient: d.recipientUserId === identity.uid,
+        recipientRole: d.recipientRole, assetType: d.assetType, assetId: d.assetId,
+        assetSlot: d.assetSlot ?? null, assetTitle: d.assetTitle,
+        task: d.task, message: d.message, rightsSummary: d.rightsSummary ?? '', creditCandidates: Array.isArray(d.creditCandidates) ? d.creditCandidates : [], status: d.status,
+        assetRevision: d.assetRevision, createdAt: toIso(d.createdAt),
+        updatedAt: toIso(d.updatedAt), responseNote: d.responseNote ?? '',
+      };
+    })
+    .sort((a,b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+  return { assignments };
+});
+
+const creatorWorkTaskRoles: Record<string, AccountRole[]> = {
+  'Writing contribution': ['writer'],
+  'Voice performance': ['creator'],
+  'Editorial review': ['editor'],
+  'Creative development': ['creator','writer','editor','artist'],
+  'Audio editing': ['editor'],
+  'Mixing / mastering': ['editor'],
+  'Production contribution': ['creator','editor'],
+  'Artwork contribution': ['artist'],
+  'Illustration contribution': ['artist'],
+  'Cover artwork': ['artist'],
+  'Visual design': ['artist'],
+  'Artwork review': ['artist','creator'],
+  'Production feedback': ['creator','editor'],
+  'Other creative contribution': ['creator','writer','editor','artist'],
+};
+const creatorWorkOwnerRoles: Record<CreatorWorkAssetType, AccountRole[]> = {
+  script: ['writer'],
+  creator_release_audio: ['creator'],
+  creator_release_artwork: ['creator'],
+  script_artwork: ['writer'],
+  artist_artwork: ['artist'],
+  editor_showcase_audio: ['editor'],
+};
+const creatorWorkTasksByAsset: Record<CreatorWorkAssetType,string[]> = {
+  script: ['Writing contribution','Voice performance','Editorial review','Creative development','Other creative contribution'],
+  creator_release_audio: ['Voice performance','Audio editing','Mixing / mastering','Production contribution','Artwork contribution','Other creative contribution'],
+  creator_release_artwork: ['Artwork contribution','Illustration contribution','Cover artwork','Visual design','Artwork review','Other creative contribution'],
+  script_artwork: ['Artwork contribution','Illustration contribution','Cover artwork','Visual design','Artwork review','Other creative contribution'],
+  artist_artwork: ['Artwork contribution','Illustration contribution','Cover artwork','Visual design','Artwork review','Other creative contribution'],
+  editor_showcase_audio: ['Audio editing','Mixing / mastering','Voice performance','Production feedback','Other creative contribution'],
+};
+
+export const sendCreatorWorkAssignment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  await requireProfessionalLegalTerms(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const assetType = cleanText(input.assetType, 40) as CreatorWorkAssetType;
+  const assetId = cleanText(input.assetId, 160);
+  const recipientUserId = cleanText(input.recipientUserId, 160);
+  const task = cleanText(input.task, 120);
+  const requestedSlot = cleanText(input.assetSlot, 20) || null;
+  const message = cleanText(input.message, 2000);
+  const rightsSummary = cleanText(input.rightsSummary, 1200);
+  if (!['script','creator_release_audio','creator_release_artwork','script_artwork','artist_artwork','editor_showcase_audio'].includes(assetType) || !assetId || !recipientUserId || recipientUserId === identity.uid || !task || !(creatorWorkTasksByAsset[assetType] ?? []).includes(task)) {
+    throw new HttpsError('invalid-argument', 'Choose your work, another professional and the task you are inviting them to do.');
+  }
+  const [ownerAccount, recipientAccount, ownerProfile, recipientProfile, asset] = await Promise.all([
+    accountRef(identity.uid).get(), accountRef(recipientUserId).get(),
+    profileRef(identity.uid).get(), profileRef(recipientUserId).get(),
+    resolveCreatorWorkAsset(assetType, assetId, identity.uid, requestedSlot),
+  ]);
+  const ownerRoles = professionalRolesForAccount(ownerAccount.data() ?? {});
+  const recipientData = recipientAccount.data() ?? {};
+  const recipientRoles = professionalRolesForAccount(recipientData);
+  if (ownerAccount.data()?.status !== 'active' || !creatorWorkOwnerRoles[assetType].some(role => ownerRoles.includes(role))) throw new HttpsError('permission-denied', 'The matching approved professional role for this work is required to assign it.');
+  const allowedRecipientRoles = creatorWorkTaskRoles[task] ?? [];
+  if (!recipientAccount.exists || recipientData.status !== 'active' || !recipientRoles.some(role => allowedRecipientRoles.includes(role))) {
+    throw new HttpsError('not-found', 'Choose an active member with an approved professional role.');
+  }
+  const duplicate = await db.collection('creatorWorkAssignments')
+    .where('ownerUserId','==',identity.uid).limit(500).get();
+  if (duplicate.docs.some(doc => doc.data().recipientUserId === recipientUserId &&
+      doc.data().assetId === assetId && (doc.data().assetSlot ?? null) === (asset.assetSlot ?? null) &&
+      !['declined','withdrawn','completed'].includes(String(doc.data().status)))) {
+    throw new HttpsError('already-exists', 'An open invitation already exists for this work and recipient.');
+  }
+  const ref = db.collection('creatorWorkAssignments').doc();
+  const ownerName = cleanText(ownerProfile.data()?.displayName,100) || 'Nightjar professional';
+  const recipientName = cleanText(recipientProfile.data()?.displayName,100) || 'Nightjar professional';
+  const record = {
+    ownerUserId: identity.uid, ownerName, ownerRoles,
+    recipientUserId, recipientName, recipientRole: recipientRoles[0], recipientRoles,
+    initiatedByUserId: identity.uid, assetType, assetId, assetSlot: asset.assetSlot,
+    assetTitle: asset.title, assetRevision: asset.revision,
+    task, message, rightsSummary, creditCandidates: [{ userId: identity.uid, roles: ownerRoles }, { userId: recipientUserId, roles: recipientRoles }],
+    allowCopy: false, allowExport: false,
+    status: 'sent', responseNote: '',
+    createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  };
+  await ref.create(record);
+  await createNotification(recipientUserId, {
+    type: 'collaboration', subtype: 'creator_work_assignment',
+    title: 'New private work invitation',
+    message: ownerName + ' invited you to collaborate on ' + asset.title + '.',
+    collaborationId: ref.id, assetType, assetId,
+  });
+  await ref.collection('events').doc('created').set({ actorUserId: identity.uid, event: 'sent', createdAt: FieldValue.serverTimestamp() });
+  return { assignment: { id: ref.id, assetTitle: asset.title, status: 'sent' } };
+});
+
+export const respondCreatorWorkAssignment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const assignmentId = cleanText(input.assignmentId, 160);
+  const status = cleanText(input.status, 20);
+  if (!assignmentId || !['accepted','declined'].includes(status)) throw new HttpsError('invalid-argument', 'Choose accept or decline.');
+  const ref = db.collection('creatorWorkAssignments').doc(assignmentId);
+  const snapshot = await ref.get();
+  const prior = snapshot.data();
+  if (!prior || prior.recipientUserId !== identity.uid) throw new HttpsError('not-found', 'Work invitation not found.');
+  if (prior.status !== 'sent') throw new HttpsError('failed-precondition', 'This invitation already has a response.');
+  if (status === 'accepted') {
+    await requireAgeVerified(identity.uid);
+    await requireProfessionalLegalTerms(identity.uid);
+    const account = (await accountRef(identity.uid).get()).data() ?? {};
+    if (account.status !== 'active' || !professionalRolesForAccount(account).length) throw new HttpsError('permission-denied', 'An active, approved professional role is required.');
+    const asset = await resolveCreatorWorkAsset(prior.assetType as CreatorWorkAssetType, String(prior.assetId), String(prior.ownerUserId), prior.assetSlot ?? null);
+    if (asset.revision !== prior.assetRevision) throw new HttpsError('failed-precondition', 'The work has changed since this invitation was sent. Ask the owner to send a fresh invitation.');
+  }
+  await db.runTransaction(async tx => {
+    const live = await tx.get(ref);
+    if (!live.exists || live.data()?.recipientUserId !== identity.uid || live.data()?.status !== 'sent') {
+      throw new HttpsError('aborted', 'This invitation has already changed. Refresh your workspace.');
+    }
+    if (status === 'accepted') {
+      const acceptingAccountSnapshot = await tx.get(accountRef(identity.uid));
+      const acceptingAccount = acceptingAccountSnapshot.data() ?? {};
+      const acceptingRoles = professionalRolesForAccount(acceptingAccount);
+      const requiredRoles = creatorWorkTaskRoles[String(prior.task)] ?? [];
+      if (acceptingAccount.status !== 'active' || !acceptingRoles.some(role => requiredRoles.includes(role))) {
+        throw new HttpsError('permission-denied', 'Your active approved professional roles do not match the contribution requested.');
+      }
+      const assetRef = creatorWorkAssetRef(prior.assetType as CreatorWorkAssetType, String(prior.assetId));
+      const assetSnapshot = await tx.get(assetRef);
+      const assetData = assetSnapshot.data();
+      if (!assetData || creatorWorkAssetRevision(assetData) !== prior.assetRevision) {
+        throw new HttpsError('failed-precondition', 'The work changed while you were accepting. Ask the owner to send a fresh invitation.');
+      }
+      if (['artist_artwork','creator_release_artwork','script_artwork'].includes(String(prior.assetType))) {
+        const isArtistArtwork = prior.assetType === 'artist_artwork';
+        const approvedId = cleanText(isArtistArtwork ? assetData.imageAssetId : assetData.artworkAssetId,160);
+        const pendingId = cleanText(isArtistArtwork ? assetData.pendingImageAssetId : assetData.pendingArtworkAssetId,160);
+        const approvedStatus = cleanText(isArtistArtwork ? assetData.imageStatus : assetData.artworkStatus,30);
+        const pendingStatus = cleanText(isArtistArtwork ? assetData.pendingImageStatus : assetData.pendingArtworkStatus,30);
+        const imageId = approvedStatus === 'approved' ? approvedId : pendingStatus === 'pending' ? pendingId : '';
+        const expectedStatus = approvedStatus === 'approved' ? 'approved' : 'pending';
+        const imageSnapshot = imageId ? await tx.get(db.collection('imageAssets').doc(imageId)) : null;
+        const imageData = imageSnapshot?.data() ?? {};
+        const expectedKind = isArtistArtwork ? 'artist_portfolio' : prior.assetType === 'creator_release_artwork' ? 'release_artwork' : 'script_artwork';
+        if (!imageSnapshot?.exists || imageData.ownerUserId !== prior.ownerUserId || imageData.status !== expectedStatus || imageData.kind !== expectedKind || imageData.targetId !== prior.assetId) {
+          throw new HttpsError('failed-precondition', 'The artwork is no longer available.');
+        }
+      }
+    }
+    tx.set(ref, { status, responseNote: cleanText(input.responseNote,1200), respondedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge:true });
+  });
+  await ref.collection('events').add({ actorUserId: identity.uid, event: status, createdAt: FieldValue.serverTimestamp() });
+  await createNotification(String(prior.ownerUserId), {
+    type: 'collaboration', subtype: 'creator_work_response',
+    title: status === 'accepted' ? 'Work invitation accepted' : 'Work invitation declined',
+    message: String(prior.recipientName ?? 'Your collaborator') + ' ' + status + ' your invitation for ' + String(prior.assetTitle ?? 'your work') + '.',
+    collaborationId: assignmentId,
+  });
+  return { assignmentId, status };
+});
+
+export const updateCreatorWorkAssignment = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const assignmentId = cleanText(input.assignmentId,160);
+  const status = cleanText(input.status,30);
+  if (!assignmentId || !['withdrawn','in_production','completed'].includes(status)) throw new HttpsError('invalid-argument','Choose a valid assignment state.');
+  const ref = db.collection('creatorWorkAssignments').doc(assignmentId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!data || (data.ownerUserId !== identity.uid && data.recipientUserId !== identity.uid)) throw new HttpsError('not-found','Work assignment not found.');
+  if (status === 'withdrawn' && data.ownerUserId !== identity.uid) throw new HttpsError('permission-denied','Only the work owner can withdraw this invitation.');
+  if (status === 'withdrawn' && ['withdrawn','declined','completed'].includes(String(data.status))) throw new HttpsError('failed-precondition','This assignment is already closed.');
+  if (status === 'in_production' && data.status !== 'accepted') throw new HttpsError('failed-precondition','The invitation must be accepted before production starts.');
+  if (status === 'completed' && data.status !== 'in_production') throw new HttpsError('failed-precondition','The work must be in production before it can be completed.');
+  await db.runTransaction(async tx => {
+    const live = await tx.get(ref);
+    const current = live.data();
+    if (!current || current.status !== data.status) throw new HttpsError('aborted','The assignment changed. Refresh and try again.');
+    tx.set(ref,{status,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+  });
+  await ref.collection('events').add({actorUserId:identity.uid,event:status,createdAt:FieldValue.serverTimestamp()});
+  const other = data.ownerUserId === identity.uid ? data.recipientUserId : data.ownerUserId;
+  await createNotification(String(other),{type:'collaboration',subtype:'creator_work_status',title:'Work assignment updated',message:String(data.assetTitle ?? 'Your work')+' is now '+status.replace('_',' ')+'.',collaborationId:assignmentId});
+  return {assignmentId,status};
+});
+
+export const openCreatorWorkAssignmentAsset = onCall({ region: REGION }, async (request) => {
+  const identity = await requireActiveIdentity(request);
+  await requireAgeVerified(identity.uid);
+  const assignmentId = cleanText((request.data as Record<string,unknown> | undefined)?.assignmentId,160);
+  const ref = db.collection('creatorWorkAssignments').doc(assignmentId);
+  const snapshot = await ref.get();
+  const assignment = snapshot.data();
+  if (!assignment || (assignment.ownerUserId !== identity.uid && assignment.recipientUserId !== identity.uid) ||
+      !['accepted','in_production','completed'].includes(String(assignment.status))) {
+    throw new HttpsError('not-found','Accepted private work access was not found.');
+  }
+  if (assignment.recipientUserId === identity.uid) {
+    const recipientAccount = (await accountRef(identity.uid).get()).data() ?? {};
+    const recipientRoles = professionalRolesForAccount(recipientAccount);
+    const requiredRoles = creatorWorkTaskRoles[String(assignment.task)] ?? [];
+    if (recipientAccount.status !== 'active' || !recipientRoles.some(role => requiredRoles.includes(role))) {
+      throw new HttpsError('permission-denied','Your active approved professional roles no longer match this contribution.');
+    }
+  }
+  const asset = await resolveCreatorWorkAsset(assignment.assetType as CreatorWorkAssetType, String(assignment.assetId), String(assignment.ownerUserId), assignment.assetSlot ?? null);
+  if (asset.revision !== assignment.assetRevision) throw new HttpsError('failed-precondition','This work has changed since it was assigned. Ask the owner to issue a new version invitation.');
+  if (assignment.assetType === 'script') {
+    const scriptData = asset.data;
+    return { assetType:'script', title:asset.title, content:String(scriptData.content ?? ''), copyAllowed:false, exportAllowed:false };
+  }
+  if (!asset.storagePath) throw new HttpsError('not-found','The assigned source file is no longer available.');
+  const file = getStorage().bucket().file(asset.storagePath);
+  const [exists] = await file.exists();
+  if (!exists) throw new HttpsError('not-found','The assigned source file is no longer available.');
+  const expiresAt = Date.now() + 5 * 60 * 1000;
+  const [url] = await file.getSignedUrl({ action:'read', expires:expiresAt });
+  await ref.collection('events').add({actorUserId:identity.uid,event:'asset_opened',createdAt:FieldValue.serverTimestamp()});
+  return { assetType:assignment.assetType, title:asset.title, url, contentType:asset.contentType, expiresAt:new Date(expiresAt).toISOString(), copyAllowed:false, exportAllowed:false };
+});
+
 export const sendCollaborationProposal = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
   const input = (request.data ?? {}) as Record<string, unknown>;
@@ -12419,12 +12781,28 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
   ]);
   const scriptData = script.data();
   const recipientData = recipient.data();
+  const assignmentType = cleanText(input.assignmentType, 60) === 'private_writer_assignment'
+    ? 'private_writer_assignment'
+    : 'collaboration_proposal';
+  const workType = ['voluntary','private_commission','nightjar_original'].includes(String(input.workType ?? ''))
+    ? String(input.workType)
+    : null;
   if (!scriptData || scriptData.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
-  if (!recipient.exists || recipientData?.status !== 'active' || !['creator','editor'].includes(String(recipientData?.role ?? ''))) {
-    throw new HttpsError('not-found', 'Eligible collaborator not found.');
+  if (assignmentType === 'private_writer_assignment' && !workType) {
+    throw new HttpsError('invalid-argument', 'Choose whether this is a voluntary submission, private commission or NightJar Original.');
   }
+  const recipientRoles = recipientData ? professionalRolesForAccount(recipientData) : [];
+  const eligibleRecipient = recipient.exists && recipientData?.status === 'active' && (
+    assignmentType === 'private_writer_assignment'
+      ? recipientRoles.includes('creator')
+      : (['creator','editor'].includes(String(recipientData?.role ?? '')) || recipientRoles.some((role) => ['creator','editor'].includes(role)))
+  );
+  if (!eligibleRecipient) throw new HttpsError('not-found', 'Eligible approved collaborator not found.');
 
-  const ref = db.collection('collaborationProposals').doc();
+  const clientRequestId = assignmentType === 'private_writer_assignment' ? privateCreateRequestId(input) : null;
+  const ref = clientRequestId
+    ? db.collection('collaborationProposals').doc(clientRequestId)
+    : db.collection('collaborationProposals').doc();
   const record = {
     scriptId,
     scriptTitle: scriptData.title ?? 'Untitled manuscript',
@@ -12432,7 +12810,17 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
     writerName: writerProfile.data()?.displayName ?? identity.email.split('@')[0],
     recipientUserId,
     recipientName: recipientProfile.data()?.displayName ?? 'Nightjar collaborator',
-    recipientRole: recipientData?.role ?? null,
+    recipientRole: assignmentType === 'private_writer_assignment' ? 'creator' : (recipientRoles.includes('creator') ? 'creator' : recipientData?.role ?? null),
+    initiatedByUserId: identity.uid,
+    assignmentType,
+    workType,
+    scriptVersion: Math.max(1, Number(scriptData.version ?? 1)),
+    scriptContentRevision: Math.max(0, Number(scriptData.contentRevision ?? 0)),
+    credits: assignmentType === 'private_writer_assignment'
+      ? [{ userId: identity.uid, role: 'writer' }, { userId: recipientUserId, role: 'creator' }]
+      : [],
+    rightsSnapshot: assignmentType === 'private_writer_assignment' ? normaliseScriptRights(scriptData.rights) : null,
+    allowOriginalExport: assignmentType === 'private_writer_assignment' && input.allowOriginalExport === true,
     message: cleanText(input.message, 2400),
     paymentProposal: cleanText(input.paymentProposal, 800),
     licenceSummary: cleanText(input.licenceSummary, 1200),
@@ -12441,19 +12829,21 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
-  await ref.set(record);
+  const reused = await savePrivateRecordOnce(ref, record, 'writerUserId', identity.uid, clientRequestId);
 
-  await createNotification(recipientUserId, {
-    type: 'collaboration',
-    subtype: 'proposal',
-    title: 'New collaboration proposal',
-    message: `${record.writerName} sent ${record.scriptTitle} for your consideration.`,
-    collaborationId: ref.id,
-    scriptId,
-  });
+  if (!reused) {
+    await createNotification(recipientUserId, {
+      type: 'collaboration',
+      subtype: assignmentType === 'private_writer_assignment' ? 'private_script_assignment' : 'proposal',
+      title: assignmentType === 'private_writer_assignment' ? 'New private script assignment' : 'New collaboration proposal',
+      message: `${record.writerName} sent ${record.scriptTitle} for your consideration.`,
+      collaborationId: ref.id,
+      scriptId,
+    });
+  }
 
   const saved = await ref.get();
-  return { proposal: collaborationPayload(saved.data() ?? record, ref.id) };
+  return { proposal: collaborationPayload(saved.data() ?? record, ref.id), reused };
 });
 
 export const expressScriptInterest = onCall({ region: REGION }, async (request) => {
@@ -12555,24 +12945,73 @@ export const respondCollaborationProposal = onCall({ region: REGION }, async (re
     throw new HttpsError('failed-precondition', 'This collaboration is already closed.');
   }
 
-  const responseNote = cleanText(input.responseNote, 1600);
-  await ref.set({
-    status,
-    responseNote,
-    respondedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  if (data.assignmentType === 'private_writer_assignment') {
+    if (identity.uid !== data.recipientUserId) throw new HttpsError('permission-denied', 'Only the selected Creator can respond to this assignment.');
+    if (status === 'accepted' || status === 'declined') {
+      const account = (await accountRef(identity.uid).get()).data() ?? {};
+      if (!professionalRolesForAccount(account).includes('creator')) throw new HttpsError('permission-denied', 'An approved Creator role is required.');
+      await requireAgeVerified(identity.uid);
+    }
+  }
 
-  const initiatorUserId = cleanText(data.initiatedByUserId, 160) || data.writerUserId;
-  const responderName = identity.uid === data.writerUserId ? data.writerName : data.recipientName;
+  const responseNote = cleanText(input.responseNote, 1600);
+  const committedData = await db.runTransaction(async (tx) => {
+    const current = await tx.get(ref);
+    const latest = current.data();
+    if (!latest || latest.writerUserId !== data.writerUserId || latest.recipientUserId !== data.recipientUserId) {
+      throw new HttpsError('not-found', 'Collaboration proposal not found.');
+    }
+    if (['declined','withdrawn','completed'].includes(String(latest.status ?? ''))) {
+      throw new HttpsError('failed-precondition', 'This collaboration is already closed.');
+    }
+    if (latest.assignmentType === 'private_writer_assignment' && ['accepted','declined'].includes(String(latest.status ?? ''))) {
+      throw new HttpsError('failed-precondition', 'This assignment already has a final response.');
+    }
+    if (latest.assignmentType === 'private_writer_assignment' && status === 'accepted') {
+      const scriptId = cleanText(latest.scriptId, 160);
+      const scriptRefValue = scriptRef(scriptId);
+      const scriptSnapshot = await tx.get(scriptRefValue);
+      const scriptData = scriptSnapshot.data();
+      if (!scriptData || scriptData.writerUserId !== latest.writerUserId) {
+        throw new HttpsError('not-found', 'The assigned manuscript is no longer available.');
+      }
+      if (Math.max(1, Number(scriptData.version ?? 1)) !== Math.max(1, Number(latest.scriptVersion ?? 1)) ||
+          Math.max(0, Number(scriptData.contentRevision ?? 0)) !== Math.max(0, Number(latest.scriptContentRevision ?? 0))) {
+        throw new HttpsError('failed-precondition', 'The manuscript has changed since this assignment was sent. Ask the Writer to send the current version.');
+      }
+      const permissionRef = scriptRefValue.collection('permissions').doc(identity.uid);
+      tx.set(permissionRef, {
+        recipientUserId: identity.uid,
+        allowCopy: false,
+        allowExport: latest.allowOriginalExport === true,
+        expiresAt: null,
+        revokedAt: null,
+        grantedBy: latest.writerUserId,
+        grantSource: 'private_writer_assignment',
+        collaborationId,
+        grantedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    tx.set(ref, {
+      status,
+      responseNote,
+      respondedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return latest;
+  });
+
+  const initiatorUserId = cleanText(committedData.initiatedByUserId, 160) || committedData.writerUserId;
+  const responderName = identity.uid === committedData.writerUserId ? committedData.writerName : committedData.recipientName;
   if (initiatorUserId && initiatorUserId !== identity.uid) {
     await createNotification(String(initiatorUserId), {
       type: 'collaboration',
       subtype: 'response',
       title: status === 'declined' ? 'Collaboration proposal declined' : 'Collaboration proposal updated',
-      message: `${responderName ?? 'A collaborator'} marked ${data.scriptTitle ?? 'your proposal'} as ${status.replace('_', ' ')}.`,
+      message: `${responderName ?? 'A collaborator'} marked ${committedData.scriptTitle ?? 'your proposal'} as ${status.replace('_', ' ')}.`,
       collaborationId,
-      scriptId: data.scriptId ?? null,
+      scriptId: committedData.scriptId ?? null,
     });
   }
 
@@ -12610,6 +13049,21 @@ export const updateCollaborationStatus = onCall({ region: REGION }, async (reque
     status,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
+
+  if (status === 'withdrawn' && data.assignmentType === 'private_writer_assignment') {
+    const scriptId = cleanText(data.scriptId, 160);
+    if (scriptId) {
+      await scriptRef(scriptId).collection('permissions').doc(String(data.recipientUserId)).set({
+        recipientUserId: data.recipientUserId,
+        allowCopy: false,
+        allowExport: false,
+        revokedAt: new Date().toISOString(),
+        revokedReason: 'private_assignment_withdrawn',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      await revokeReaderSessions(String(data.recipientUserId), scriptId, 'private_assignment_withdrawn');
+    }
+  }
 
   const otherUserId = data.writerUserId === identity.uid ? data.recipientUserId : data.writerUserId;
   if (otherUserId) {
