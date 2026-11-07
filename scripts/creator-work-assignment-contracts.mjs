@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const backend=fs.readFileSync('functions/src/index.ts','utf8');
+const client=fs.readFileSync('src/platform/firebase-collaboration.ts','utf8');
+const hub=fs.readFileSync('src/components/CreatorWorkAssignmentHub.tsx','utf8');
+const app=fs.readFileSync('src/App.tsx','utf8');
+
+const start=backend.indexOf('type CreatorWorkAssetType');
+const end=backend.indexOf('export const sendCollaborationProposal',start);
+assert.ok(start>=0&&end>start,'Asset-agnostic assignment backend must exist');
+const api=backend.slice(start,end);
+for(const type of ['script','creator_release_audio','artist_artwork','editor_showcase_audio']) assert.ok(api.includes("'" + type + "'"),'Missing adapter: '+type);
+assert.match(api,/data\.writerUserId !== ownerUserId/,'Manuscript owner must be verified server-side');
+assert.match(api,/data\.creatorUserId !== ownerUserId/,'Release owner must be verified server-side');
+assert.match(api,/data\.ownerUserId !== ownerUserId/,'Portfolio owner must be verified server-side');
+assert.match(api,/imageData\.ownerUserId !== ownerUserId/,'Artwork asset owner must be verified server-side');
+assert.match(api,/professionalRolesForAccount\(recipientData\)/,'Recipient must have an approved professional role');
+assert.match(api,/asset\.revision !== prior\.assetRevision/,'Stale work must be rejected on acceptance');
+assert.match(api,/allowCopy: false, allowExport: false/,'Assignments must not grant copy/export');
+assert.match(api,/expires:expiresAt/,'Asset URLs must be short-lived');
+assert.match(api,/creatorWorkAssignments/,'Dedicated private assignment records must be used');
+assert.doesNotMatch(api,/stripe|connectAccount|transfer|escrow|paymentProposal|creatorPool/i,'Creator-to-creator payment handling must not be introduced');
+assert.match(api,/isOwner: d\.ownerUserId === identity\.uid/,'List results must identify owner direction');
+assert.match(api,/isRecipient: d\.recipientUserId === identity\.uid/,'List results must identify recipient direction');
+for(const method of ['listMyAssignableWorkAssets','listMyCreatorWorkAssignments','sendCreatorWorkAssignment','respondCreatorWorkAssignment','updateCreatorWorkAssignment','openCreatorWorkAssignmentAsset']) assert.ok(api.includes('export const '+method),'Missing callable '+method);
+for(const method of ['assignableWork','workAssignments','sendWorkAssignment','respondWorkAssignment','updateWorkAssignment','openWorkAssignment']) assert.ok(client.includes('async '+method),'Missing client method '+method);
+assert.match(hub,/Access is granted only after acceptance/);
+assert.match(hub,/controlsList="nodownload"/);
+assert.match(app,/CreatorWorkAssignmentHub role="creator"/);
+assert.match(app,/CreatorWorkAssignmentHub role="artist"/);
+assert.match(app,/CreatorWorkAssignmentHub role="editor"/);
+process.stdout.write('PASS creator-work-assignment: private multi-media adapters, ownership, role validation, stale revision, short-lived access and no payment routing\n');
