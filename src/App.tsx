@@ -5253,7 +5253,15 @@ function App() {
   const commandItems: NightjarCommand[] = [
     ...(effectiveRole === 'listener' || effectiveRole === 'admin' ? [{ id:'nav-discover', group:'Navigate', label:'Discover', detail:'Recommendations, catalogue and spotlights', keywords:['home','listen'], icon:<Headphones size={15}/>, action:()=>navigate('discover') }] : []),
     { id:'nav-directory', group:'Navigate', label:'Directory', detail:'Find VA Creators, Writers, Audio Editors, Artists and Listeners', keywords:['people','profiles','community'], icon:<Users size={15}/>, action:()=>navigate('creators') },
-    ...((!canAdmin || interactiveRoleTest) && user?.userId ? [{ id:'nav-my-roles', group:'Account', label:'My Roles', detail:'Apply for or switch approved professional roles', keywords:['role','voice actor','VA','writer','editor','artist','application'], icon:<ShieldCheck size={15}/>, action:openMyRoles }] : []),
+    ...((!canAdmin || interactiveRoleTest) && user?.userId ? [
+      { id:'nav-my-roles', group:'Account', label:'My Roles', detail:'Apply for or switch approved professional roles', keywords:['role','voice actor','VA','writer','editor','artist','application'], icon:<ShieldCheck size={15}/>, action:openMyRoles },
+      { id:'search-profile-types', group:'Applications', label:'Profile Types & Applications', detail:'Choose VA Creator, Writer, Audio Editor or Artist and go straight to the application form', keywords:['profile type','profile types','apply','application','voice actor','voice acting','va creator','writer','audio editor','artist','professional roles','role upgrade','become a creator'], icon:<ShieldCheck size={15}/>, action:openMyRoles },
+      { id:'search-apply-va', group:'Applications', label:'Apply as a VA Creator', detail:'Open professional role selection and the application form', keywords:['voice actor','voice acting','voiceover','voice over','va','creator application'], icon:<Mic2 size={15}/>, action:openMyRoles },
+      { id:'search-apply-writer', group:'Applications', label:'Apply as a Writer', detail:'Open professional role selection and the application form', keywords:['writing','writer application','scripts','screenwriter'], icon:<FileText size={15}/>, action:openMyRoles },
+      { id:'search-apply-editor', group:'Applications', label:'Apply as an Audio Editor', detail:'Open professional role selection and the application form', keywords:['audio editing','editor application','sound editor','mixing'], icon:<FileCheck2 size={15}/>, action:openMyRoles },
+      { id:'search-apply-artist', group:'Applications', label:'Apply as an Artist', detail:'Open professional role selection and the application form', keywords:['artwork','illustrator','artist application','cover art'], icon:<ImagePlus size={15}/>, action:openMyRoles },
+    ] : []),
+    { id:'search-settings', group:'Account', label:'Settings & Preferences', detail:'Notifications, accessibility, appearance, privacy and account tools', keywords:['settings','preferences','notifications','accessibility','vision','theme','appearance','password','passkey','privacy'], icon:<Settings2 size={15}/>, action:()=>navigate('settings') },
     ...((role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) ? [{ id:'nav-messages', group:'Work', label:'Messages', detail:[
   messageUnreadCount ? messageUnreadCount + ' unread' : '',
   messageNeedsReplyCount ? messageNeedsReplyCount + ' need your reply' : '',
@@ -5267,7 +5275,12 @@ function App() {
     { id:'nav-calendar', group:'Account', label:'My calendar', detail:'Your local date, private plans and scheduled audio releases',keywords:['calendar','date','schedule','release','appointment'],icon:<CalendarDays size={15}/>,action:()=>navigate('calendar') },
     { id:'nav-profile', group:'Account', label:'Profile', detail:'Identity, public showcase and preferences', keywords:['settings','bio'], icon:<UserCircle2 size={15}/>, action:openProfileEditor },
     { id:'nav-protection', group:'Account', label:'Protection Centre', detail:'Reports, evidence and account safety', keywords:['security','safety'], icon:<ShieldCheck size={15}/>, action:()=>{ navigate('protection'); void loadProtection(); } },
-    ...(canAdmin && !simulationMode ? [{ id:'nav-admin', group:'Administration', label:'Owner Console', detail:'People, content, security and commercial operations', keywords:['admin','moderation'], icon:<Settings2 size={15}/>, action:()=>{ navigate('admin'); void loadAdminOverview(); } }] : []),
+    ...(canAdmin && !simulationMode ? [
+      { id:'nav-admin', group:'Administration', label:'Owner Console', detail:'People, content, security and commercial operations', keywords:['admin','moderation'], icon:<Settings2 size={15}/>, action:()=>{ navigate('admin'); void loadAdminOverview(); } },
+      { id:'search-commitments', group:'Administration', label:'Commitment Control Centre', detail:'Review creator commitments and eligibility rules', keywords:['commitments','eligibility','creator pool','minimum releases','minimum minutes'], icon:<Users size={15}/>, action:()=>{ navigate('admin'); openAdminWorkspace('contributors'); } },
+      { id:'search-compensation', group:'Administration', label:'Compensation Control Centre', detail:'Manage the creator, platform and owner allocation model', keywords:['compensation','revenue split','creator payments','pool percentages','tax estimate','payout model','finance'], icon:<Coins size={15}/>, action:()=>{ navigate('admin'); openAdminWorkspace('contributors'); } },
+      { id:'search-admin-people', group:'Administration', label:'Member & Role Applications', detail:'Review member accounts and professional applications', keywords:['admin people','pending applications','approve creator','approve writer','role review'], icon:<Users size={15}/>, action:()=>{ navigate('admin'); openAdminWorkspace('content'); } },
+    ] : []),
     ...profileDirectory.slice(0,80).map((person) => ({
       id:'profile-' + person.userId,
       group:roleMeta[person.role].label,
@@ -5393,7 +5406,7 @@ function App() {
               </div>
             </section>}
           </div>}
-          {user && !liveRolePreview && <button className="nj-search-trigger desktop-only" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
+          {user && !liveRolePreview && <button className="nj-search-trigger" onClick={() => setCommandOpen(true)} aria-label="Search Nightjar"><Search size={15}/><span>Search</span><kbd>⌘K</kbd></button>}
           {user && !liveRolePreview && (role === 'admin' || ['creator','writer','editor','artist'].includes(String(effectiveRole))) && <button type="button" className="nj-header-inbox" onClick={()=>navigate('messages')} aria-label={'Open NightJar Inbox' + (messageUnreadCount ? ': ' + messageUnreadCount + ' unread' : '')}><MessageCircle size={19}/><span>Inbox</span>{messageUnreadCount > 0 && <em>{messageUnreadCount > 99 ? '99+' : messageUnreadCount}</em>}</button>}
           {user && ageVerified && !liveRolePreview && <button type="button"
             className={view==='calendar'?'nj-header-calendar active':'nj-header-calendar'}
