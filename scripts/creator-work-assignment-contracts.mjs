@@ -31,6 +31,7 @@ for(const method of ['listMyAssignableWorkAssets','listMyCreatorWorkAssignments'
 for(const method of ['assignableWork','workAssignments','sendWorkAssignment','respondWorkAssignment','updateWorkAssignment','openWorkAssignment']) assert.ok(client.includes('async '+method),'Missing client method '+method);
 assert.match(hub,/Access is granted only after acceptance/);
 assert.match(hub,/controlsList="nodownload"/);
+assert.match(app,/CreatorWorkAssignmentHub role="writer"/);
 assert.match(app,/CreatorWorkAssignmentHub role="creator"/);
 assert.match(app,/CreatorWorkAssignmentHub role="artist"/);
 assert.match(app,/CreatorWorkAssignmentHub role="editor"/);
