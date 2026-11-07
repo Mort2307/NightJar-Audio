@@ -29,7 +29,7 @@ export default function WriterCreatorAssignmentButton({ script, notify, simulati
   const [message, setMessage] = useState('');
   const [paymentProposal, setPaymentProposal] = useState('');
   const [licenceSummary, setLicenceSummary] = useState('');
-  const [workType, setWorkType] = useState<'voluntary' | 'private_commission' | 'nightjar_original'>('voluntary');
+  const [workType, setWorkType] = useState<'' | 'voluntary' | 'private_commission' | 'nightjar_original'>('');
   const [review, setReview] = useState(false);
 
   const openComposer = async () => {
@@ -73,12 +73,12 @@ const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
       setMessage('');
       setPaymentProposal('');
       setLicenceSummary('');
-      setWorkType('voluntary');
+      setWorkType('');
     }
   }, [open]);
 
   const send = async () => {
-    if (!selected || sending) return;
+    if (!selected || !workType || sending) return;
     setSending(true);
     try {
       if (simulationMode) {
@@ -140,7 +140,8 @@ const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
               {!eligible.length && <p className="nj-assignment-state">No approved Creators match that search.</p>}
             </div>
             <label className="nj-assignment-field">Work arrangement
-              <select value={workType} onChange={(event)=>setWorkType(event.target.value as typeof workType)}>
+              <select value={workType} required onChange={(event)=>setWorkType(event.target.value as typeof workType)}>
+                <option value="" disabled>Choose the work arrangement…</option>
                 <option value="voluntary">Voluntary submission · Writer retains copyright</option>
                 <option value="private_commission">Private commission · agree ownership and fee separately</option>
                 <option value="nightjar_original">NightJar Original · separate commission agreement</option>
@@ -149,10 +150,10 @@ const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
             <label className="nj-assignment-field">Private note <textarea value={message} onChange={(event)=>setMessage(event.target.value)} rows={3} maxLength={2400} placeholder="Tell the selected Creator what you have in mind…"/></label>
             <label className="nj-assignment-field">Proposed payment <input value={paymentProposal} onChange={(event)=>setPaymentProposal(event.target.value)} maxLength={800} placeholder="Optional · e.g. £150 agreed commission, or to be discussed"/></label>
             <label className="nj-assignment-field">Rights / licence summary <input value={licenceSummary} onChange={(event)=>setLicenceSummary(event.target.value)} maxLength={1200} placeholder="Optional · record the proposed rights arrangement"/></label>
-            <p className="nj-assignment-privacy">This is a private invitation, not a public listing. No ownership transfer or payment is triggered by sending it.</p>
+            <p className="nj-assignment-privacy">This is a private invitation, not a public listing. The Writer and selected VA/Creator are linked for future release credits. No ownership transfer or payment is triggered by sending it.</p>
             <footer className="nj-assignment-actions">
               <button type="button" className="ghost-button" onClick={()=>setOpen(false)}>Cancel</button>
-              <button type="button" className="primary-button" disabled={!selected || loading} onClick={()=>setReview(true)}>Review assignment <ArrowRight size={15}/></button>
+              <button type="button" className="primary-button" disabled={!selected || loading} onClick={()=>setReview(true)} disabled={!selected || !workType}>Review assignment <ArrowRight size={15}/></button>
             </footer>
           </> : <>
             <div className="nj-assignment-review">
@@ -161,6 +162,7 @@ const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
               <p><span>Arrangement</span><strong>{workType === 'voluntary' ? 'Voluntary submission' : workType === 'private_commission' ? 'Private commission' : 'NightJar Original'}</strong></p>
               <p><span>Payment proposal</span><strong>{paymentProposal.trim() || 'Not specified'}</strong></p>
               <p><span>Rights summary</span><strong>{licenceSummary.trim() || 'Not specified'}</strong></p>
+              <p><span>Credits linked</span><strong>Writer · {selected?.name} (VA/Creator)</strong></p>
             </div>
             <p className="nj-assignment-privacy">Only {selected?.name} receives this assignment. They can accept or decline it in their private Collaborations workspace. The script is not published or listed.</p>
             <footer className="nj-assignment-actions">
