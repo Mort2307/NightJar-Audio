@@ -188,6 +188,8 @@ const adminGetTaxLedgerCall = httpsCallable<{ periodId: string }, {
   ledger: null | { periodId: string; reservePence?: number; reserveNote?: string; confirmedLiabilityPence?: number; accountantReference?: string; paidPence?: number };
   payments: Array<{ id: string; amountPence: number; reference: string; paidAt: string }>;
   estimates: Array<{ id: string; category: string; taxableBasePence: number; rateBasisPoints: number; estimatedTaxPence: number; sourceReference: string; note: string; recordedAt: unknown }>;
+  reserveEntries: Array<{ id: string; reservePence: number; note: string; recordedAt: unknown; recordedByAdminUserId: string }>;
+  liabilityEntries: Array<{ id: string; liabilityPence: number; accountantReference: string; recordedAt: unknown; recordedByAdminUserId: string }>;
 }>(functions, 'adminGetTaxLedger');
 const getMyCreatorCompensationCall = httpsCallable<void, { compensation: Array<{
   periodId: string; periodStatus: string; creatorPoolPercent: number; eligibleCreatorCount: number;
