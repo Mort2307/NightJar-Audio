@@ -12412,16 +12412,17 @@ export const collaborationDirectory = onCall({ region: REGION }, async (request)
 
 // Asset-agnostic private work assignments. Each adapter resolves ownership and
 // storage server-side; clients never supply a storage path or owner identity.
-type CreatorWorkAssetType = 'script' | 'creator_release_audio' | 'artist_artwork' | 'editor_showcase_audio';
+type CreatorWorkAssetType = 'script' | 'creator_release_audio' | 'creator_release_artwork' | 'script_artwork' | 'artist_artwork' | 'editor_showcase_audio';
 const creatorWorkAssetRevision = (data: Record<string, any>) => [
   String(Math.max(0, Number(data.updatedAt?.toMillis?.() ?? 0))),
   String(Math.max(0, Number(data.metadataRevision ?? data.contentRevision ?? data.version ?? 1))),
-  String(data.audioStoragePath ?? data.beforeAudioStoragePath ?? '') + ':' + String(data.afterAudioStoragePath ?? data.imageAssetId ?? data.originalUpload?.sourceSha256 ?? ''),
+  String(data.audioStoragePath ?? data.beforeAudioStoragePath ?? '') + ':' + String(data.afterAudioStoragePath ?? data.imageAssetId ?? data.artworkAssetId ?? data.originalUpload?.sourceSha256 ?? ''),
 ].join(':');
 
 const creatorWorkAssetRef = (assetType: CreatorWorkAssetType, assetId: string) => {
   if (assetType === 'script') return db.collection('scripts').doc(assetId);
-  if (assetType === 'creator_release_audio') return db.collection('releases').doc(assetId);
+  if (assetType === 'creator_release_audio' || assetType === 'creator_release_artwork') return db.collection('releases').doc(assetId);
+  if (assetType === 'script_artwork') return db.collection('scripts').doc(assetId);
   if (assetType === 'artist_artwork') return db.collection('artistPortfolio').doc(assetId);
   return db.collection('editorPortfolio').doc(assetId);
 };
@@ -12443,11 +12444,17 @@ const resolveCreatorWorkAsset = async (assetType: CreatorWorkAssetType, assetId:
     if (data.creatorUserId !== ownerUserId || data.status === 'removed' || data.status === 'removing' || !data.audioStoragePath) throw new HttpsError('not-found', 'The selected audio release could not be found.');
     storagePath = cleanText(data.audioStoragePath, 600);
     contentType = cleanText(data.audioContentType, 160) || 'audio/mpeg';
-  } else if (assetType === 'artist_artwork') {
-    if (data.ownerUserId !== ownerUserId || data.status === 'removed' || data.imageStatus !== 'approved' || !data.imageAssetId) throw new HttpsError('not-found', 'Approved artwork owned by this Artist could not be found.');
-    const image = await db.collection('imageAssets').doc(String(data.imageAssetId)).get();
+  } else if (['artist_artwork','creator_release_artwork','script_artwork'].includes(assetType)) {
+    const isArtist = assetType === 'artist_artwork';
+    const isRelease = assetType === 'creator_release_artwork';
+    const ownerField = isArtist ? data.ownerUserId : isRelease ? data.creatorUserId : data.writerUserId;
+    const imageId = cleanText(isArtist ? data.imageAssetId : data.artworkAssetId, 160);
+    const imageStatus = cleanText(isArtist ? data.imageStatus : data.artworkStatus, 30);
+    const expectedKind = isArtist ? 'artist_portfolio' : isRelease ? 'release_artwork' : 'script_artwork';
+    if (ownerField !== ownerUserId || data.status === 'removed' || imageStatus !== 'approved' || !imageId) throw new HttpsError('not-found', 'Approved artwork owned by this professional could not be found.');
+    const image = await db.collection('imageAssets').doc(imageId).get();
     const imageData = image.data() ?? {};
-    if (!image.exists || imageData.ownerUserId !== ownerUserId || imageData.status !== 'approved') throw new HttpsError('not-found', 'The approved artwork file is no longer available.');
+    if (!image.exists || imageData.ownerUserId !== ownerUserId || imageData.status !== 'approved' || imageData.kind !== expectedKind || imageData.targetId !== assetId) throw new HttpsError('not-found', 'The approved artwork file is no longer available.');
     storagePath = cleanText(imageData.storagePath, 600);
     contentType = cleanText(imageData.contentType, 160) || 'image/jpeg';
   } else {
@@ -12482,6 +12489,7 @@ export const listMyAssignableWorkAssets = onCall({ region: REGION }, async (requ
     for (const doc of snap.docs) {
       const d = doc.data();
       if (d.status !== 'Removed' && String(d.content ?? '').trim()) add('script', doc.id, cleanText(d.title,180) || 'Untitled manuscript', creatorWorkAssetRevision(d));
+      if (d.status !== 'Removed' && d.artworkStatus === 'approved' && d.artworkAssetId) add('script_artwork', doc.id, (cleanText(d.title,180) || 'Untitled manuscript') + ' · Cover artwork', creatorWorkAssetRevision(d));
     }
   })());
   if (roles.includes('creator')) jobs.push((async () => {
@@ -12489,6 +12497,7 @@ export const listMyAssignableWorkAssets = onCall({ region: REGION }, async (requ
     for (const doc of snap.docs) {
       const d = doc.data();
       if (!['removed','removing'].includes(String(d.status)) && d.audioStoragePath) add('creator_release_audio', doc.id, cleanText(d.title,180) || 'Untitled audio release', creatorWorkAssetRevision(d));
+      if (!['removed','removing'].includes(String(d.status)) && d.artworkStatus === 'approved' && d.artworkAssetId) add('creator_release_artwork', doc.id, (cleanText(d.title,180) || 'Untitled audio release') + ' · Cover artwork', creatorWorkAssetRevision(d));
     }
   })());
   if (roles.includes('artist')) jobs.push((async () => {
@@ -12543,7 +12552,7 @@ export const sendCreatorWorkAssignment = onCall({ region: REGION }, async (reque
   const task = cleanText(input.task, 120);
   const requestedSlot = cleanText(input.assetSlot, 20) || null;
   const message = cleanText(input.message, 2000);
-  if (!['script','creator_release_audio','artist_artwork','editor_showcase_audio'].includes(assetType) || !assetId || !recipientUserId || recipientUserId === identity.uid || !task) {
+  if (!['script','creator_release_audio','creator_release_artwork','script_artwork','artist_artwork','editor_showcase_audio'].includes(assetType) || !assetId || !recipientUserId || recipientUserId === identity.uid || !task) {
     throw new HttpsError('invalid-argument', 'Choose your work, another professional and the task you are inviting them to do.');
   }
   const [ownerAccount, recipientAccount, ownerProfile, recipientProfile, asset] = await Promise.all([
