@@ -12532,7 +12532,7 @@ export const listMyCreatorWorkAssignments = onCall({ region: REGION }, async (re
         recipientUserId: d.recipientUserId, recipientName: d.recipientName, isRecipient: d.recipientUserId === identity.uid,
         recipientRole: d.recipientRole, assetType: d.assetType, assetId: d.assetId,
         assetSlot: d.assetSlot ?? null, assetTitle: d.assetTitle,
-        task: d.task, message: d.message, status: d.status,
+        task: d.task, message: d.message, rightsSummary: d.rightsSummary ?? '', creditCandidates: Array.isArray(d.creditCandidates) ? d.creditCandidates : [], status: d.status,
         assetRevision: d.assetRevision, createdAt: toIso(d.createdAt),
         updatedAt: toIso(d.updatedAt), responseNote: d.responseNote ?? '',
       };
@@ -12552,6 +12552,7 @@ export const sendCreatorWorkAssignment = onCall({ region: REGION }, async (reque
   const task = cleanText(input.task, 120);
   const requestedSlot = cleanText(input.assetSlot, 20) || null;
   const message = cleanText(input.message, 2000);
+  const rightsSummary = cleanText(input.rightsSummary, 1200);
   if (!['script','creator_release_audio','creator_release_artwork','script_artwork','artist_artwork','editor_showcase_audio'].includes(assetType) || !assetId || !recipientUserId || recipientUserId === identity.uid || !task) {
     throw new HttpsError('invalid-argument', 'Choose your work, another professional and the task you are inviting them to do.');
   }
@@ -12579,10 +12580,11 @@ export const sendCreatorWorkAssignment = onCall({ region: REGION }, async (reque
   const recipientName = cleanText(recipientProfile.data()?.displayName,100) || 'Nightjar professional';
   const record = {
     ownerUserId: identity.uid, ownerName, ownerRoles,
-    recipientUserId, recipientName, recipientRole: recipientRoles[0],
+    recipientUserId, recipientName, recipientRole: recipientRoles[0], recipientRoles,
     initiatedByUserId: identity.uid, assetType, assetId, assetSlot: asset.assetSlot,
     assetTitle: asset.title, assetRevision: asset.revision,
-    task, message, allowCopy: false, allowExport: false,
+    task, message, rightsSummary, creditCandidates: [{ userId: identity.uid, roles: ownerRoles }, { userId: recipientUserId, roles: recipientRoles }],
+    allowCopy: false, allowExport: false,
     status: 'sent', responseNote: '',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   };
