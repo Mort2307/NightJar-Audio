@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Check, ChevronDown, Handshake, LoaderCircle, Search, X } from 'lucide-react';
+import { ArrowRight, Check, Handshake, LoaderCircle, Search, X } from 'lucide-react';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
 import { pendingPrivateCreateId, clearPrivateCreateId } from '../platform/client-create-idempotency';
 
@@ -59,6 +59,12 @@ export default function WriterCreatorAssignmentButton({ script, notify, simulati
 
   const selected = people.find((person) => person.userId === selectedId);
 
+const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
+  const bytes = new TextEncoder().encode(scriptId + ':' + recipientId);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, '0')).join('');
+};
+
   useEffect(() => {
     if (!open) {
       setReview(false);
@@ -78,7 +84,8 @@ export default function WriterCreatorAssignmentButton({ script, notify, simulati
       if (simulationMode) {
         notify('Simulation only: assignment was not sent to a real Creator.');
       } else {
-        const requestId = pendingPrivateCreateId('writer-creator-assignment', script.id + ':' + selected.userId);
+        const fingerprint = await assignmentFingerprint(script.id, selected.userId);
+        const requestId = pendingPrivateCreateId('writer-creator-assignment', fingerprint);
         await nightjarCollaboration.send({
           scriptId: script.id,
           recipientUserId: selected.userId,
@@ -90,7 +97,7 @@ export default function WriterCreatorAssignmentButton({ script, notify, simulati
           scriptVersion: Number(script.version ?? 1),
           clientRequestId: requestId,
         });
-        clearPrivateCreateId('writer-creator-assignment', requestId, script.id + ':' + selected.userId);
+        clearPrivateCreateId('writer-creator-assignment', requestId, fingerprint);
         notify('Private assignment sent. Only the selected Creator has been notified.');
       }
       setOpen(false);
