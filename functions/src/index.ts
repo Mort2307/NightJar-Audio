@@ -12519,8 +12519,8 @@ export const listMyCreatorWorkAssignments = onCall({ region: REGION }, async (re
     .map(doc => {
       const d = doc.data();
       return {
-        id: doc.id, ownerUserId: d.ownerUserId, ownerName: d.ownerName,
-        recipientUserId: d.recipientUserId, recipientName: d.recipientName,
+        id: doc.id, ownerUserId: d.ownerUserId, ownerName: d.ownerName, isOwner: d.ownerUserId === identity.uid,
+        recipientUserId: d.recipientUserId, recipientName: d.recipientName, isRecipient: d.recipientUserId === identity.uid,
         recipientRole: d.recipientRole, assetType: d.assetType, assetId: d.assetId,
         assetSlot: d.assetSlot ?? null, assetTitle: d.assetTitle,
         task: d.task, message: d.message, status: d.status,
