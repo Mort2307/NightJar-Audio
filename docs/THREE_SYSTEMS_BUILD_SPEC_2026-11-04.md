@@ -179,7 +179,7 @@ Allowed types are a fixed allowlist. Role permissions are never inferred from th
 - Direct creator tips and wallet/token flows remain separate from subscription revenue unless explicitly and legally reconciled into a distinct ledger stream.
 
 ### Proposed data shape
-- `financePolicies/{policyId}`: effectiveFrom, subscriptionPricePence, creatorPoolPercent, nightjarPoolPercent, ownerPoolPercent, taxReserveRule, currency, version, status.
+- `financePolicies/{policyId}`: effectiveFrom, subscriptionPricePence (planning only), creatorPoolPercent, nightjarPoolPercent, ownerPoolPercent, taxReservePercent, currency, version, status.
 - `financePeriods/{periodKey}`: sourceTotals, deductions, eligibleNetRevenuePence, policyVersion, creatorPoolPence, allocationTotals, status, closedAt.
 - `creatorPayouts/{periodKey_userId}`: periodKey, userId, eligibleRole, poolSharePence, status, paymentReference, timestamps.
 - `taxLedger/{entryId}`: category, periodKey, entryType (reserve/estimate/liability/payment/adjustment), amountPence, date, reference, note, createdBy.
