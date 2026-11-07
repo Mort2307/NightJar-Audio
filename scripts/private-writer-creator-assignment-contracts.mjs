@@ -22,7 +22,7 @@ assert.match(backend, /scriptVersion: Math\.max\(1, Number\(scriptData\.version 
 assert.match(backend, /scriptContentRevision: Math\.max\(0, Number\(scriptData\.contentRevision \?\? 0\)\)/);
 assert.match(backend, /latest\.scriptContentRevision/);
 assert.match(backend, /credits: assignmentType === 'private_writer_assignment'/);
-assert.match(backend, /grantSource: 'private_writer_assignment'/);
+assert.match(backend, /grantSource: 'private_writer_assignment'/);\nassert.match(backend, /allowExport: latest\.allowOriginalExport === true/);\nassert.match(backend, /originalStoragePath && canReadOriginalFile/);\nassert.match(composer, /allowOriginalExport/);
 assert.match(backend, /allowCopy: false,[\s\S]*allowExport: false/);
 assert.match(backend, /private_assignment_withdrawn/);
 assert.match(hub, /Open assigned manuscript/);
