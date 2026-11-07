@@ -1,11 +1,11 @@
 {
   "pr": 343,
-  "reason": "PR #343 includes the reviewed Writer → Creator manuscript assignment integration and adds the asset-agnostic private work-assignment workspace to Creator, Artist and Audio Editor routes. The App change only mounts the new collaboration UI in those professional studios; it does not change routes, authentication, account permissions, release gates or the three completed platform systems.",
+  "reason": "PR #343 retains the reviewed Writer → Creator manuscript-card assignment and adds the asset-agnostic private work-assignment workspace to Writer, Creator, Artist and Audio Editor studios. The App change only mounts the new collaboration UI in those professional studios; it does not change authentication, account permissions, release gates or the three completed platform systems.",
   "files": [
     {
       "path": "src/App.tsx",
       "baselineSha": "05931969befcd2fbc5991e16facabfec994f623f",
-      "sha": "e4cc5680e356705593e05a3ddfe38aea3413a20d"
+      "sha": "e33db49f927d646140a6a07b660865457672d41a"
     }
   ]
 }
