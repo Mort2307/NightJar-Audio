@@ -64,7 +64,9 @@ export default function CompensationControlCentre() {
     ledger: { periodId: string; reservePence?: number; reserveNote?: string; confirmedLiabilityPence?: number; accountantReference?: string; paidPence?: number } | null;
     payments: Array<{ id: string; amountPence: number; reference: string; paidAt: string }>;
     estimates: Array<{ id: string; category: string; taxableBasePence: number; rateBasisPoints: number; estimatedTaxPence: number; sourceReference: string; note: string; recordedAt: unknown }>;
-  }>({ ledger: null, payments: [], estimates: [] });
+    reserveEntries: Array<{ id: string; reservePence: number; note: string; recordedAt: unknown; recordedByAdminUserId: string }>;
+    liabilityEntries: Array<{ id: string; liabilityPence: number; accountantReference: string; recordedAt: unknown; recordedByAdminUserId: string }>;
+  }>({ ledger: null, payments: [], estimates: [], reserveEntries: [], liabilityEntries: [] });
   const [taxEstimateCategory, setTaxEstimateCategory] = useState<'corporation_tax' | 'income_tax' | 'vat' | 'paye_ni' | 'other'>('other');
   const [taxEstimateBase, setTaxEstimateBase] = useState('');
   const [taxEstimateRate, setTaxEstimateRate] = useState('');
@@ -137,7 +139,7 @@ export default function CompensationControlCentre() {
       }
     } catch (cause) {
       if (requestId !== refreshRequestId.current) return;
-      setTaxLedger({ ledger: null, payments: [], estimates: [] });
+      setTaxLedger({ ledger: null, payments: [], estimates: [], reserveEntries: [], liabilityEntries: [] });
       setError(cause instanceof Error ? cause.message : 'The tax ledger could not be loaded.');
     } finally { if (requestId === refreshRequestId.current) setLoading(false); }
   }, [periodId]);
@@ -147,7 +149,7 @@ export default function CompensationControlCentre() {
     setExternalId(''); setSettledAt(periodId + '-01'); setSourceReference(''); setGross('');
     setRefunds('0'); setChargebacks('0'); setFees('0'); setVat('0'); setOtherDeductions('0');
     setReconciliationNotes({}); setPaymentRefs({}); setPaymentAmounts({});
-    setTaxLedger({ ledger: null, payments: [], estimates: [] }); setTaxReserve(''); setTaxReserveNote('');
+    setTaxLedger({ ledger: null, payments: [], estimates: [], reserveEntries: [], liabilityEntries: [] }); setTaxReserve(''); setTaxReserveNote('');
     setTaxEstimateCategory('other'); setTaxEstimateBase(''); setTaxEstimateRate(''); setTaxEstimateSource(''); setTaxEstimateNote('');
     setTaxLiability(''); setAccountantReference(''); setTaxPaymentAmount(''); setTaxPaymentReference('');
   }, [periodId]);
@@ -396,6 +398,10 @@ export default function CompensationControlCentre() {
         <label>Payment reference<input value={taxPaymentReference} onChange={(event) => setTaxPaymentReference(event.target.value)} placeholder="Bank / HMRC payment reference"/></label>
       </div>}
       {!!taxLedger.ledger?.confirmedLiabilityPence && <button className="nj-compensation-primary" type="button" disabled={busy === 'tax-payment' || !taxPaymentReference.trim() || !taxPaymentValid} onClick={() => void recordTaxPayment()}>{busy === 'tax-payment' ? 'Recording…' : 'Record actual tax payment'}</button>}
+      <h4>Cash reserve history</h4>
+      {taxLedger.reserveEntries.map((entry) => <div className="nj-tax-payment-row" key={entry.id}><span>{entry.note}</span><strong>{money(entry.reservePence)}</strong></div>)}
+      <h4>Confirmed liability history</h4>
+      {taxLedger.liabilityEntries.map((entry) => <div className="nj-tax-payment-row" key={entry.id}><span>{entry.accountantReference}</span><strong>{money(entry.liabilityPence)}</strong></div>)}
       {taxLedger.payments.map((payment) => <div className="nj-tax-payment-row" key={payment.id}><span>{payment.paidAt} · {payment.reference}</span><strong>{money(payment.amountPence)}</strong></div>)}
     </article>
     <p className="nj-compensation-footnote">No bank transfers or automatic payouts are initiated here. This centre records reconciled source data, approved payout liabilities and payment references. Tax liabilities and payments require their own accountant-confirmed ledger.</p>
