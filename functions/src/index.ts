@@ -12416,7 +12416,7 @@ type CreatorWorkAssetType = 'script' | 'creator_release_audio' | 'creator_releas
 const creatorWorkAssetRevision = (data: Record<string, any>) => [
   String(Math.max(0, Number(data.updatedAt?.toMillis?.() ?? 0))),
   String(Math.max(0, Number(data.metadataRevision ?? data.contentRevision ?? data.version ?? 1))),
-  String(data.audioStoragePath ?? data.beforeAudioStoragePath ?? '') + ':' + String(data.afterAudioStoragePath ?? data.imageAssetId ?? data.artworkAssetId ?? data.originalUpload?.sourceSha256 ?? ''),
+  String(data.audioStoragePath ?? data.beforeAudioStoragePath ?? '') + ':' + String(data.afterAudioStoragePath ?? data.imageAssetId ?? data.pendingImageAssetId ?? data.artworkAssetId ?? data.pendingArtworkAssetId ?? data.originalUpload?.sourceSha256 ?? ''),
 ].join(':');
 
 const creatorWorkAssetRef = (assetType: CreatorWorkAssetType, assetId: string) => {
@@ -12448,13 +12448,17 @@ const resolveCreatorWorkAsset = async (assetType: CreatorWorkAssetType, assetId:
     const isArtist = assetType === 'artist_artwork';
     const isRelease = assetType === 'creator_release_artwork';
     const ownerField = isArtist ? data.ownerUserId : isRelease ? data.creatorUserId : data.writerUserId;
-    const imageId = cleanText(isArtist ? data.imageAssetId : data.artworkAssetId, 160);
-    const imageStatus = cleanText(isArtist ? data.imageStatus : data.artworkStatus, 30);
+    const approvedImageId = cleanText(isArtist ? data.imageAssetId : data.artworkAssetId, 160);
+    const pendingImageId = cleanText(isArtist ? data.pendingImageAssetId : data.pendingArtworkAssetId, 160);
+    const approvedStatus = cleanText(isArtist ? data.imageStatus : data.artworkStatus, 30);
+    const pendingStatus = cleanText(isArtist ? data.pendingImageStatus : data.pendingArtworkStatus, 30);
+    const imageId = approvedStatus === 'approved' ? approvedImageId : pendingStatus === 'pending' ? pendingImageId : '';
+    const expectedImageStatus = approvedStatus === 'approved' ? 'approved' : 'pending';
     const expectedKind = isArtist ? 'artist_portfolio' : isRelease ? 'release_artwork' : 'script_artwork';
-    if (ownerField !== ownerUserId || data.status === 'removed' || imageStatus !== 'approved' || !imageId) throw new HttpsError('not-found', 'Approved artwork owned by this professional could not be found.');
+    if (ownerField !== ownerUserId || data.status === 'removed' || !imageId) throw new HttpsError('not-found', 'Artwork owned by this professional could not be found.');
     const image = await db.collection('imageAssets').doc(imageId).get();
     const imageData = image.data() ?? {};
-    if (!image.exists || imageData.ownerUserId !== ownerUserId || imageData.status !== 'approved' || imageData.kind !== expectedKind || imageData.targetId !== assetId) throw new HttpsError('not-found', 'The approved artwork file is no longer available.');
+    if (!image.exists || imageData.ownerUserId !== ownerUserId || imageData.status !== expectedImageStatus || imageData.kind !== expectedKind || imageData.targetId !== assetId) throw new HttpsError('not-found', 'The artwork file is no longer available.');
     storagePath = cleanText(imageData.storagePath, 600);
     contentType = cleanText(imageData.contentType, 160) || 'image/jpeg';
   } else {
@@ -12489,7 +12493,7 @@ export const listMyAssignableWorkAssets = onCall({ region: REGION }, async (requ
     for (const doc of snap.docs) {
       const d = doc.data();
       if (d.status !== 'Removed' && String(d.content ?? '').trim()) add('script', doc.id, cleanText(d.title,180) || 'Untitled manuscript', creatorWorkAssetRevision(d));
-      if (d.status !== 'Removed' && d.artworkStatus === 'approved' && d.artworkAssetId) add('script_artwork', doc.id, (cleanText(d.title,180) || 'Untitled manuscript') + ' · Cover artwork', creatorWorkAssetRevision(d));
+      if (d.status !== 'Removed' && ((d.artworkStatus === 'approved' && d.artworkAssetId) || (d.pendingArtworkStatus === 'pending' && d.pendingArtworkAssetId))) add('script_artwork', doc.id, (cleanText(d.title,180) || 'Untitled manuscript') + ' · Cover artwork', creatorWorkAssetRevision(d));
     }
   })());
   if (roles.includes('creator')) jobs.push((async () => {
@@ -12497,14 +12501,14 @@ export const listMyAssignableWorkAssets = onCall({ region: REGION }, async (requ
     for (const doc of snap.docs) {
       const d = doc.data();
       if (!['removed','removing'].includes(String(d.status)) && d.audioStoragePath) add('creator_release_audio', doc.id, cleanText(d.title,180) || 'Untitled audio release', creatorWorkAssetRevision(d));
-      if (!['removed','removing'].includes(String(d.status)) && d.artworkStatus === 'approved' && d.artworkAssetId) add('creator_release_artwork', doc.id, (cleanText(d.title,180) || 'Untitled audio release') + ' · Cover artwork', creatorWorkAssetRevision(d));
+      if (!['removed','removing'].includes(String(d.status)) && ((d.artworkStatus === 'approved' && d.artworkAssetId) || (d.pendingArtworkStatus === 'pending' && d.pendingArtworkAssetId))) add('creator_release_artwork', doc.id, (cleanText(d.title,180) || 'Untitled audio release') + ' · Cover artwork', creatorWorkAssetRevision(d));
     }
   })());
   if (roles.includes('artist')) jobs.push((async () => {
     const snap = await db.collection('artistPortfolio').where('ownerUserId', '==', identity.uid).limit(100).get();
     for (const doc of snap.docs) {
       const d = doc.data();
-      if (d.status !== 'removed' && d.imageStatus === 'approved' && d.imageAssetId) add('artist_artwork', doc.id, cleanText(d.title,180) || 'Untitled artwork', creatorWorkAssetRevision(d));
+      if (d.status !== 'removed' && ((d.imageStatus === 'approved' && d.imageAssetId) || (d.pendingImageStatus === 'pending' && d.pendingImageAssetId))) add('artist_artwork', doc.id, cleanText(d.title,180) || 'Untitled artwork', creatorWorkAssetRevision(d));
     }
   })());
   if (roles.includes('editor')) jobs.push((async () => {
@@ -12672,12 +12676,18 @@ export const respondCreatorWorkAssignment = onCall({ region: REGION }, async (re
         throw new HttpsError('failed-precondition', 'The work changed while you were accepting. Ask the owner to send a fresh invitation.');
       }
       if (['artist_artwork','creator_release_artwork','script_artwork'].includes(String(prior.assetType))) {
-        const imageId = cleanText(prior.assetType === 'artist_artwork' ? assetData.imageAssetId : assetData.artworkAssetId,160);
+        const isArtistArtwork = prior.assetType === 'artist_artwork';
+        const approvedId = cleanText(isArtistArtwork ? assetData.imageAssetId : assetData.artworkAssetId,160);
+        const pendingId = cleanText(isArtistArtwork ? assetData.pendingImageAssetId : assetData.pendingArtworkAssetId,160);
+        const approvedStatus = cleanText(isArtistArtwork ? assetData.imageStatus : assetData.artworkStatus,30);
+        const pendingStatus = cleanText(isArtistArtwork ? assetData.pendingImageStatus : assetData.pendingArtworkStatus,30);
+        const imageId = approvedStatus === 'approved' ? approvedId : pendingStatus === 'pending' ? pendingId : '';
+        const expectedStatus = approvedStatus === 'approved' ? 'approved' : 'pending';
         const imageSnapshot = imageId ? await tx.get(db.collection('imageAssets').doc(imageId)) : null;
         const imageData = imageSnapshot?.data() ?? {};
-        const expectedKind = prior.assetType === 'artist_artwork' ? 'artist_portfolio' : prior.assetType === 'creator_release_artwork' ? 'release_artwork' : 'script_artwork';
-        if (!imageSnapshot?.exists || imageData.ownerUserId !== prior.ownerUserId || imageData.status !== 'approved' || imageData.kind !== expectedKind || imageData.targetId !== prior.assetId) {
-          throw new HttpsError('failed-precondition', 'The approved artwork is no longer available.');
+        const expectedKind = isArtistArtwork ? 'artist_portfolio' : prior.assetType === 'creator_release_artwork' ? 'release_artwork' : 'script_artwork';
+        if (!imageSnapshot?.exists || imageData.ownerUserId !== prior.ownerUserId || imageData.status !== expectedStatus || imageData.kind !== expectedKind || imageData.targetId !== prior.assetId) {
+          throw new HttpsError('failed-precondition', 'The artwork is no longer available.');
         }
       }
     }
