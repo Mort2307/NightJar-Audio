@@ -1713,12 +1713,29 @@ export const adminSetTaxReserve = onCall({ region: REGION }, async (request) => 
     throw new HttpsError('invalid-argument', 'Choose a period and document the reason for the cash reserve.');
   }
   const ref = taxLedgerRef(periodId);
-  await ref.set({
-    periodId, reservePence, reserveNote: note,
-    reserveSetByAdminUserId: admin.uid, reserveUpdatedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { saved: true, periodId, reservePence };
+  const entryId = createHash('sha256').update(periodId + ':reserve:' + reservePence + ':' + note).digest('hex');
+  const entryRef = ref.collection('reserveEntries').doc(entryId);
+  const result = await db.runTransaction(async (tx) => {
+    const [ledgerSnap, entrySnap] = await Promise.all([tx.get(ref), tx.get(entryRef)]);
+    if (entrySnap.exists) {
+      const prior = entrySnap.data() ?? {};
+      if (prior.reservePence !== reservePence || prior.note !== note) {
+        throw new HttpsError('already-exists', 'This reserve entry reference conflicts with an existing record.');
+      }
+      return { duplicate: true };
+    }
+    tx.create(entryRef, {
+      entryId, periodId, reservePence, note,
+      recordedByAdminUserId: admin.uid, recordedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(ref, {
+      periodId, reservePence, reserveNote: note,
+      reserveSetByAdminUserId: admin.uid, reserveUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { duplicate: false };
+  });
+  return { saved: true, duplicate: result.duplicate, periodId, reservePence };
 });
 
 export const adminSetConfirmedTaxLiability = onCall({ region: REGION }, async (request) => {
@@ -1731,17 +1748,31 @@ export const adminSetConfirmedTaxLiability = onCall({ region: REGION }, async (r
     throw new HttpsError('invalid-argument', 'Provide the period and an accountant or HMRC source reference.');
   }
   const ref = taxLedgerRef(periodId);
-  await db.runTransaction(async (tx) => {
-    const existing = await tx.get(ref);
+  const entryId = createHash('sha256').update(periodId + ':liability:' + liabilityPence + ':' + accountantReference).digest('hex');
+  const entryRef = ref.collection('liabilityEntries').doc(entryId);
+  const result = await db.runTransaction(async (tx) => {
+    const [existing, entry] = await Promise.all([tx.get(ref), tx.get(entryRef)]);
     const paidPence = safePence(existing.data()?.paidPence ?? 0, 'Tax paid');
     if (liabilityPence < paidPence) throw new HttpsError('failed-precondition', 'Confirmed liability cannot be lower than tax payments already recorded.');
+    if (entry.exists) {
+      const prior = entry.data() ?? {};
+      if (prior.liabilityPence !== liabilityPence || prior.accountantReference !== accountantReference) {
+        throw new HttpsError('already-exists', 'This liability confirmation conflicts with an existing record.');
+      }
+      return { duplicate: true };
+    }
+    tx.create(entryRef, {
+      entryId, periodId, liabilityPence, accountantReference,
+      recordedByAdminUserId: admin.uid, recordedAt: FieldValue.serverTimestamp(),
+    });
     tx.set(ref, {
       periodId, confirmedLiabilityPence: liabilityPence,
       accountantReference, liabilityConfirmedByAdminUserId: admin.uid,
       liabilityConfirmedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+    return { duplicate: false };
   });
-  return { saved: true, periodId, liabilityPence };
+  return { saved: true, duplicate: result.duplicate, periodId, liabilityPence };
 });
 
 export const adminRecordTaxPayment = onCall({ region: REGION }, async (request) => {
@@ -1791,15 +1822,19 @@ export const adminGetTaxLedger = onCall({ region: REGION }, async (request) => {
   const periodId = (request.data as Record<string, unknown> | undefined)?.periodId;
   if (!validCommitmentPeriodId(periodId)) throw new HttpsError('invalid-argument', 'Choose a valid tax period.');
   const ref = taxLedgerRef(periodId);
-  const [ledger, payments, estimates] = await Promise.all([
+  const [ledger, payments, estimates, reserveEntries, liabilityEntries] = await Promise.all([
     ref.get(),
     ref.collection('payments').orderBy('recordedAt', 'desc').limit(100).get(),
     ref.collection('estimates').orderBy('recordedAt', 'desc').limit(100).get(),
+    ref.collection('reserveEntries').orderBy('recordedAt', 'desc').limit(100).get(),
+    ref.collection('liabilityEntries').orderBy('recordedAt', 'desc').limit(100).get(),
   ]);
   return {
     ledger: ledger.exists ? { periodId, ...ledger.data() } : null,
     payments: payments.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
     estimates: estimates.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    reserveEntries: reserveEntries.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    liabilityEntries: liabilityEntries.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
   };
 });
 export const getMyCreatorCompensation = onCall({ region: REGION }, async (request) => {
