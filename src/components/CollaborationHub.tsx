@@ -30,6 +30,8 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
   const [sending, setSending] = useState(false);
   const [collaboratorQuery, setCollaboratorQuery] = useState('');
   const [collaboratorRole, setCollaboratorRole] = useState<'all' | 'creator' | 'editor'>('all');
+  const [openedAssignmentScript, setOpenedAssignmentScript] = useState<any | null>(null);
+  const [openingScriptId, setOpeningScriptId] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -161,7 +163,21 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
     }
   };
 
-  return <section className="research-panel collaboration-hub">
+  const openAssignedScript = async (proposal: any) => {
+    if (simulationMode || !proposal.scriptId || openingScriptId) return;
+    setOpeningScriptId(proposal.id);
+    try {
+      const result = await nightjarScripts.openProtected(proposal.scriptId);
+      setOpenedAssignmentScript(result);
+    } catch {
+      notify('The assigned manuscript could not be opened. Check that the assignment is accepted and still active.');
+    } finally {
+      setOpeningScriptId('');
+    }
+  };
+
+  return <>
+    <section className="research-panel collaboration-hub">
     <div className="research-panel-head">
       <div><span className="mini-label">COLLABORATION WORKSPACE</span><h2>Clear proposals. Clear answers.</h2><p>Keep creative business out of inbox limbo. Every proposal retains a visible response and production state.</p></div>
       <Handshake size={22}/>
@@ -212,16 +228,24 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
         const counterpartUserId = role === 'writer' ? proposal.recipientUserId : proposal.writerUserId;
         return <article className="collaboration-card" key={proposal.id}>
           <div className="collaboration-card-top">
-            <div><span className="nj-term-label">{statusLabel(proposal.status)} <ContextHelp topic="collaboration-status"/></span><h3>{proposal.scriptTitle}</h3><p>{incoming ? 'From ' : 'To '}{counterpartName}{proposal.initiatedByUserId && proposal.initiatedByUserId !== proposal.writerUserId ? ' · Marketplace interest' : ''}</p></div>
+            <div>
+              {proposal.assignmentType === 'private_writer_assignment' && <span className="nj-term-label">PRIVATE SCRIPT ASSIGNMENT · VERSION {Number(proposal.scriptVersion ?? 1)}</span>}
+              <span className="nj-term-label">{statusLabel(proposal.status)} <ContextHelp topic="collaboration-status"/></span>
+              <h3>{proposal.scriptTitle}</h3>
+              <p>{incoming ? 'From ' : 'To '}{counterpartName}{proposal.assignmentType === 'private_writer_assignment' ? ' · Private Writer → Creator assignment' : proposal.initiatedByUserId && proposal.initiatedByUserId !== proposal.writerUserId ? ' · Marketplace interest' : ''}</p>
+            </div>
             <FileText size={18}/>
           </div>
           {proposal.message && <p className="collaboration-message">{proposal.message}</p>}
           <dl className="collaboration-meta">
-            <div><dt>Payment</dt><dd>{proposal.paymentProposal || 'Not specified'}</dd></div>
+            <div><dt>Writer payment proposal</dt><dd>{proposal.paymentProposal || 'Not specified'}</dd></div>
             <div><dt className="nj-term-label">Licence <ContextHelp topic="licence-choice"/></dt><dd>{proposal.licenceSummary || 'Not specified'}</dd></div>
           </dl>
           {proposal.responseNote && <p className="collaboration-response"><strong>Response:</strong> {proposal.responseNote}</p>}
           <div className="collaboration-actions">
+            {role === 'creator' && proposal.assignmentType === 'private_writer_assignment' && ['accepted','in_production','completed'].includes(proposal.status) && <button className="primary-button" disabled={Boolean(openingScriptId) || simulationMode} onClick={() => void openAssignedScript(proposal)}>
+              <FileText size={13}/>{openingScriptId === proposal.id ? 'Opening manuscript…' : 'Open assigned manuscript'}
+            </button>}
             <button className="secondary-button" onClick={() => {
               const targetUserId = counterpartUserId;
               if (!targetUserId) return;
@@ -241,5 +265,29 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
         </article>;
       })}
     </div>}
-  </section>;
+    </section>
+    {openedAssignmentScript && <div className="nj-writer-assignment-backdrop" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) setOpenedAssignmentScript(null);
+    }}>
+      <section className="nj-writer-assignment-dialog nj-assigned-script-reader" role="dialog" aria-modal="true" aria-labelledby="nj-assigned-script-title">
+        <header className="nj-writer-assignment-head">
+          <div><span className="mini-label">PROTECTED ASSIGNED MANUSCRIPT</span>
+            <h2 id="nj-assigned-script-title">{openedAssignmentScript.script?.title || 'Assigned manuscript'}</h2>
+            <p>Version {Number(openedAssignmentScript.script?.version ?? 1)} · Copy and export permissions remain controlled by the Writer.</p>
+          </div>
+          <button type="button" className="ghost-button" aria-label="Close manuscript" onClick={() => setOpenedAssignmentScript(null)}><X size={18}/></button>
+        </header>
+        {String(openedAssignmentScript.script?.content ?? '').trim()
+          ? <article className="nj-assigned-script-content" onCopy={(event) => { if (openedAssignmentScript.copyAllowed !== true) event.preventDefault(); }}>
+              <pre>{openedAssignmentScript.script.content}</pre>
+            </article>
+          : openedAssignmentScript.sourceFile?.url
+            ? <p className="nj-assignment-privacy">This manuscript was uploaded as a file: <a href={openedAssignmentScript.sourceFile.url} target="_blank" rel="noreferrer">{openedAssignmentScript.sourceFile.fileName || 'Open uploaded manuscript'}</a></p>
+            : openedAssignmentScript.script?.sourceFile?.fileName
+              ? <p className="nj-assignment-privacy">The uploaded original is protected from download under this assignment. Ask the Writer to provide an in-app text version or approve original-file access.</p>
+              : <p className="nj-assignment-state">No readable manuscript content is available in this version.</p>}
+        <footer className="nj-assignment-actions"><button type="button" className="primary-button" onClick={() => setOpenedAssignmentScript(null)}>Close manuscript</button></footer>
+      </section>
+    </div>}
+  </>;
 }

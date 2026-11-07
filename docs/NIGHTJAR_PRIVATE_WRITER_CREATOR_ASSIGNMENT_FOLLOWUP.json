@@ -1,0 +1,11 @@
+{
+  "pr": 341,
+  "reason": "Connects the standalone private Writer-to-Creator assignment action to Writer Studio manuscript cards. This App.tsx change only passes the existing notify and simulation-mode props into the new card action; it does not alter routes, account permissions or any of the three completed systems.",
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "05931969befcd2fbc5991e16facabfec994f623f",
+      "sha": "f6cc2f91794c5538190dbad994673e703a9b0b18"
+    }
+  ]
+}

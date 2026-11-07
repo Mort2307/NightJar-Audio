@@ -207,6 +207,20 @@ for(const item of adminProfileSearchFollowup.files){
   overrides.set(item.path,item);
 }
 
+// PR #341 adds the private Writer → Creator assignment action to the Writer
+// manuscript cards. Keep the App integration pinned to the exact #339 baseline.
+const privateAssignmentFollowup=JSON.parse(string('docs/NIGHTJAR_PRIVATE_WRITER_CREATOR_ASSIGNMENT_FOLLOWUP.json'));
+assert.equal(privateAssignmentFollowup.pr,341,'private Writer/Creator assignment App integration requires its own review');
+assert.deepEqual(privateAssignmentFollowup.files.map(item=>item.path),['src/App.tsx'],
+  'private assignment integration may change only the reviewed App prop wiring');
+for(const item of privateAssignmentFollowup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'private assignment App wiring must anchor to the approved admin profile search App baseline');
+  assert.equal(item.baselineSha,previous.sha,'preserve the exact previously approved App SHA');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){

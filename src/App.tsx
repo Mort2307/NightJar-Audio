@@ -6295,7 +6295,7 @@ function App() {
             </>}
             <div className="writer-layout">
               {!writerDetailOpen
-                ? <WriterManuscriptGrid scripts={writerScripts} onRemove={deleteWriterScript} onOpen={(script)=>{
+                ? <WriterManuscriptGrid scripts={writerScripts} onRemove={deleteWriterScript} notify={notify} simulationMode={simulationMode} onOpen={(script)=>{
                     setWriterSelected(script); setWriterEditDirty(false);
                     setWriterSaveConflict(false); setWriterAutoSavePaused(false);
                     setWriterDetailOpen(true); void loadWriterPermissions(script.id);
