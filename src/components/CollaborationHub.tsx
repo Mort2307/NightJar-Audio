@@ -283,7 +283,9 @@ export default function CollaborationHub({ role, notify, demoMode = false, simul
             </article>
           : openedAssignmentScript.sourceFile?.url
             ? <p className="nj-assignment-privacy">This manuscript was uploaded as a file: <a href={openedAssignmentScript.sourceFile.url} target="_blank" rel="noreferrer">{openedAssignmentScript.sourceFile.fileName || 'Open uploaded manuscript'}</a></p>
-            : <p className="nj-assignment-state">No readable manuscript content is available in this version.</p>}
+            : openedAssignmentScript.script?.sourceFile?.fileName
+              ? <p className="nj-assignment-privacy">The uploaded original is protected from download under this assignment. Ask the Writer to provide an in-app text version or approve original-file access.</p>
+              : <p className="nj-assignment-state">No readable manuscript content is available in this version.</p>}
         <footer className="nj-assignment-actions"><button type="button" className="primary-button" onClick={() => setOpenedAssignmentScript(null)}>Close manuscript</button></footer>
       </section>
     </div>}
