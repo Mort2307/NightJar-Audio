@@ -12661,6 +12661,7 @@ export const updateCreatorWorkAssignment = onCall({ region: REGION }, async (req
   const data = snapshot.data();
   if (!data || (data.ownerUserId !== identity.uid && data.recipientUserId !== identity.uid)) throw new HttpsError('not-found','Work assignment not found.');
   if (status === 'withdrawn' && data.ownerUserId !== identity.uid) throw new HttpsError('permission-denied','Only the work owner can withdraw this invitation.');
+  if (status === 'withdrawn' && ['withdrawn','declined','completed'].includes(String(data.status))) throw new HttpsError('failed-precondition','This assignment is already closed.');
   if (status === 'in_production' && data.status !== 'accepted') throw new HttpsError('failed-precondition','The invitation must be accepted before production starts.');
   if (status === 'completed' && data.status !== 'in_production') throw new HttpsError('failed-precondition','The work must be in production before it can be completed.');
   await db.runTransaction(async tx => {
