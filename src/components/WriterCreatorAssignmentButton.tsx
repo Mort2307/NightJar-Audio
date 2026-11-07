@@ -153,7 +153,7 @@ const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
             <p className="nj-assignment-privacy">This is a private invitation, not a public listing. The Writer and selected VA/Creator are linked for future release credits. No ownership transfer or payment is triggered by sending it.</p>
             <footer className="nj-assignment-actions">
               <button type="button" className="ghost-button" onClick={()=>setOpen(false)}>Cancel</button>
-              <button type="button" className="primary-button" disabled={!selected || loading} onClick={()=>setReview(true)} disabled={!selected || !workType}>Review assignment <ArrowRight size={15}/></button>
+              <button type="button" className="primary-button" disabled={!selected || loading || !workType} onClick={()=>setReview(true)}>Review assignment <ArrowRight size={15}/></button>
             </footer>
           </> : <>
             <div className="nj-assignment-review">
