@@ -12568,9 +12568,10 @@ export const sendCreatorWorkAssignment = onCall({ region: REGION }, async (reque
     throw new HttpsError('not-found', 'Choose an active member with an approved professional role.');
   }
   const duplicate = await db.collection('creatorWorkAssignments')
-    .where('ownerUserId','==',identity.uid).where('recipientUserId','==',recipientUserId)
-    .where('assetId','==',assetId).where('assetSlot','==',asset.assetSlot).limit(20).get();
-  if (duplicate.docs.some(doc => !['declined','withdrawn','completed'].includes(String(doc.data().status)))) {
+    .where('ownerUserId','==',identity.uid).limit(500).get();
+  if (duplicate.docs.some(doc => doc.data().recipientUserId === recipientUserId &&
+      doc.data().assetId === assetId && (doc.data().assetSlot ?? null) === (asset.assetSlot ?? null) &&
+      !['declined','withdrawn','completed'].includes(String(doc.data().status)))) {
     throw new HttpsError('already-exists', 'An open invitation already exists for this work and recipient.');
   }
   const ref = db.collection('creatorWorkAssignments').doc();
