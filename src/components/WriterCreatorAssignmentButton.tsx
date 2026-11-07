@@ -152,7 +152,7 @@ const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
               </select>
             </label>
             <label className="nj-assignment-field">Private note <textarea value={message} onChange={(event)=>setMessage(event.target.value)} rows={3} maxLength={2400} placeholder="Tell the selected Creator what you have in mind…"/></label>
-            <label className="nj-assignment-field">Proposed payment <input value={paymentProposal} onChange={(event)=>setPaymentProposal(event.target.value)} maxLength={800} placeholder="Optional · e.g. £150 agreed commission, or to be discussed"/></label>
+            <label className="nj-assignment-field">Proposed Writer payment <input value={paymentProposal} onChange={(event)=>setPaymentProposal(event.target.value)} maxLength={800} placeholder="Optional · e.g. £150 Writer commission, or to be discussed"/></label>
             <label className="nj-assignment-field">Rights / licence summary <input value={licenceSummary} onChange={(event)=>setLicenceSummary(event.target.value)} maxLength={1200} placeholder="Optional · record the proposed rights arrangement"/></label>
             <p className="nj-assignment-privacy">This is a private invitation, not a public listing. The Writer and selected VA/Creator are linked for future release credits. No ownership transfer or payment is triggered by sending it.</p>
             <footer className="nj-assignment-actions">
@@ -164,7 +164,7 @@ const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
               <p><span>Script</span><strong>{script.title || 'Untitled manuscript'} · v{Number(script.version ?? 1)}</strong></p>
               <p><span>Assigned to</span><strong>{selected?.name}</strong></p>
               <p><span>Arrangement</span><strong>{workType === 'voluntary' ? 'Voluntary submission' : workType === 'private_commission' ? 'Private commission' : 'NightJar Original'}</strong></p>
-              <p><span>Payment proposal</span><strong>{paymentProposal.trim() || 'Not specified'}</strong></p>
+              <p><span>Writer payment proposal</span><strong>{paymentProposal.trim() || 'Not specified'}</strong></p>
               <p><span>Rights summary</span><strong>{licenceSummary.trim() || 'Not specified'}</strong></p>
               <p><span>Credits linked</span><strong>Writer · {selected?.name} (VA/Creator)</strong></p>
             </div>
