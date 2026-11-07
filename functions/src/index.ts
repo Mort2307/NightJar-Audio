@@ -12563,13 +12563,13 @@ export const sendCreatorWorkAssignment = onCall({ region: REGION }, async (reque
   const ownerRoles = professionalRolesForAccount(ownerAccount.data() ?? {});
   const recipientData = recipientAccount.data() ?? {};
   const recipientRoles = professionalRolesForAccount(recipientData);
-  if (!ownerRoles.length) throw new HttpsError('permission-denied', 'An approved professional role is required to assign work.');
+  if (ownerAccount.data()?.status !== 'active' || !ownerRoles.length) throw new HttpsError('permission-denied', 'An active, approved professional role is required to assign work.');
   if (!recipientAccount.exists || recipientData.status !== 'active' || !recipientRoles.length) {
     throw new HttpsError('not-found', 'Choose an active member with an approved professional role.');
   }
   const duplicate = await db.collection('creatorWorkAssignments')
     .where('ownerUserId','==',identity.uid).where('recipientUserId','==',recipientUserId)
-    .where('assetId','==',assetId).limit(20).get();
+    .where('assetId','==',assetId).where('assetSlot','==',asset.assetSlot).limit(20).get();
   if (duplicate.docs.some(doc => !['declined','withdrawn','completed'].includes(String(doc.data().status)))) {
     throw new HttpsError('already-exists', 'An open invitation already exists for this work and recipient.');
   }
@@ -12619,6 +12619,23 @@ export const respondCreatorWorkAssignment = onCall({ region: REGION }, async (re
     const live = await tx.get(ref);
     if (!live.exists || live.data()?.recipientUserId !== identity.uid || live.data()?.status !== 'sent') {
       throw new HttpsError('aborted', 'This invitation has already changed. Refresh your workspace.');
+    }
+    if (status === 'accepted') {
+      const assetRef = creatorWorkAssetRef(prior.assetType as CreatorWorkAssetType, String(prior.assetId));
+      const assetSnapshot = await tx.get(assetRef);
+      const assetData = assetSnapshot.data();
+      if (!assetData || creatorWorkAssetRevision(assetData) !== prior.assetRevision) {
+        throw new HttpsError('failed-precondition', 'The work changed while you were accepting. Ask the owner to send a fresh invitation.');
+      }
+      if (['artist_artwork','creator_release_artwork','script_artwork'].includes(String(prior.assetType))) {
+        const imageId = cleanText(prior.assetType === 'artist_artwork' ? assetData.imageAssetId : assetData.artworkAssetId,160);
+        const imageSnapshot = imageId ? await tx.get(db.collection('imageAssets').doc(imageId)) : null;
+        const imageData = imageSnapshot?.data() ?? {};
+        const expectedKind = prior.assetType === 'artist_artwork' ? 'artist_portfolio' : prior.assetType === 'creator_release_artwork' ? 'release_artwork' : 'script_artwork';
+        if (!imageSnapshot?.exists || imageData.ownerUserId !== prior.ownerUserId || imageData.status !== 'approved' || imageData.kind !== expectedKind || imageData.targetId !== prior.assetId) {
+          throw new HttpsError('failed-precondition', 'The approved artwork is no longer available.');
+        }
+      }
     }
     tx.set(ref, { status, responseNote: cleanText(input.responseNote,1200), respondedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge:true });
   });
