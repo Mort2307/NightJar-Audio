@@ -16,6 +16,10 @@ assert.match(api,/data\.creatorUserId !== ownerUserId/,'Release owner must be ve
 assert.match(api,/data\.ownerUserId !== ownerUserId/,'Portfolio owner must be verified server-side');
 assert.match(api,/imageData\.ownerUserId !== ownerUserId/,'Artwork asset owner must be verified server-side');
 assert.match(api,/professionalRolesForAccount\(recipientData\)/,'Recipient must have an approved professional role');
+assert.match(api,/creatorWorkTaskRoles/,'Recipient role must match the requested task');
+assert.match(api,/creatorWorkOwnerRoles/,'Owner role must match the assigned asset type');
+assert.match(api,/creditCandidates/,'Credit candidates remain attached to the private assignment');
+assert.match(api,/rightsSummary/,'Rights and permitted-use terms are recorded separately');
 assert.match(api,/asset\.revision !== prior\.assetRevision/,'Stale work must be rejected on acceptance');
 assert.match(api,/allowCopy: false, allowExport: false/,'Assignments must not grant copy/export');
 assert.match(api,/expires:expiresAt/,'Asset URLs must be short-lived');
