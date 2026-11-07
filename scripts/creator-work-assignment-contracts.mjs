@@ -10,7 +10,7 @@ const start=backend.indexOf('type CreatorWorkAssetType');
 const end=backend.indexOf('export const sendCollaborationProposal',start);
 assert.ok(start>=0&&end>start,'Asset-agnostic assignment backend must exist');
 const api=backend.slice(start,end);
-for(const type of ['script','creator_release_audio','artist_artwork','editor_showcase_audio']) assert.ok(api.includes("'" + type + "'"),'Missing adapter: '+type);
+for(const type of ['script','creator_release_audio','creator_release_artwork','script_artwork','artist_artwork','editor_showcase_audio']) assert.ok(api.includes("'" + type + "'"),'Missing adapter: '+type);
 assert.match(api,/data\.writerUserId !== ownerUserId/,'Manuscript owner must be verified server-side');
 assert.match(api,/data\.creatorUserId !== ownerUserId/,'Release owner must be verified server-side');
 assert.match(api,/data\.ownerUserId !== ownerUserId/,'Portfolio owner must be verified server-side');
