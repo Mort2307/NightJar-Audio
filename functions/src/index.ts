@@ -12079,6 +12079,8 @@ const collaborationPayload = (data: Record<string, any>, id: string) => ({
   assignmentType: data.assignmentType ?? 'collaboration_proposal',
   workType: data.workType ?? null,
   scriptVersion: Number(data.scriptVersion ?? 1),
+  scriptContentRevision: Math.max(0, Number(data.scriptContentRevision ?? 0)),
+  credits: Array.isArray(data.credits) ? data.credits : [],
   message: data.message ?? '',
   paymentProposal: data.paymentProposal ?? '',
   licenceSummary: data.licenceSummary ?? '',
@@ -12429,6 +12431,9 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
     ? String(input.workType)
     : null;
   if (!scriptData || scriptData.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
+  if (assignmentType === 'private_writer_assignment' && !workType) {
+    throw new HttpsError('invalid-argument', 'Choose whether this is a voluntary submission, private commission or NightJar Original.');
+  }
   const recipientRoles = recipientData ? professionalRolesForAccount(recipientData) : [];
   const eligibleRecipient = recipient.exists && recipientData?.status === 'active' && (
     assignmentType === 'private_writer_assignment'
@@ -12453,6 +12458,10 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
     assignmentType,
     workType,
     scriptVersion: Math.max(1, Number(scriptData.version ?? 1)),
+    scriptContentRevision: Math.max(0, Number(scriptData.contentRevision ?? 0)),
+    credits: assignmentType === 'private_writer_assignment'
+      ? [{ userId: identity.uid, role: 'writer' }, { userId: recipientUserId, role: 'creator' }]
+      : [],
     rightsSnapshot: assignmentType === 'private_writer_assignment' ? normaliseScriptRights(scriptData.rights) : null,
     message: cleanText(input.message, 2400),
     paymentProposal: cleanText(input.paymentProposal, 800),
@@ -12608,7 +12617,8 @@ export const respondCollaborationProposal = onCall({ region: REGION }, async (re
       if (!scriptData || scriptData.writerUserId !== latest.writerUserId) {
         throw new HttpsError('not-found', 'The assigned manuscript is no longer available.');
       }
-      if (Math.max(1, Number(scriptData.version ?? 1)) !== Math.max(1, Number(latest.scriptVersion ?? 1))) {
+      if (Math.max(1, Number(scriptData.version ?? 1)) !== Math.max(1, Number(latest.scriptVersion ?? 1)) ||
+          Math.max(0, Number(scriptData.contentRevision ?? 0)) !== Math.max(0, Number(latest.scriptContentRevision ?? 0))) {
         throw new HttpsError('failed-precondition', 'The manuscript has changed since this assignment was sent. Ask the Writer to send the current version.');
       }
       const permissionRef = scriptRefValue.collection('permissions').doc(identity.uid);
