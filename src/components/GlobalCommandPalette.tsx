@@ -37,7 +37,7 @@ export default function GlobalCommandPalette({ open, onClose, commands }: Props)
       const detail = (command.detail ?? '').toLowerCase();
       const keywords = (command.keywords ?? []).join(' ').toLowerCase();
       const searchable = [label, detail, keywords].join(' ');
-      const tokens = term.split(/\\s+/).filter(Boolean);
+      const tokens = term.split(/\s+/).filter(Boolean);
       let score = 0;
       if (label === term) score += 12;
       if (label.startsWith(term)) score += 7;
