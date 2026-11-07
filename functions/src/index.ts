@@ -12541,6 +12541,39 @@ export const listMyCreatorWorkAssignments = onCall({ region: REGION }, async (re
   return { assignments };
 });
 
+const creatorWorkTaskRoles: Record<string, AccountRole[]> = {
+  'Writing contribution': ['writer'],
+  'Voice performance': ['creator'],
+  'Editorial review': ['editor'],
+  'Creative development': ['creator','writer','editor','artist'],
+  'Audio editing': ['editor'],
+  'Mixing / mastering': ['editor'],
+  'Production contribution': ['creator','editor'],
+  'Artwork contribution': ['artist'],
+  'Illustration contribution': ['artist'],
+  'Cover artwork': ['artist'],
+  'Visual design': ['artist'],
+  'Artwork review': ['artist','creator'],
+  'Production feedback': ['creator','editor'],
+  'Other creative contribution': ['creator','writer','editor','artist'],
+};
+const creatorWorkOwnerRoles: Record<CreatorWorkAssetType, AccountRole[]> = {
+  script: ['writer'],
+  creator_release_audio: ['creator'],
+  creator_release_artwork: ['creator'],
+  script_artwork: ['writer'],
+  artist_artwork: ['artist'],
+  editor_showcase_audio: ['editor'],
+};
+const creatorWorkTasksByAsset: Record<CreatorWorkAssetType,string[]> = {
+  script: ['Writing contribution','Voice performance','Editorial review','Creative development','Other creative contribution'],
+  creator_release_audio: ['Voice performance','Audio editing','Mixing / mastering','Production contribution','Artwork contribution','Other creative contribution'],
+  creator_release_artwork: ['Artwork contribution','Illustration contribution','Cover artwork','Visual design','Artwork review','Other creative contribution'],
+  script_artwork: ['Artwork contribution','Illustration contribution','Cover artwork','Visual design','Artwork review','Other creative contribution'],
+  artist_artwork: ['Artwork contribution','Illustration contribution','Cover artwork','Visual design','Artwork review','Other creative contribution'],
+  editor_showcase_audio: ['Audio editing','Mixing / mastering','Voice performance','Production feedback','Other creative contribution'],
+};
+
 export const sendCreatorWorkAssignment = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
@@ -12553,7 +12586,7 @@ export const sendCreatorWorkAssignment = onCall({ region: REGION }, async (reque
   const requestedSlot = cleanText(input.assetSlot, 20) || null;
   const message = cleanText(input.message, 2000);
   const rightsSummary = cleanText(input.rightsSummary, 1200);
-  if (!['script','creator_release_audio','creator_release_artwork','script_artwork','artist_artwork','editor_showcase_audio'].includes(assetType) || !assetId || !recipientUserId || recipientUserId === identity.uid || !task) {
+  if (!['script','creator_release_audio','creator_release_artwork','script_artwork','artist_artwork','editor_showcase_audio'].includes(assetType) || !assetId || !recipientUserId || recipientUserId === identity.uid || !task || !(creatorWorkTasksByAsset[assetType] ?? []).includes(task)) {
     throw new HttpsError('invalid-argument', 'Choose your work, another professional and the task you are inviting them to do.');
   }
   const [ownerAccount, recipientAccount, ownerProfile, recipientProfile, asset] = await Promise.all([
@@ -12564,8 +12597,9 @@ export const sendCreatorWorkAssignment = onCall({ region: REGION }, async (reque
   const ownerRoles = professionalRolesForAccount(ownerAccount.data() ?? {});
   const recipientData = recipientAccount.data() ?? {};
   const recipientRoles = professionalRolesForAccount(recipientData);
-  if (ownerAccount.data()?.status !== 'active' || !ownerRoles.length) throw new HttpsError('permission-denied', 'An active, approved professional role is required to assign work.');
-  if (!recipientAccount.exists || recipientData.status !== 'active' || !recipientRoles.length) {
+  if (ownerAccount.data()?.status !== 'active' || !creatorWorkOwnerRoles[assetType].some(role => ownerRoles.includes(role))) throw new HttpsError('permission-denied', 'The matching approved professional role for this work is required to assign it.');
+  const allowedRecipientRoles = creatorWorkTaskRoles[task] ?? [];
+  if (!recipientAccount.exists || recipientData.status !== 'active' || !recipientRoles.some(role => allowedRecipientRoles.includes(role))) {
     throw new HttpsError('not-found', 'Choose an active member with an approved professional role.');
   }
   const duplicate = await db.collection('creatorWorkAssignments')
@@ -12626,8 +12660,10 @@ export const respondCreatorWorkAssignment = onCall({ region: REGION }, async (re
     if (status === 'accepted') {
       const acceptingAccountSnapshot = await tx.get(accountRef(identity.uid));
       const acceptingAccount = acceptingAccountSnapshot.data() ?? {};
-      if (acceptingAccount.status !== 'active' || !professionalRolesForAccount(acceptingAccount).length) {
-        throw new HttpsError('permission-denied', 'An active, approved professional role is required to accept this work.');
+      const acceptingRoles = professionalRolesForAccount(acceptingAccount);
+      const requiredRoles = creatorWorkTaskRoles[String(prior.task)] ?? [];
+      if (acceptingAccount.status !== 'active' || !acceptingRoles.some(role => requiredRoles.includes(role))) {
+        throw new HttpsError('permission-denied', 'Your active approved professional roles do not match the contribution requested.');
       }
       const assetRef = creatorWorkAssetRef(prior.assetType as CreatorWorkAssetType, String(prior.assetId));
       const assetSnapshot = await tx.get(assetRef);
@@ -12696,8 +12732,10 @@ export const openCreatorWorkAssignmentAsset = onCall({ region: REGION }, async (
   }
   if (assignment.recipientUserId === identity.uid) {
     const recipientAccount = (await accountRef(identity.uid).get()).data() ?? {};
-    if (recipientAccount.status !== 'active' || !professionalRolesForAccount(recipientAccount).length) {
-      throw new HttpsError('permission-denied','An active, approved professional role is required to open this work.');
+    const recipientRoles = professionalRolesForAccount(recipientAccount);
+    const requiredRoles = creatorWorkTaskRoles[String(assignment.task)] ?? [];
+    if (recipientAccount.status !== 'active' || !recipientRoles.some(role => requiredRoles.includes(role))) {
+      throw new HttpsError('permission-denied','Your active approved professional roles no longer match this contribution.');
     }
   }
   const asset = await resolveCreatorWorkAsset(assignment.assetType as CreatorWorkAssetType, String(assignment.assetId), String(assignment.ownerUserId), assignment.assetSlot ?? null);
