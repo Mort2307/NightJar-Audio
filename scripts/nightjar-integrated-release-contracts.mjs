@@ -177,6 +177,21 @@ for(const item of contributorSystemsFollowup.files){
   overrides.set(item.path,item);
 }
 
+// PR #338 expands the global command palette with direct destinations for
+// professional applications, account preferences and authorized admin tools.
+// The original release-candidate and earlier follow-up source blobs stay pinned.
+const appSearchFollowup=JSON.parse(string('docs/NIGHTJAR_APP_WIDE_SEARCH_FOLLOWUP.json'));
+assert.equal(appSearchFollowup.pr,338,'app-wide action search requires its own review');
+assert.deepEqual(appSearchFollowup.files.map(item=>item.path),['src/App.tsx'],
+  'app-wide search follow-up may change only the approved application command registry');
+for(const item of appSearchFollowup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'app-wide search must anchor to an approved App baseline');
+  assert.equal(item.baselineSha,previous.sha,'preserve the previously approved App SHA');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){
