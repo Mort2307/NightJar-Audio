@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight, FileText, Search } from 'lucide-react';
 import ConfirmDeleteAction from './ConfirmDeleteAction';
+import WriterCreatorAssignmentButton from './WriterCreatorAssignmentButton';
 import './writer-manuscript-grid.css';
 
 export type WriterManuscriptSummary = {
@@ -26,11 +27,13 @@ const displayStatus = (raw: unknown) => {
 };
 
 export default function WriterManuscriptGrid({
-  scripts, onOpen, onRemove,
+  scripts, onOpen, onRemove, notify, simulationMode = false,
 }: {
   scripts: WriterManuscriptSummary[];
   onOpen: (script: WriterManuscriptSummary) => void;
   onRemove?: (script: WriterManuscriptSummary) => Promise<void>;
+  notify: (message: string) => void;
+  simulationMode?: boolean;
 }) {
   const [filter,setFilter] = useState('');
   const duplicateTitles = useMemo(() => {
@@ -91,6 +94,7 @@ export default function WriterManuscriptGrid({
             <span className="nj-writer-open-label">Open details <ArrowRight size={16} aria-hidden="true"/></span>
           </span>
           </button>
+          <div className="nj-writer-card-assign"><WriterCreatorAssignmentButton script={script} notify={notify} simulationMode={simulationMode}/></div>
           {onRemove && ['Draft','Rejected'].includes(String(script.status??'Draft')) && <div className="nj-writer-card-delete">
             <ConfirmDeleteAction iconOnly label="Delete manuscript" itemName={title}
               description="This private manuscript and its versions will be permanently removed. This cannot be undone."
