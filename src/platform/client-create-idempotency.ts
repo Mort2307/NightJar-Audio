@@ -1,6 +1,6 @@
 import { firebaseAuth } from './firebase-auth';
 
-export type PrivateCreateKind = 'creator-release' | 'artist-artwork' | 'editor-showcase' | 'writer-draft' | 'writer-upload';
+export type PrivateCreateKind = 'creator-release' | 'artist-artwork' | 'editor-showcase' | 'writer-draft' | 'writer-upload' | 'writer-creator-assignment';
 const memory = new Map<string,string>();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const storageKey = (uid:string,kind:PrivateCreateKind,fingerprint='') => 'nightjar.private-create.v1:'+uid+':'+kind+(fingerprint?':'+fingerprint:'');
