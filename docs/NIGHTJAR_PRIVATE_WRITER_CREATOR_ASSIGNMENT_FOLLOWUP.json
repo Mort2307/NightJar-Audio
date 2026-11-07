@@ -1,11 +1,11 @@
 {
-  "pr": 341,
-  "reason": "Connects the standalone private Writer-to-Creator assignment action to Writer Studio manuscript cards. This App.tsx change only passes the existing notify and simulation-mode props into the new card action; it does not alter routes, account permissions or any of the three completed systems.",
+  "pr": 343,
+  "reason": "PR #343 includes the reviewed Writer → Creator manuscript assignment integration and adds the asset-agnostic private work-assignment workspace to Creator, Artist and Audio Editor routes. The App change only mounts the new collaboration UI in those professional studios; it does not change routes, authentication, account permissions, release gates or the three completed platform systems.",
   "files": [
     {
       "path": "src/App.tsx",
       "baselineSha": "05931969befcd2fbc5991e16facabfec994f623f",
-      "sha": "f6cc2f91794c5538190dbad994673e703a9b0b18"
+      "sha": "e4cc5680e356705593e05a3ddfe38aea3413a20d"
     }
   ]
 }
