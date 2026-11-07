@@ -77,3 +77,6 @@
 @media(max-width:560px){.nj-writer-assignment-backdrop{padding:8px;align-items:end}.nj-writer-assignment-dialog{max-height:94dvh;border-radius:16px}.nj-assignment-actions>*{flex:1 1 100%;justify-content:center}.nj-assignment-review p{grid-template-columns:1fr;gap:4px}}
 @media(prefers-reduced-motion:reduce){.nj-writer-assignment-dialog,.nj-writer-assign-trigger{scroll-behavior:auto;transition:none}}
 @media(forced-colors:active){.nj-writer-assign-trigger,.nj-assignment-person,.nj-writer-assignment-dialog{border:1px solid CanvasText}}
+
+.nj-assignment-export-option{display:flex;align-items:flex-start;gap:10px;padding:12px 13px;border:1px solid #66553f;border-radius:10px;background:#1a1714;color:#e4d5c2;line-height:1.45}
+.nj-assignment-export-option input{width:19px;height:19px;min-height:19px;flex:none;margin:1px 0 0;accent-color:#d9b574}
