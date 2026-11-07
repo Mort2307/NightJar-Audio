@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Check, ChevronDown, Handshake, LoaderCircle, Search, X } from 'lucide-react';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
+import { pendingPrivateCreateId, clearPrivateCreateId } from '../platform/client-create-idempotency';
 
 type Props = {
   script: { id: string; title?: string | null; version?: number; status?: string | null };
@@ -77,6 +78,7 @@ export default function WriterCreatorAssignmentButton({ script, notify, simulati
       if (simulationMode) {
         notify('Simulation only: assignment was not sent to a real Creator.');
       } else {
+        const requestId = pendingPrivateCreateId('writer-creator-assignment', script.id + ':' + selected.userId);
         await nightjarCollaboration.send({
           scriptId: script.id,
           recipientUserId: selected.userId,
@@ -86,7 +88,9 @@ export default function WriterCreatorAssignmentButton({ script, notify, simulati
           assignmentType: 'private_writer_assignment',
           workType,
           scriptVersion: Number(script.version ?? 1),
+          clientRequestId: requestId,
         });
+        clearPrivateCreateId('writer-creator-assignment', requestId, script.id + ':' + selected.userId);
         notify('Private assignment sent. Only the selected Creator has been notified.');
       }
       setOpen(false);
