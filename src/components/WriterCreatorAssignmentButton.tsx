@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Check, Handshake, LoaderCircle, Search, X } from 'lucide-react';
 import { nightjarCollaboration } from '../platform/firebase-collaboration';
 import { pendingPrivateCreateId, clearPrivateCreateId } from '../platform/client-create-idempotency';
+import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap';
 
 type Props = {
   script: { id: string; title?: string | null; version?: number; status?: string | null };
@@ -31,6 +32,9 @@ export default function WriterCreatorAssignmentButton({ script, notify, simulati
   const [licenceSummary, setLicenceSummary] = useState('');
   const [workType, setWorkType] = useState<'' | 'voluntary' | 'private_commission' | 'nightjar_original'>('');
   const [review, setReview] = useState(false);
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const closeComposer = useCallback(() => { if (!sending) setOpen(false); }, [sending]);
+  useDialogFocusTrap(dialogRef, { active: open, onEscape: closeComposer });
 
   const openComposer = async () => {
     setOpen(true);
@@ -116,7 +120,7 @@ const assignmentFingerprint = async (scriptId: string, recipientId: string) => {
     {open && <div className="nj-writer-assignment-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget && !sending) setOpen(false);
     }}>
-      <section className="nj-writer-assignment-dialog" role="dialog" aria-modal="true"
+      <section ref={dialogRef} className="nj-writer-assignment-dialog" role="dialog" aria-modal="true" tabIndex={-1}
         aria-labelledby={'nj-assignment-title-' + script.id}>
         <header className="nj-writer-assignment-head">
           <div><span className="mini-label">PRIVATE PRODUCTION ASSIGNMENT</span>
