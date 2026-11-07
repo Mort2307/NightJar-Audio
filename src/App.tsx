@@ -5911,19 +5911,21 @@ function App() {
         )}
 
         {view === 'artist' && effectiveRole === 'artist' && !liveRolePreview && (
-          <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Opening Artist Studio" />}>
-            <ArtistStudio
-              key={'artist-studio-' + demoSessionKey}
-              notify={notify}
-              demoMode={demoMode}
-              onEditProfile={() => { navigate('profile'); void switchProfileEditRole('artist'); }}
-              onMessages={() => navigate('messages')}
-              onDirectory={() => navigate('creators')}
-              completedCollaborations={profileCompletedCollaborations}
-              messageUnreadCount={messageUnreadCount}
-            />
-          </Suspense>
-          <div className="page-wrap"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading private work assignments" />}><CreatorWorkAssignmentHub role="artist" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense></div>
+          <>
+            <Suspense fallback={<NightjarSkeleton variant="page" count={4} label="Opening Artist Studio" />}>
+              <ArtistStudio
+                key={'artist-studio-' + demoSessionKey}
+                notify={notify}
+                demoMode={demoMode}
+                onEditProfile={() => { navigate('profile'); void switchProfileEditRole('artist'); }}
+                onMessages={() => navigate('messages')}
+                onDirectory={() => navigate('creators')}
+                completedCollaborations={profileCompletedCollaborations}
+                messageUnreadCount={messageUnreadCount}
+              />
+            </Suspense>
+            <div className="page-wrap"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading private work assignments" />}><CreatorWorkAssignmentHub role="artist" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense></div>
+          </>
         )}
 
         {view === 'library' && (effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && (
