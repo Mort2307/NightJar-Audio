@@ -31,7 +31,7 @@ The existing collaboration proposal infrastructure is the preferred foundation. 
 5. Before sending, show a confirmation summary naming the exact recipient and selected script/version.
 6. Backend validates Writer role, script ownership, recipient active status and approved professional Creator role; creates one idempotent private assignment/proposal and targeted notification.
 7. The selected Creator sees the assignment in their private Collaborations workspace and can accept or decline. Writer sees the current state and can withdraw a pending request.
-8. On acceptance, preserve the script version snapshot. Later script edits must not silently change what was offered; revisions need an explicit new version/revision agreement.
+8. On acceptance, preserve both the script version and content revision snapshot. Later script edits must not silently change what was offered; revisions need an explicit new version/revision agreement.
 9. Assignment never changes marketplace visibility, publication status, ownership, licence, payment settlement or release credit automatically.
 
 ## Roles and visibility
@@ -74,7 +74,8 @@ Keep Writer fee and VA/Creator fee as distinct obligations. Do not automatically
 - [ ] Creator sees only their own incoming assignments and can accept/decline.
 - [ ] Writer sees outgoing assignments and can withdraw pending assignment.
 - [ ] Other accounts cannot list, open or infer private assignment/script content.
-- [ ] Script version is snapshotted; later edits do not silently mutate accepted work.
+- [ ] Script version and content revision are snapshotted; later edits do not silently mutate accepted work.
+- [ ] Writer and assigned VA/Creator identities are linked as private credit candidates; publication still requires existing release approval.
 - [ ] Rights and Writer/Creator fees remain separate and non-automated.
 - [ ] Multi-role accounts do not create duplicate identities or payment obligations.
 - [ ] Loading, empty, error, retry and success states are honest and accessible.
