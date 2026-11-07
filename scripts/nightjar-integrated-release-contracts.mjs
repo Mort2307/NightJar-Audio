@@ -207,12 +207,12 @@ for(const item of adminProfileSearchFollowup.files){
   overrides.set(item.path,item);
 }
 
-// PR #341 adds the private Writer → Creator assignment action to the Writer
-// manuscript cards. Keep the App integration pinned to the exact #339 baseline.
+// PR #343 retains the private Writer → Creator manuscript assignment and adds
+// the asset-agnostic work assignment workspace to Creator, Artist and Editor studios.
 const privateAssignmentFollowup=JSON.parse(string('docs/NIGHTJAR_PRIVATE_WRITER_CREATOR_ASSIGNMENT_FOLLOWUP.json'));
-assert.equal(privateAssignmentFollowup.pr,341,'private Writer/Creator assignment App integration requires its own review');
+assert.equal(privateAssignmentFollowup.pr,343,'full creator work assignment App integration requires its own review');
 assert.deepEqual(privateAssignmentFollowup.files.map(item=>item.path),['src/App.tsx'],
-  'private assignment integration may change only the reviewed App prop wiring');
+  'full creator work assignment integration may change only the reviewed App route mounting');
 for(const item of privateAssignmentFollowup.files){
   assert.match(item.sha,/^[0-9a-f]{40}$/);
   const previous=overrides.get(item.path);
