@@ -152,6 +152,7 @@ const NightjarOnboarding = lazy(() => import('./components/NightjarOnboarding'))
 const CloudProfileDraft = lazy(() => import('./components/CloudProfileDraft'));
 const PublicProfile = lazy(() => import('./components/PublicProfile'));
 const CollaborationHub = lazy(() => import('./components/CollaborationHub'));
+const CreatorWorkAssignmentHub = lazy(() => import('./components/CreatorWorkAssignmentHub'));
 const WriterRightsPanel = lazy(() => import('./components/WriterRightsPanel'));
 const WriterScriptArtwork = lazy(() => import('./components/WriterScriptArtwork'));
 const ManuscriptReviewConversation = lazy(() => import('./components/ManuscriptReviewConversation'));
@@ -5904,6 +5905,7 @@ function App() {
             {canAdmin && !demoMode && !liveRolePreview && <div className="admin-note"><ShieldCheck size={18}/><div><strong>REAL CREATOR MARKETPLACE · READ ONLY</strong><span>These are actual approved scripts with Marketplace visibility. No fictional entries are shown, and you cannot send interest as another user. For unpublished tester uploads, use Admin → Live Role Preview to see why they are hidden.</span></div></div>}
             {creatorOnly && accountStatus !== 'pending_review' && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="creator-licences" title="Licensing and rights" summary="Discuss protected scripts and collaboration terms"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading script rights offers" />}><ScriptLicenceWorkspace role="creator" currentUserId={user?.userId} demoMode={demoMode} simulationMode={simulationMode} notify={notify} onMessageUser={(uid)=>{setMessageRecipientUserId(uid);setMessageCollaborationId(null);navigate('messages');}}/></Suspense></WorkspaceSection>}
             {creatorOnly && accountStatus !== 'pending_review' && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="creator-collaborations" title="Collaborations" summary="Active projects, invitations and handoffs"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading Creator collaborations" />}><CollaborationHub key={'creator-collab-' + demoSessionKey} role="creator" notify={notify} demoMode={demoMode} simulationMode={simulationMode} onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }} /></Suspense></WorkspaceSection>}
+            {creatorOnly && accountStatus !== 'pending_review' && <WorkspaceSection userId={user?.userId ?? 'guest'} sectionId="creator-work-assignments" title="Assign your creative work" summary="Invite approved professionals to collaborate on your recordings"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading private work assignments" />}><CreatorWorkAssignmentHub role="creator" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense></WorkspaceSection>}
             {canAdmin && !liveRolePreview && <article className="panel-card"><div className="panel-title"><div><span className="mini-label">ECONOMICS · ADMIN PREVIEW</span><h2>Capped equal standard rate</h2></div><ShieldCheck size={18}/></div><div className="formula-stack"><div><span>01</span><strong>Confirmed paid subscriptions</strong></div><ChevronRight size={15}/><div><span>02</span><strong>Published subscriber-rate band</strong></div><ChevronRight size={15}/><div><span>03</span><strong>Equal eligible creator rate, limited by the configured cap</strong></div></div><p className="panel-note">Administrator planning preview only. This compensation model is not shown on member or professional profiles and should not be treated as a contractual earnings promise.</p></article>}
           </section>
         )}
@@ -5921,6 +5923,7 @@ function App() {
               messageUnreadCount={messageUnreadCount}
             />
           </Suspense>
+          <div className="page-wrap"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading private work assignments" />}><CreatorWorkAssignmentHub role="artist" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense></div>
         )}
 
         {view === 'library' && (effectiveRole === 'listener' || (role === 'admin' && previewRole === 'listener')) && (
@@ -6355,6 +6358,7 @@ function App() {
               onOpenMessages={()=>navigate('messages')}
               onMessageUser={(userId,collaborationId)=>{ setMessageRecipientUserId(userId); setMessageCollaborationId(collaborationId??null); navigate('messages'); }}
             />
+            <div className="page-wrap"><Suspense fallback={<NightjarSkeleton variant="list" count={2} label="Loading private work assignments" />}><CreatorWorkAssignmentHub role="editor" notify={notify} demoMode={demoMode} simulationMode={simulationMode}/></Suspense></div>
             <ManualTranscriptSync label="Audio Editor · Manual transcript sync workshop"/>
           </Suspense>
         )}
