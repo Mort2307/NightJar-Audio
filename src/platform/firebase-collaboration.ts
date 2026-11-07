@@ -31,6 +31,13 @@ const listCall = httpsCallable<void, { proposals: any[] }>(functions, 'listMyCol
 const interestCall = httpsCallable<{ scriptId: string; message?: string }, { proposal: any }>(functions, 'expressScriptInterest');
 const respondCall = httpsCallable<{ collaborationId: string; status: CollaborationStatus; responseNote?: string }, { proposal: any }>(functions, 'respondCollaborationProposal');
 const statusCall = httpsCallable<{ collaborationId: string; status: CollaborationStatus }, { proposal: any }>(functions, 'updateCollaborationStatus');
+const listAssignableWorkCall = httpsCallable<void, { assets: any[] }>(functions, 'listMyAssignableWorkAssets');
+const listWorkAssignmentsCall = httpsCallable<void, { assignments: any[] }>(functions, 'listMyCreatorWorkAssignments');
+const sendWorkAssignmentCall = httpsCallable<Record<string, unknown>, { assignment: any }>(functions, 'sendCreatorWorkAssignment');
+const respondWorkAssignmentCall = httpsCallable<{ assignmentId: string; status: 'accepted'|'declined'; responseNote?: string }, any>(functions, 'respondCreatorWorkAssignment');
+const updateWorkAssignmentCall = httpsCallable<{ assignmentId: string; status: 'withdrawn'|'in_production'|'completed' }, any>(functions, 'updateCreatorWorkAssignment');
+const openWorkAssignmentCall = httpsCallable<{ assignmentId: string }, any>(functions, 'openCreatorWorkAssignmentAsset');
+
 
 export const nightjarCollaboration = {
   async history(userId: string) {
@@ -59,5 +66,29 @@ export const nightjarCollaboration = {
 
   async setStatus(collaborationId: string, status: CollaborationStatus) {
     return (await statusCall({ collaborationId, status })).data;
+  },
+
+  async assignableWork() {
+    return (await listAssignableWorkCall()).data;
+  },
+
+  async workAssignments() {
+    return (await listWorkAssignmentsCall()).data;
+  },
+
+  async sendWorkAssignment(input: Record<string, unknown>) {
+    return (await sendWorkAssignmentCall(input)).data;
+  },
+
+  async respondWorkAssignment(assignmentId: string, status: 'accepted'|'declined', responseNote = '') {
+    return (await respondWorkAssignmentCall({ assignmentId, status, responseNote })).data;
+  },
+
+  async updateWorkAssignment(assignmentId: string, status: 'withdrawn'|'in_production'|'completed') {
+    return (await updateWorkAssignmentCall({ assignmentId, status })).data;
+  },
+
+  async openWorkAssignment(assignmentId: string) {
+    return (await openWorkAssignmentCall({ assignmentId })).data;
   },
 };
