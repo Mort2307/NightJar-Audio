@@ -12076,6 +12076,9 @@ const collaborationPayload = (data: Record<string, any>, id: string) => ({
   recipientName: data.recipientName ?? 'Nightjar collaborator',
   recipientRole: data.recipientRole ?? null,
   initiatedByUserId: data.initiatedByUserId ?? data.writerUserId ?? null,
+  assignmentType: data.assignmentType ?? 'collaboration_proposal',
+  workType: data.workType ?? null,
+  scriptVersion: Number(data.scriptVersion ?? 1),
   message: data.message ?? '',
   paymentProposal: data.paymentProposal ?? '',
   licenceSummary: data.licenceSummary ?? '',
@@ -12419,10 +12422,20 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
   ]);
   const scriptData = script.data();
   const recipientData = recipient.data();
+  const assignmentType = cleanText(input.assignmentType, 60) === 'private_writer_assignment'
+    ? 'private_writer_assignment'
+    : 'collaboration_proposal';
+  const workType = ['voluntary','private_commission','nightjar_original'].includes(String(input.workType ?? ''))
+    ? String(input.workType)
+    : null;
   if (!scriptData || scriptData.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
-  if (!recipient.exists || recipientData?.status !== 'active' || !['creator','editor'].includes(String(recipientData?.role ?? ''))) {
-    throw new HttpsError('not-found', 'Eligible collaborator not found.');
-  }
+  const recipientRoles = recipientData ? professionalRolesForAccount(recipientData) : [];
+  const eligibleRecipient = recipient.exists && recipientData?.status === 'active' && (
+    assignmentType === 'private_writer_assignment'
+      ? recipientRoles.includes('creator')
+      : (['creator','editor'].includes(String(recipientData?.role ?? '')) || recipientRoles.some((role) => ['creator','editor'].includes(role)))
+  );
+  if (!eligibleRecipient) throw new HttpsError('not-found', 'Eligible approved collaborator not found.');
 
   const ref = db.collection('collaborationProposals').doc();
   const record = {
@@ -12432,7 +12445,10 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
     writerName: writerProfile.data()?.displayName ?? identity.email.split('@')[0],
     recipientUserId,
     recipientName: recipientProfile.data()?.displayName ?? 'Nightjar collaborator',
-    recipientRole: recipientData?.role ?? null,
+    recipientRole: assignmentType === 'private_writer_assignment' ? 'creator' : (recipientRoles.includes('creator') ? 'creator' : recipientData?.role ?? null),
+    assignmentType,
+    workType,
+    scriptVersion: Math.max(1, Number(scriptData.version ?? 1)),
     message: cleanText(input.message, 2400),
     paymentProposal: cleanText(input.paymentProposal, 800),
     licenceSummary: cleanText(input.licenceSummary, 1200),
@@ -12446,7 +12462,7 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
   await createNotification(recipientUserId, {
     type: 'collaboration',
     subtype: 'proposal',
-    title: 'New collaboration proposal',
+    title: assignmentType === 'private_writer_assignment' ? 'New private script assignment' : 'New collaboration proposal',
     message: `${record.writerName} sent ${record.scriptTitle} for your consideration.`,
     collaborationId: ref.id,
     scriptId,
