@@ -15,8 +15,13 @@ import {
   type User,
 } from 'firebase/auth';
 
+const firebaseApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+if (!firebaseApiKey || !/^AIza[0-9A-Za-z_-]{35}$/.test(firebaseApiKey)) {
+  throw new Error('Nightjar Firebase configuration is missing or invalid. Check VITE_FIREBASE_API_KEY in the production build environment.');
+}
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? 'AIzaSyBHgKqK9SRYoWWrKH0DeMX4I35AVIoMJs',
+  apiKey: firebaseApiKey,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? 'nightjar-audio.firebaseapp.com',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? 'nightjar-audio',
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? 'nightjar-audio.firebasestorage.app',
