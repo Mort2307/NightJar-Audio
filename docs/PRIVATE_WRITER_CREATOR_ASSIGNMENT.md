@@ -72,6 +72,7 @@ Keep Writer fee and VA/Creator fee as distinct obligations. Do not automatically
 - [ ] Preview confirms recipient, script/version, rights type and proposed terms.
 - [ ] Send creates one durable record and one targeted notification.
 - [ ] Creator sees only their own incoming assignments and can accept/decline.
+- [ ] Original uploaded-file download is denied by default and requires an explicit Writer grant; signed URLs obey that permission.
 - [ ] Writer sees outgoing assignments and can withdraw pending assignment.
 - [ ] Other accounts cannot list, open or infer private assignment/script content.
 - [ ] Script version and content revision are snapshotted; later edits do not silently mutate accepted work.
