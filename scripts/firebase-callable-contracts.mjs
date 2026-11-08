@@ -40,11 +40,11 @@ if(qualityExports) {
 // Didit resubmission callables are factory-bound to account/admin identity guards.
 const diditResubmissionFactory=functionSources.find(source =>
   source.includes('export function buildDiditResubmissionCallables(')) ?? '';
-const diditResubmissionExports=indexSource.match(/export\\s+const\\s*\\{([^}]+)\\}\\s*=\\s*buildDiditResubmissionCallables\\s*\\(/);
+const diditResubmissionExports=indexSource.match(/export\s+const\s*\{([^}]+)\}\s*=\s*buildDiditResubmissionCallables\s*\(/);
 if(diditResubmissionExports) {
   for(const name of diditResubmissionExports[1].split(',').map(value=>value.trim())) {
     if(/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) &&
-       new RegExp('const\\\\s+'+name+'\\\\s*=\\\\s*onCall\\\\b').test(diditResubmissionFactory))
+       new RegExp('const\\s+'+name+'\\s*=\\s*onCall\\b').test(diditResubmissionFactory))
       exported.add(name);
   }
 }
