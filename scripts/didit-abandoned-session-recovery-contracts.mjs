@@ -11,6 +11,7 @@ for (const fragment of [
   "Deliberately omit status: inspect every lifecycle state returned for this account.",
   'if (payload.next)',
   "'Awaiting User'",
+  "Boolean(status) && Boolean(text(item.session_id, 128))",
   "parsedUrl.protocol !== 'https:'",
   "item.session_kind === 'user' && item.vendor_data === uid",
   "['Not Started', 'In Progress', 'Resubmitted', 'Awaiting User'].includes(status)",
@@ -23,5 +24,7 @@ assert.ok(source.includes("status: outcomeUncertain ? 'CREATION_UNCERTAIN' : 'NO
 assert.ok(source.includes('const recovered = await recoverExistingDiditSession(uid);'));
 assert.ok(source.includes('if (recovered) return recovered;'));
 assert.ok(source.includes('No new verification was started'));
+assert.doesNotMatch(recovery, /\['Not Started', 'In Progress', 'In Review', 'Resubmitted', 'Abandoned'/,
+  'unknown provider statuses must be matched and blocked rather than ignored');
 
 console.log('Didit abandoned-session recovery contracts passed.');
