@@ -6,6 +6,13 @@ export type DiditResubmissionReason =
   'unclear_document' | 'wrong_document' | 'expired_document' | 'document_not_detected' | 'other';
 export type DiditResubmissionState =
   'none' | 'requested' | 'processing' | 'ready' | 'denied' | 'needs_manual_review';
+export type DiditDocumentGuidance = {
+  code:string;
+  title:string;
+  explanation:string;
+  action:string;
+  canRetake:boolean;
+};
 export type DiditResubmissionStatus = {
   status: DiditResubmissionState;
   reason: DiditResubmissionReason | null;
@@ -13,6 +20,8 @@ export type DiditResubmissionStatus = {
   canRequest: boolean;
   launchUrl: string | null;
   message: string | null;
+  guidance?: DiditDocumentGuidance | null;
+  guidanceUnavailable?: boolean;
 };
 export type AdminDiditResubmissionItem = {
   userId: string;
