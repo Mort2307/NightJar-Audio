@@ -18,7 +18,9 @@ Retain one Master Contributor Agreement, but make it the umbrella agreement rath
 6. Schedule E — NightJar Originals: separate, express opt-in exclusivity or assignment for a named work.
 7. Schedule F — Direct Creator Collaboration: agreement between creators themselves; NightJar is not a party or payment intermediary.
 8. Schedule G — Speech-to-Text Permission: narrow transcription permission, no model training or voice cloning.
-9. Review Register — open legal, operational and commercial decisions.
+9. Role-specific scope templates — VA Creator, Writer, Audio Editor, Artist and combined-role projects.
+10. Plain-English glossary — definitions of legal and commercial terms.
+11. Review Register — open legal, operational and commercial decisions.
 
 ## Completion and approval
 
