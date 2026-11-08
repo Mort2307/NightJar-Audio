@@ -12,7 +12,6 @@ for (const fragment of [
   'if (payload.next)',
   "parsedUrl.protocol !== 'https:'",
   "item.session_kind === 'user' && item.vendor_data === uid",
-  "parsed.protocol === 'https:'",
   "['Not Started', 'In Progress', 'Resubmitted'].includes(status)",
   "status === 'In Review'",
   "status === 'Approved'",
