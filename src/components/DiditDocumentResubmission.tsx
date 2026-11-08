@@ -96,7 +96,7 @@ export default function DiditDocumentResubmission() {
     </section>
 
     {status?.status==='ready' && <p className="nj-didit-resubmission-message" role="status">
-      NightJar has authorised the replacement document step in your existing session. Open the same secure Didit session; the selected document check is the only step NightJar has requested you to repeat. Didit controls the exact screen shown inside its hosted flow.
+      NightJar has authorised the replacement document step in your existing session. Open the same secure Didit session; Didit will ask you to repeat only the selected step. Didit controls the exact screen shown inside its hosted flow.
     </p>}
     {link && <a className="secondary-button wide-button nj-didit-continue" href={link} target="_blank" rel="noopener noreferrer">
       {status?.status==='ready'?'Continue to your document retake':'Open existing Didit session'}
