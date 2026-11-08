@@ -15,6 +15,7 @@ import { hasPaidEntitlement } from './entitlements';
 import { canUseBetaListening } from './entitlements';
 import { buildVerifiedCreditCallables } from './verified-credits';
 import { buildNightjarQualityCallables } from './nightjar-quality';
+import { buildDiditResubmissionCallables } from './didit-resubmissions';
 import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes, type NightjarProfileType } from './profile-types';
 import { evaluateRoleCommitments, isCommitmentTaskReviewable, type RoleCommitmentAssessment } from './commitment-eligibility';
 import { allocateCreatorPool, type CreatorPoolMember } from './creator-pool';
@@ -16332,3 +16333,10 @@ export const {
   submitTesterFeedback,adminListTesterFeedback,adminReviewTesterFeedback,
   adminGetQualityAcceptance,adminRecordQualityCheck,
 } = buildNightjarQualityCallables(requireActiveIdentity,requireAdminIdentity,requireAgeVerified);
+
+// Explicit member-requested, admin-reviewed same-session Didit ID resubmission.
+// No new session is created and no 18+ approval can be granted by this workflow.
+export const { myDiditResubmission, requestDiditResubmission,
+  adminListDiditResubmissions, adminReviewDiditResubmission } = buildDiditResubmissionCallables({
+  requireActiveIdentity, requireAdminIdentity,
+});
