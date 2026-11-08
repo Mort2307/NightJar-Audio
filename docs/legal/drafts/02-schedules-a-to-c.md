@@ -16,7 +16,9 @@ The Contributor retains ownership of copyright and other intellectual-property r
 
 ## A3. Licence to NightJar
 
-In return for NightJar making the platform available and considering or hosting the submission, the Contributor grants the Operator a worldwide, non-exclusive, royalty-free licence while the work is hosted to:
+When the Contributor submits a work for consideration, they grant the Operator a temporary, non-exclusive licence to receive, store, review and moderate that submission solely to decide whether to accept it. If NightJar rejects the work or the Contributor withdraws it before acceptance, NightJar must not publish or otherwise exploit it and must securely delete ordinary working copies within 30 calendar days, except for a restricted copy reasonably required for a legal hold, dispute evidence or secure backup.
+
+If NightJar accepts the work for hosting or publication, the Contributor grants the Operator a worldwide, non-exclusive, royalty-free licence while the work is hosted to:
 (a) receive, store, back up and technically process the work;
 (b) review, moderate, format, encode, transcode, quality-check and secure it;
 (c) reproduce, communicate, display and make it available to NightJar members through the platform in the publication format selected by the Contributor and accepted by NightJar;
@@ -178,7 +180,7 @@ For each monthly accounting period, the Creator Pool is 50% of Eligible Net Subs
 
 If no Eligible Creators qualify for a period, the unallocated pool is carried forward and added to the next month's Creator Pool. It remains identified in the Creator Pool ledger and is not automatically transferred to the Operator, the NightJar operating pool or the owners. If there are still no eligible creators, it carries forward again.
 
-Amounts are calculated in whole pence. Any remainder penny must be allocated using a fair rotating or otherwise neutral method so that the same creator is not systematically favoured. The allocation record must show the method used.
+Amounts are calculated in whole pence. Any remainder penny must be allocated using a rotating order: eligible creators are placed in a stable, reproducible order for calculation, the starting position advances from the previous period, and the order continues until all remainder pennies are allocated. A creator must not systematically receive the extra penny because their account identifier sorts first. The allocation record must show the method and starting position used.
 
 ## C4. Eligibility
 
@@ -192,7 +194,7 @@ A person is an Eligible Creator for a period only if:
 
 The exact number, type and duration of qualifying works, qualification period, cut-off date and evidence requirements must be recorded in a Creator Pool Eligibility Table before the period begins. It must be accessible to contributors and cannot be changed retrospectively.
 
-The table must be role-sensitive and proportionate. Audio duration may be relevant for some roles but cannot be a universal test that unfairly excludes artwork or editing measured differently. Short-form, mini-release or other exceptions qualify only where the table or a written individual exception says so. Exceptions must be recorded consistently.
+The table must be role-sensitive and proportionate. Audio duration may be relevant for some roles but cannot be a universal test that unfairly excludes artwork or editing measured differently. Short-form, mini-release or other exceptions qualify only where the table or a written individual exception says so. Exceptions must be recorded consistently. The Operator must not make a Contributor ineligible solely because it delays publication of work that it has already accepted, unless the published eligibility table clearly and fairly makes public release a necessary criterion for that particular role.
 
 A creator eligible through multiple roles still receives one share. A person must not be excluded merely for making a good-faith complaint, requesting lawful removal or exercising a statutory right. If the Operator suspends eligibility, it must give the reason, identify the affected period and provide a review route. Amounts not reasonably in dispute must not be withheld.
 
