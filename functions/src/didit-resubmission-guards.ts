@@ -51,7 +51,7 @@ export function canRequestNewReview(params:{
 export type DiditDocumentIssueCode =
   | 'image_blurry' | 'image_dark' | 'image_bright' | 'image_quality'
   | 'document_expired' | 'mrz_invalid' | 'nfc_mismatch'
-  | 'adult_evidence_missing' | 'id_step_approved' | 'document_issue' | 'other_check';
+  | 'adult_evidence_missing' | 'id_step_approved' | 'document_issue' | 'document_unsupported' | 'other_check';
 
 export type DiditDocumentGuidance = {
   code:DiditDocumentIssueCode;
@@ -77,6 +77,12 @@ const guidanceByWarning:Record<string,DiditDocumentGuidance> = {
   COULD_NOT_RECOGNIZE_DOCUMENT:{code:'document_issue',title:'Didit could not read the document details',
     explanation:'One or more required details could not be extracted from the captured document. This can happen when the image is unclear, the required side is missing, or the document subtype is not accepted by the active workflow.',
     action:'Use the original, current physical document. Photograph the side that contains the required details straight-on, with all four corners visible, in even natural light and without glare. If the document is already clear and complete, contact NightJar support so we can check whether that document type is enabled.',canRetake:true},
+  DOCUMENT_TYPE_NOT_SUPPORTED:{code:'document_unsupported',title:'This document type is not enabled for NightJar verification',
+    explanation:'Didit recognised that a document was presented, but this country or document subtype is not enabled in the active NightJar workflow. Retaking the same document is unlikely to fix a workflow allowlist issue.',
+    action:'Please do not keep retrying the same document. Contact NightJar support to confirm which original physical documents are accepted for your country. If you have another accepted document, tell support before requesting a replacement step.',canRetake:true},
+  DOCUMENT_NOT_SUPPORTED_FOR_APPLICATION:{code:'document_unsupported',title:'This document type is not enabled for NightJar verification',
+    explanation:'The document type is not enabled for the active NightJar application workflow. This is a configuration issue, not necessarily a problem with your document or photograph.',
+    action:'Please do not keep retrying the same document. Contact NightJar support to confirm which original physical documents are accepted for your country before requesting a replacement step.',canRetake:true},
   DOCUMENT_EXPIRED:{code:'document_expired',title:'The identity document has expired',
     explanation:'The expiry date on the document is in the past, so it cannot be used for this check.',
     action:'Use a current, unexpired physical identity document that NightJar’s verification flow accepts. Do not retry with the expired document.',canRetake:true},
