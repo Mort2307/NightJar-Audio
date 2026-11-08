@@ -45,18 +45,16 @@ const recoverExistingDiditSession = async (uid: string) => {
     signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) throw new Error('Could not inspect existing Didit sessions');
-  const payload = await response.json() as { results?: unknown };
+  const payload = await response.json() as { results?: unknown; next?: unknown };
   if (!Array.isArray(payload?.results)) throw new Error('Invalid Didit session-list response');
+  if (payload.next) throw new HttpsError('unavailable',
+    'Nightjar could not inspect every existing Didit session. No new verification was started. Please contact support.');
   const matching = (payload.results as RecoverableDiditSession[]).filter(item => {
     const status = text(item.status, 40);
-    let parsed: URL;
-    try { parsed = new URL(text(item.session_url, 2048)); } catch { return false; }
     return item.session_kind === 'user' && item.vendor_data === uid &&
       (!item.workflow_id || item.workflow_id === DIDIT_WORKFLOW_ID.value()) &&
       ['Not Started', 'In Progress', 'In Review', 'Resubmitted', 'Abandoned', 'Expired',
         'Declined', 'Approved', 'Kyc Expired'].includes(status) &&
-      parsed.protocol === 'https:' &&
-      ['verify.didit.me', 'verification.didit.me'].includes(parsed.hostname) &&
       Boolean(text(item.session_id, 128));
   });
   if (matching.length > 1) {
@@ -68,6 +66,13 @@ const recoverExistingDiditSession = async (uid: string) => {
   const status = text(item.status, 40);
   const sessionId = text(item.session_id, 128);
   const url = text(item.session_url, 2048);
+  let parsedUrl: URL;
+  try { parsedUrl = new URL(url); } catch {
+    throw new HttpsError('unavailable', 'Nightjar found your existing Didit session but could not safely restore its link. No new verification was started; please contact support.');
+  }
+  if (parsedUrl.protocol !== 'https:' || !['verify.didit.me', 'verification.didit.me'].includes(parsedUrl.hostname)) {
+    throw new HttpsError('unavailable', 'Nightjar found your existing Didit session but could not safely restore its link. No new verification was started; please contact support.');
+  }
   const createdAtMs = Date.parse(text(item.created_at, 64));
   if (!Number.isFinite(createdAtMs)) throw new Error('Didit session has no valid creation timestamp');
 
