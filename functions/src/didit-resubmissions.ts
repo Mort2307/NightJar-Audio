@@ -118,6 +118,7 @@ export function buildDiditResubmissionCallables(deps: {
         state === 'denied' ? 'NightJar reviewed this request. Contact support if you need further help.' :
         guidanceUnavailable ? 'NightJar could not safely retrieve the individual Didit result. Please contact support; do not start another check.' :
         guidance?.explanation ?? null,
+    };
   });
 
   const requestDiditResubmission = onCall({region:REGION,secrets:[DIDIT_API_KEY,DIDIT_WORKFLOW_ID,DIDIT_ENVIRONMENT]}, async request => {
