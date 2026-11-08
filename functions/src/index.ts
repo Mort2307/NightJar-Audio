@@ -9651,7 +9651,32 @@ export const reconcileMyDiditVerification = onCall({
     return { verified: false, outcome: 'provider_not_approved' };
   }
   if (!verifiedAdultFromDecision(decision)) {
-    return { verified: false, outcome: 'adult_evidence_missing' };
+    // Persist a safe review-required state so the member is offered the
+    // same-session document resubmission path even when the signed webhook
+    // was delayed or never reached Nightjar. This NEVER grants 18+ access.
+    const reviewRequired = await db.runTransaction(async tx => {
+      const [ageNowSnap, sessionNowSnap] = await Promise.all([tx.get(ageRef), tx.get(sessionRef)]);
+      const ageNow = ageNowSnap.data() ?? {};
+      const sessionNow = sessionNowSnap.data() ?? {};
+      if (diditPass(ageNow)) return false;
+      if (ageNow.sessionId !== sessionId || ageNow.provider !== 'didit' ||
+          ageNow.environment !== 'live' || sessionNow.uid !== identity.uid ||
+          sessionNow.environment !== 'live' || sessionNow.workflowId !== session.workflowId ||
+          Number(ageNow.diditEventCreatedAt ?? 0) !== Number(age.diditEventCreatedAt ?? 0)) {
+        throw new HttpsError('aborted',
+          'The linked Didit result changed. Refresh your status; do not start another ID check.');
+      }
+      tx.set(ageRef, {
+        provider:'didit', environment:'live', status:'PENDING_REVIEW',
+        verified:false, reverifyRequired:true, testMode:false,
+        diditDecisionSyncOutcome:'adult_evidence_missing',
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+      tx.set(sessionRef, { status:cleanText(decision.status,40) || 'Approved',
+        updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      return true;
+    });
+    return { verified:false, outcome:'adult_evidence_missing', reviewRequired };
   }
 
   // Transactional binding and event-version checks prevent stale or replaced
@@ -9763,9 +9788,9 @@ export const adminReconcileMemberDidit = onCall({
     return { verified: false, outcome: 'provider_not_approved', providerStatus, idFeatureStatuses };
   }
   if (!verifiedAdultFromDecision(decision)) {
-    // A generic overall Approved cannot substitute for an individually
-    // approved documentary 18+ check. Return only safe diagnostic categories.
-    // Never return the DOB, identity fields or provider decision to the client.
+    // A generic overall Approved cannot substitute for documentary 18+ proof.
+    // Persist only a safe review state so the member can request a controlled
+    // same-session ID resubmission. This is not an age-gate approval.
     const checks = Array.isArray(decision.id_verifications) ? decision.id_verifications : [];
     const approvedIds = checks.filter((feature: any) =>
       ['Approved','APPROVED'].includes(String(feature?.status)));
@@ -9773,8 +9798,33 @@ export const adminReconcileMemberDidit = onCall({
       : !diditDocumentBirthDateReturned(decision)
         ? 'birth_date_not_returned'
         : 'adult_evidence_unconfirmed';
-    return { verified: false, outcome: 'adult_evidence_missing',
-      providerStatus, idFeatureStatuses, evidenceIssue };
+    const reviewRequired = await db.runTransaction(async tx => {
+      const [ageNowSnap, sessionNowSnap, accountNowSnap] = await Promise.all([
+        tx.get(ageRef), tx.get(sessionRef), tx.get(accountRef(userId)),
+      ]);
+      const ageNow = ageNowSnap.data() ?? {};
+      const sessionNow = sessionNowSnap.data() ?? {};
+      const accountNow = accountNowSnap.data() ?? {};
+      if (diditPass(ageNow)) return false;
+      if (!accountNowSnap.exists || accountNow.status === 'suspended' ||
+          ageNow.sessionId !== sessionId || ageNow.provider !== 'didit' ||
+          ageNow.environment !== 'live' || sessionNow.uid !== userId ||
+          sessionNow.environment !== 'live' || sessionNow.workflowId !== session.workflowId ||
+          Number(ageNow.diditEventCreatedAt ?? 0) !== Number(age.diditEventCreatedAt ?? 0)) {
+        throw new HttpsError('aborted',
+          'The linked Didit session or account changed. Refresh before taking another action.');
+      }
+      tx.set(ageRef, {
+        provider:'didit', environment:'live', status:'PENDING_REVIEW',
+        verified:false, reverifyRequired:true, testMode:false,
+        diditDecisionSyncOutcome:'adult_evidence_missing',
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+      tx.set(sessionRef, { status:providerStatus, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      return true;
+    });
+    return { verified:false, outcome:'adult_evidence_missing',
+      providerStatus, idFeatureStatuses, evidenceIssue, reviewRequired };
   }
 
   const previousEventTime = Number(age.diditEventCreatedAt ?? 0);
