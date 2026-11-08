@@ -5050,7 +5050,7 @@ function App() {
             </button>
             {diditRecoveryMessage&&<p role="status" className="nj-didit-recovery-message">{diditRecoveryMessage}</p>}
           </section>}
-          {!ageProviderVerified && <DiditDocumentResubmission />}
+          {!ageProviderVerified && ['FAIL','ABANDONED','EXPIRED','PENDING_REVIEW'].includes(ageProviderStatus) && <DiditDocumentResubmission />}
           <button type="button" className="secondary-button wide-button" disabled={ageLoading} onClick={() => void refreshAgeStatus()}><RefreshCw size={16} /> Refresh verification status</button>
           {ageProviderStatus === 'PENDING_REVIEW' && <p className="access-fine">Your previous check is under review. Contact Nightjar support instead of starting another paid verification.</p>}
           <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Didit verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
