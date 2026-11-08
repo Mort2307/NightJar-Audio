@@ -10,6 +10,7 @@ const admin=fs.readFileSync('src/components/AdminDiditResubmissions.tsx','utf8')
 const panel=fs.readFileSync('src/components/AdminDiditControlCentre.tsx','utf8');
 const app=fs.readFileSync('src/App.tsx','utf8');
 const api=fs.readFileSync('src/platform/firebase-didit-resubmission.ts','utf8');
+const hosting=fs.readFileSync('.github/workflows/firebase-hosting-merge.yml','utf8');
 
 assert.match(entry,/buildDiditResubmissionCallables\(/,'callables must be exposed');
 const memberRecovery=entry.slice(entry.indexOf('export const reconcileMyDiditVerification = onCall'),
@@ -58,6 +59,11 @@ assert.doesNotMatch(backend,/console\.(?:log|warn|error)|date_of_birth|document_
 assert.match(api,/myDiditResubmission/);
 assert.match(api,/requestDiditResubmission/);
 assert.match(api,/adminReviewDiditResubmission/);
+assert.match(hosting,/\[nightjar-didit-document-guidance-release\]/,'the guidance release tag must activate a backend-first deploy gate');
+assert.match(hosting,/Deploy Didit document quality guidance backend before Hosting/,'guidance backend deploy must run before Hosting');
+assert.match(hosting,/inputs\[function_names\]=myDiditResubmission,requestDiditResubmission,adminListDiditResubmissions,adminReviewDiditResubmission/,'only the four reviewed Didit resubmission callables are deployed');
+assert.match(hosting,/gh run watch "\$RUN_ID"[^\n]*--exit-status/,'Hosting waits for the selected Didit backend deployment to succeed');
+
 assert.match(member,/Request document review/);
 assert.match(member,/nightjarDiditResubmission\.request\(reason\)/);
 assert.match(member,/original, real physical identity document/,'member receives physical-document-only guidance');
