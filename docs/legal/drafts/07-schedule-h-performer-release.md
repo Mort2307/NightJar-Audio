@@ -51,7 +51,7 @@ This Schedule must be completed and signed by each identifiable Performer whose 
 
 3.4 The Operator may make ordinary technical edits for timing, clarity, noise reduction, mixing, mastering, formatting, accessibility and removal of mistakes. It must not materially change the meaning of the performance, create a misleading portrayal, add words or conduct outside the agreed performance, or use edits to place the Performer in an unconsented context.
 
-3.5 The Operator must not use the performance to create a synthetic voice, voice clone, imitation, digital replica or new performance. It must not use the performance to train, fine-tune or improve generative AI or speech models. Optional speech-to-text transcription requires a separate Schedule G and a verified provider that contractually respects the no-training restriction.
+3.5 The Operator must not use the performance to create a synthetic voice, voice clone, imitation, digital replica or new performance. It must not create or commission an artificial or digitally altered intimate depiction of the Performer. It must not use the performance to train, fine-tune or improve generative AI or speech models. Any materially different synthetic or intimate use would require a separate, specific, informed written agreement and must be lawful; this Schedule does not provide that permission. Optional speech-to-text transcription requires a separate Schedule G and a verified provider that contractually respects the no-training restriction.
 
 ## 4. Rights option — select one
 
