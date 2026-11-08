@@ -15,7 +15,7 @@ import {
   DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT,
   diditConfigured, diditMode, diditPass, verifiedAdultFromDecision,
 } from './didit';
-import { selectDocumentResubmission, canRequestNewReview } from './didit-resubmission-guards';
+import { selectDocumentResubmission, canRequestNewReview, describeDiditDocumentIssue } from './didit-resubmission-guards';
 
 type Identity = { uid: string; email: string; admin: boolean };
 type RequestState = 'requested' | 'processing' | 'ready' | 'denied' | 'needs_manual_review';
@@ -64,7 +64,7 @@ export function buildDiditResubmissionCallables(deps: {
   requireActiveIdentity: (request: any) => Promise<Identity>;
   requireAdminIdentity: (request: any) => Identity;
 }) {
-  const myDiditResubmission = onCall({region:REGION,secrets:[DIDIT_WORKFLOW_ID]}, async request => {
+  const myDiditResubmission = onCall({region:REGION,secrets:[DIDIT_API_KEY,DIDIT_WORKFLOW_ID,DIDIT_ENVIRONMENT]}, async request => {
     const identity = await deps.requireActiveIdentity(request);
     const [ageSnap, formSnap] = await Promise.all([ageRef(identity.uid).get(), requestRef(identity.uid).get()]);
     const age = ageSnap.data() ?? {}, form = formSnap.data() ?? {};
@@ -79,20 +79,45 @@ export function buildDiditResubmissionCallables(deps: {
     const sent = Number(current.providerRequests ?? 0);
     const requested = Number(current.memberRequests ?? 0);
     const ageEligible = eligibleAgeStates.has(String(age.status)) && !diditPass(age);
-    const canRequest = ageEligible && canRequestNewReview({
+    const canRequestByLimits = ageEligible && canRequestNewReview({
       accountStatus:String(age.status), providerRequests:sent, memberRequests:requested,
       requestStatus:state, lastProviderRequestMs:Number(current.lastProviderRequestMs ?? 0), now:Date.now(),
     });
     const launchUrl = state === 'ready' && sameSession ? safeUrl(session.url) : null;
+    let guidance:ReturnType<typeof describeDiditDocumentIssue> | null = null;
+    let guidanceUnavailable = false;
+    // A read-only provider decision lookup supplies a whitelisted reason code.
+    // Raw decision data, document media, DOB and provider text never leave this function.
+    if (ageEligible && ['none','denied'].includes(state) && diditConfigured() && diditMode() === 'live') {
+      try {
+        const response = await fetch('https://verification.didit.me/v3/session/'+encodeURIComponent(text(age.sessionId))+'/decision/',{
+          method:'GET',headers:{'x-api-key':DIDIT_API_KEY.value(),Accept:'application/json'},
+          signal:AbortSignal.timeout(10000),
+        });
+        if (response.ok) {
+          const decision = await response.json() as Record<string,any>;
+          const bound = decision?.session_id === age.sessionId && decision?.vendor_data === identity.uid &&
+            decision?.workflow_id === session.workflowId && decision?.environment === 'live' &&
+            decision?.session_kind === 'user' &&
+            (!session.applicationId || decision?.application_id === session.applicationId);
+          if (bound) guidance = describeDiditDocumentIssue(decision,verifiedAdultFromDecision(decision));
+          else guidanceUnavailable = true;
+        } else guidanceUnavailable = true;
+      } catch { guidanceUnavailable = true; }
+    }
+    const canRequest = canRequestByLimits && guidance?.canRetake === true;
     return {
       ...publicStatus(current, launchUrl),
       canRequest,
+      guidance,
+      guidanceUnavailable,
       message: state === 'ready' ? readyMessage :
         state === 'requested' ? 'Your request is awaiting NightJar review; no new check has started.' :
         state === 'processing' ? 'NightJar is checking the existing Didit session. Please do not retry.' :
         state === 'needs_manual_review' ? genericMessage :
-        state === 'denied' ? 'NightJar reviewed this request. Contact support if you need further help.' : null,
-    };
+        state === 'denied' ? 'NightJar reviewed this request. Contact support if you need further help.' :
+        guidanceUnavailable ? 'NightJar could not safely retrieve the individual Didit result. Please contact support; do not start another check.' :
+        guidance?.explanation ?? null,
   });
 
   const requestDiditResubmission = onCall({region:REGION,secrets:[DIDIT_API_KEY,DIDIT_WORKFLOW_ID,DIDIT_ENVIRONMENT]}, async request => {
