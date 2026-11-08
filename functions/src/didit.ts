@@ -35,7 +35,7 @@ const recoverExistingDiditSession = async (uid: string) => {
     session_kind: 'user',
     vendor_data: uid,
     workflow_id: DIDIT_WORKFLOW_ID.value(),
-    status: 'Not Started,In Progress,In Review,Resubmitted,Abandoned,Expired,Declined,Approved,Kyc Expired',
+    // Deliberately omit status: inspect every lifecycle state returned for this account.
     limit: '100',
     offset: '0',
   });
@@ -54,7 +54,7 @@ const recoverExistingDiditSession = async (uid: string) => {
     return item.session_kind === 'user' && item.vendor_data === uid &&
       (!item.workflow_id || item.workflow_id === DIDIT_WORKFLOW_ID.value()) &&
       ['Not Started', 'In Progress', 'In Review', 'Resubmitted', 'Abandoned', 'Expired',
-        'Declined', 'Approved', 'Kyc Expired'].includes(status) &&
+        'Declined', 'Approved', 'Kyc Expired', 'Awaiting User'].includes(status) &&
       Boolean(text(item.session_id, 128));
   });
   if (matching.length > 1) {
@@ -79,7 +79,7 @@ const recoverExistingDiditSession = async (uid: string) => {
   // Only sessions that are genuinely awaiting member action can be resumed.
   // In Review is a human-review state; Abandoned/Expired/Declined/Approved
   // need reconciliation or an explicit controlled decision, not a blind restart.
-  if (!['Not Started', 'In Progress', 'Resubmitted'].includes(status)) {
+  if (!['Not Started', 'In Progress', 'Resubmitted', 'Awaiting User'].includes(status)) {
     throw new HttpsError('failed-precondition',
       status === 'In Review'
         ? 'Your existing Didit verification is awaiting review. You do not need to start another check.'
