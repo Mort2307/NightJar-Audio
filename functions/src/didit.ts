@@ -51,11 +51,11 @@ const recoverExistingDiditSession = async (uid: string) => {
     'Nightjar could not inspect every existing Didit session. No new verification was started. Please contact support.');
   const matching = (payload.results as RecoverableDiditSession[]).filter(item => {
     const status = text(item.status, 40);
+    // Match the account-bound session regardless of its status. Unknown or newly
+    // introduced provider statuses must fail closed below, never fall through to a new POST.
     return item.session_kind === 'user' && item.vendor_data === uid &&
       (!item.workflow_id || item.workflow_id === DIDIT_WORKFLOW_ID.value()) &&
-      ['Not Started', 'In Progress', 'In Review', 'Resubmitted', 'Abandoned', 'Expired',
-        'Declined', 'Approved', 'Kyc Expired', 'Awaiting User'].includes(status) &&
-      Boolean(text(item.session_id, 128));
+      Boolean(status) && Boolean(text(item.session_id, 128));
   });
   if (matching.length > 1) {
     throw new HttpsError('failed-precondition',
