@@ -27,6 +27,7 @@ import { scrollNightjarToTop } from './platform/scroll-navigation';
 import { revealHomeSection, revealWorkspaceSection } from './platform/reveal-navigation';
 import { nightjarAge } from './platform/firebase-age';
 import { nightjarDiditControlled } from './platform/firebase-didit-controlled';
+import DiditDocumentResubmission from './components/DiditDocumentResubmission';
 import { nightjarLegal } from './platform/firebase-legal';
 import { NIGHTJAR_AGE_NOTICE_VERSION } from './legal/nightjarLegal';
 import { nightjarScripts } from './platform/firebase-scripts';
@@ -5023,7 +5024,7 @@ function App() {
             </label>}
           </section>}
           {ageStatusError && <div className="access-note" role="alert">{ageStatusError}</div>}
-          {!DIDIT_VERIFICATION_PAUSED && <button className="primary-button wide-button" disabled={ageLoading ||
+          {!DIDIT_VERIFICATION_PAUSED && !['FAIL','ABANDONED','EXPIRED','PENDING_REVIEW'].includes(ageProviderStatus) && <button className="primary-button wide-button" disabled={ageLoading ||
             (!ageNoticeAccepted && !ageNoticeAcknowledged) ||
             (!ageProviderVerified && !ageDiditPermission) ||
             (ageProviderStatus === 'PENDING_REVIEW')} onClick={() => void beginAgeVerificationFromGate()}>
