@@ -68,7 +68,7 @@ assert.match(member,/both front and back/,'member is told to capture both sides 
 assert.match(member,/Continue to your document retake/,'member has a direct action to resume the existing resubmitted session');
 assert.match(member,/only the selected step/,'member is told Didit will repeat only the selected step');
 assert.match(backend,/describeDiditDocumentIssue/,'member status uses whitelisted provider issue guidance');
-assert.match(backend,/decision\.session_id === age\.sessionId/,'guidance decision is bound to the current session');
+assert.match(backend,/decision\?\.session_id === age\.sessionId/,'guidance decision is bound to the current session');
 assert.match(backend,/guidance\?\.canRetake === true/,'unknown and non-document failures cannot trigger blind resubmission');
 assert.match(policy,/IMAGE_TOO_BLURRY/,'known Didit image warnings are mapped');
 assert.match(policy,/IMAGE_TOO_DARK/,'dark image warning is mapped');
