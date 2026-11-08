@@ -116,13 +116,15 @@ The parties may select a licence instead of assignment. The Statement of Work mu
 
 ## B7. Cancellation
 
-If the Operator cancels before work begins, it must pay approved non-refundable third-party costs. If it cancels after work begins, it must pay for work completed up to cancellation and approved unavoidable commitments, subject to the Statement of Work. If the Contributor abandons work without lawful excuse, the Operator may withhold payment for undelivered work but must pay for a completed portion it elects to keep or use. Rights in unfinished or unpaid work remain with the Contributor unless a separate written settlement states otherwise.
+If the Operator cancels before work begins, it must pay approved non-refundable third-party costs. If it cancels after work begins, it must pay for work completed up to cancellation and approved unavoidable commitments, subject to the Statement of Work. If the Contributor abandons work without lawful excuse, the Operator may withhold payment for undelivered work but must pay for a completed portion it elects to keep or use. If the Operator elects to keep or use a completed part rather than the whole project, the parties must identify that part and agree its proportionate fee and rights arrangement in a signed written settlement. The Operator must not exploit that part until the agreed payment and rights conditions have been met. Rights in unfinished or unpaid work remain with the Contributor unless a separate written settlement states otherwise.
 
 ## B8. Statement of Work template
 
 Project reference/title: [INSERT]  
 Contributor legal name: [INSERT]  
-Operator legal name: [INSERT]  
+Operator legal name: [INSERT]
+
+If more than one author, producer or other rights holder contributes to the Commissioned Work, either use a separate signed Statement of Work for each person or attach an execution page that identifies each person's contribution, fee, payment trigger and rights being assigned/licensed. Every person who owns rights that NightJar is acquiring must sign their own assignment or validly authorise a signatory. A lead creator's signature alone does not transfer another person's rights.  
 Role(s): [INSERT]  
 Description and deliverables: [INSERT]  
 Technical specifications/formats: [INSERT]  
@@ -137,7 +139,7 @@ Cancellation terms (if different): [INSERT]
 Rights option: [ASSIGNMENT / EXCLUSIVE LICENCE / NON-EXCLUSIVE LICENCE]  
 Pre-existing materials/reserved rights: [INSERT OR NONE]  
 Third-party materials and permissions: [INSERT OR NONE]  
-Sound recording producer/owner: [INSERT]  
+Sound recording producer/owner and signed rights instrument: [INSERT]  
 Performer(s) and signed Schedule H references: [INSERT OR NOT APPLICABLE]  
 Moral-rights consent/waiver needed: [INSERT OR NOT APPLICABLE]  
 Credit wording: [INSERT]  
@@ -210,7 +212,7 @@ Any future change to the founder opt-out applies prospectively and cannot alter 
 
 The Operator calculates the pool monthly after subscription receipts and adjustments are reconciled. Within 20 calendar days after month end, each Eligible Creator receives a statement showing the period, Eligible Net Subscription Revenue, pool percentage and total, carry-forward balance, number of Eligible Creators, individual share, any amount held for a documented payment issue and expected payment date.
 
-Undisputed amounts are paid by direct bank transfer no later than 30 calendar days after month end, subject to lawful identity, fraud and payment checks. The intended account is the Operator's Monzo business account, or a replacement business account notified to creators. NightJar does not require a creator to send money to another creator through the platform. Private creator-to-creator transactions remain directly between those creators.
+Undisputed amounts are paid by direct bank transfer no later than 30 calendar days after month end, subject to lawful identity, fraud and payment checks. The intended account is the Operator's nominated Monzo account, or a replacement account notified to creators. NightJar does not require a creator to send money to another creator through the platform. Private creator-to-creator transactions remain directly between those creators.
 
 If payment cannot be completed because bank details are incorrect or a lawful check is outstanding, the Operator must notify the Contributor. The amount remains owed and is not forfeited.
 
