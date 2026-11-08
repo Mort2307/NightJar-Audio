@@ -45,6 +45,13 @@ export default function DiditDocumentResubmission() {
     catch { setError('Could not check your document review status. Please retry or contact NightJar support.'); }
   };
   useEffect(()=>{void refresh();},[]);
+  useEffect(()=>{
+    const code=status?.guidance?.code;
+    if(code==='document_expired') setReason('expired_document');
+    else if(code==='mrz_invalid'||code==='nfc_mismatch') setReason('document_not_detected');
+    else if(code==='image_blurry'||code==='image_dark'||code==='image_bright'||code==='image_quality'||code==='document_issue')
+      setReason('unclear_document');
+  },[status?.guidance?.code]);
   const submit=async()=>{
     if(loading || status?.canRequest!==true)return;
     setLoading(true);
