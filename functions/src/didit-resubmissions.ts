@@ -86,9 +86,12 @@ export function buildDiditResubmissionCallables(deps: {
     const launchUrl = state === 'ready' && sameSession ? safeUrl(session.url) : null;
     let guidance:ReturnType<typeof describeDiditDocumentIssue> | null = null;
     let guidanceUnavailable = false;
+    let providerAllowsResubmission = false;
     // A read-only provider decision lookup supplies a whitelisted reason code.
     // Raw decision data, document media, DOB and provider text never leave this function.
-    if (ageEligible && ['none','denied'].includes(state) && diditConfigured() && diditMode() === 'live') {
+    if (ageEligible && ['none','denied','ready'].includes(state)) {
+      if (!diditConfigured() || diditMode() !== 'live') guidanceUnavailable = true;
+      else {
       try {
         const response = await fetch('https://verification.didit.me/v3/session/'+encodeURIComponent(text(age.sessionId))+'/decision/',{
           method:'GET',headers:{'x-api-key':DIDIT_API_KEY.value(),Accept:'application/json'},
@@ -100,12 +103,16 @@ export function buildDiditResubmissionCallables(deps: {
             decision?.workflow_id === session.workflowId && decision?.environment === 'live' &&
             decision?.session_kind === 'user' &&
             (!session.applicationId || decision?.application_id === session.applicationId);
-          if (bound) guidance = describeDiditDocumentIssue(decision,verifiedAdultFromDecision(decision));
-          else guidanceUnavailable = true;
+          if (bound) {
+            const adultEvidence = verifiedAdultFromDecision(decision);
+            guidance = describeDiditDocumentIssue(decision,adultEvidence);
+            providerAllowsResubmission = selectDocumentResubmission(decision,adultEvidence).allowed;
+          } else guidanceUnavailable = true;
         } else guidanceUnavailable = true;
       } catch { guidanceUnavailable = true; }
+      }
     }
-    const canRequest = canRequestByLimits && guidance?.canRetake === true;
+    const canRequest = canRequestByLimits && guidance?.canRetake === true && providerAllowsResubmission;
     return {
       ...publicStatus(current, launchUrl),
       canRequest,
