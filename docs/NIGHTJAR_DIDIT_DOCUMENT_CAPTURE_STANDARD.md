@@ -24,6 +24,8 @@ For a successful capture:
 
 Accepted document types vary by country and by the live workflow configuration. NightJar must not promise that a particular document type is accepted unless it is enabled in that workflow.
 
+**Enforcement setting to verify in Didit:** configure the ID Verification step to allow live camera capture only (`CAMERA_SCAN`) and disable the file-upload path (`UPLOAD`) if the active workflow and member-device support permit it. This is a Didit workflow setting; NightJar's on-screen instructions alone cannot technically prevent a user from selecting an upload. Do not claim camera-only enforcement until the live workflow configuration has been checked.
+
 ## How NightJar explains a failed check
 
 NightJar reads the existing, account-bound Didit decision server-side. It may show a member-facing explanation only from a fixed allowlist of known warning codes. It must never expose provider payloads, extracted identity data, date of birth, document numbers, image URLs, biometrics or raw provider warning text.
