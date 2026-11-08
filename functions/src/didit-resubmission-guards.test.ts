@@ -73,3 +73,16 @@ test('other-check and unknown provider reasons do not invent a document failure'
   assert.equal(result.code,'other_check');
   assert.equal(result.canRetake,false);
 });
+
+test('overall approval without any ID verification step requires NightJar configuration review',()=>{
+  const result=describeDiditDocumentIssue({status:'Approved',id_verifications:[]},false);
+  assert.equal(result.code,'adult_evidence_missing');
+  assert.equal(result.canRetake,false);
+  assert.match(result.action,/Do not upload your ID again/);
+});
+test('warning codes supplied as strings are safely mapped',()=>{
+  const result=describeDiditDocumentIssue({
+    id_verifications:[{status:'Declined',warnings:['IMAGE_TOO_BLURRY']}],
+  },false);
+  assert.equal(result.code,'image_blurry');
+});
