@@ -9662,6 +9662,7 @@ export const reconcileMyDiditVerification = onCall({
       if (ageNow.sessionId !== sessionId || ageNow.provider !== 'didit' ||
           ageNow.environment !== 'live' || sessionNow.uid !== identity.uid ||
           sessionNow.environment !== 'live' || sessionNow.workflowId !== session.workflowId ||
+          sessionNow.applicationId !== session.applicationId ||
           Number(ageNow.diditEventCreatedAt ?? 0) !== Number(age.diditEventCreatedAt ?? 0)) {
         throw new HttpsError('aborted',
           'The linked Didit result changed. Refresh your status; do not start another ID check.');
@@ -9810,6 +9811,7 @@ export const adminReconcileMemberDidit = onCall({
           ageNow.sessionId !== sessionId || ageNow.provider !== 'didit' ||
           ageNow.environment !== 'live' || sessionNow.uid !== userId ||
           sessionNow.environment !== 'live' || sessionNow.workflowId !== session.workflowId ||
+          sessionNow.applicationId !== session.applicationId ||
           Number(ageNow.diditEventCreatedAt ?? 0) !== Number(age.diditEventCreatedAt ?? 0)) {
         throw new HttpsError('aborted',
           'The linked Didit session or account changed. Refresh before taking another action.');
