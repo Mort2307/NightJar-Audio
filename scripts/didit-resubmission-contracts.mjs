@@ -79,6 +79,7 @@ assert.match(backend,/guidance\?\.canRetake === true/,'unknown and non-document 
 assert.match(policy,/IMAGE_TOO_BLURRY/,'known Didit image warnings are mapped');
 assert.match(policy,/IMAGE_TOO_DARK/,'dark image warning is mapped');
 assert.match(policy,/IMAGE_TOO_BRIGHT/,'bright image warning is mapped');
+assert.match(policy,/COULD_NOT_RECOGNIZE_DOCUMENT/,'unreadable document results explain what needs attention');
 assert.match(policy,/DOCUMENT_EXPIRED/,'expired document warning is mapped');
 assert.match(policy,/adult_evidence_missing/,'missing adult evidence is not mislabelled as a photo problem');
 

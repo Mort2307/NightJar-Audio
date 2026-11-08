@@ -86,3 +86,13 @@ test('warning codes supplied as strings are safely mapped',()=>{
   },false);
   assert.equal(result.code,'image_blurry');
 });
+
+test('unreadable document warning explains the possible missing side or unsupported subtype',()=>{
+  const result=describeDiditDocumentIssue({
+    id_verifications:[{status:'Declined',warnings:[{code:'COULD_NOT_RECOGNIZE_DOCUMENT'}]}],
+  },false);
+  assert.equal(result.canRetake,true);
+  assert.match(result.title,/could not read/i);
+  assert.match(result.action,/required details|side that contains/i);
+  assert.match(result.action,/document type is enabled/i);
+});
