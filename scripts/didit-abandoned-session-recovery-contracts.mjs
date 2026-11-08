@@ -8,7 +8,7 @@ for (const fragment of [
   "session_kind: 'user'",
   "vendor_data: uid",
   "workflow_id: DIDIT_WORKFLOW_ID.value()",
-  "status: 'Not Started,In Progress,In Review,Resubmitted,Abandoned,Expired,Declined,Approved,Kyc Expired'",
+  "Deliberately omit status: inspect every lifecycle state returned for this account.",
   'if (payload.next)',
   "'Awaiting User'",
   "parsedUrl.protocol !== 'https:'",
