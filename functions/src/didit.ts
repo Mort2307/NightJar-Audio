@@ -33,6 +33,7 @@ const recoverExistingDiditSession = async (uid: string) => {
     session_kind: 'user',
     vendor_data: uid,
     workflow_id: DIDIT_WORKFLOW_ID.value(),
+    status: 'Not Started,In Progress,In Review,Resubmitted,Pending',
     limit: '20',
     offset: '0',
   });
