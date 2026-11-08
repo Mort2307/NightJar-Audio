@@ -30,6 +30,8 @@ Accepted document types vary by country and by the live workflow configuration. 
 
 NightJar reads the existing, account-bound Didit decision server-side. It may show a member-facing explanation only from a fixed allowlist of known warning codes. It must never expose provider payloads, extracted identity data, date of birth, document numbers, image URLs, biometrics or raw provider warning text.
 
+Known document warning examples include `IMAGE_TOO_BLURRY`, `IMAGE_TOO_DARK`, `IMAGE_TOO_BRIGHT`, `DOCUMENT_EXPIRED`, `MRZ_VALIDATION_FAILED`, `NFC_DATA_DOES_NOT_MATCH_OCR`, and `COULD_NOT_RECOGNIZE_DOCUMENT`. The last can indicate an unreadable required field, a missing required side, or a document subtype not enabled in the workflow; support must distinguish a member capture issue from a workflow allowlist issue.
+
 The member explanation must contain:
 - What part of the check needs attention.
 - Why that issue prevents the check from completing.
