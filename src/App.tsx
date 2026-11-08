@@ -4011,7 +4011,7 @@ function App() {
       const message = result.verified
         ? 'The existing Didit 18+ approval is now securely confirmed. This applicant can be reviewed for professional access.'
         : result.outcome === 'adult_evidence_missing'
-          ? 'Didit reports overall Approved, but approved 18+ documentary ID evidence is missing from the provider decision. Review the individual ID Verification step in Didit.' + idStatuses
+          ? 'Didit reports overall Approved, but its documentary ID step has not confirmed 18+. Nightjar has kept 18+ access locked and recorded a review-required state. The member can request a same-session document resubmission from their age-verification screen after refreshing. Review the individual ID Verification step in Didit first; no new session was started.' + idStatuses
           : result.outcome === 'provider_not_approved'
             ? 'Didit has not returned an Approved overall decision for this linked session (provider: ' + String(result.providerStatus ?? 'unknown') + ').' + idStatuses
             : 'No safely reconcilable live Didit session was found. Review the member in the Didit operations desk; do not start another check.';
