@@ -12,6 +12,15 @@ const app=fs.readFileSync('src/App.tsx','utf8');
 const api=fs.readFileSync('src/platform/firebase-didit-resubmission.ts','utf8');
 
 assert.match(entry,/buildDiditResubmissionCallables\(/,'callables must be exposed');
+const memberRecovery=entry.slice(entry.indexOf('export const reconcileMyDiditVerification = onCall'),
+  entry.indexOf('// Owner-triggered recovery for a specific, registered Nightjar member'));
+const adminRecovery=entry.slice(entry.indexOf('export const adminReconcileMemberDidit = onCall'),
+  entry.indexOf('// Admin-only, bounded Nightjar member verification directory'));
+assert.match(memberRecovery,/status:'PENDING_REVIEW'/,'member sync persists a review state when overall Approved lacks documentary adult evidence');
+assert.match(adminRecovery,/status:'PENDING_REVIEW'/,'owner sync persists the same review state for the selected member');
+assert.match(memberRecovery,/diditDecisionSyncOutcome:'adult_evidence_missing'/,'only a safe categorical evidence outcome is stored');
+assert.match(memberRecovery,/verified:false, reverifyRequired:true/,'missing evidence remains blocked from 18+');
+
 assert.match(backend,/await deps\.requireActiveIdentity\(request\)/,'member status/request use trusted auth');
 assert.match(backend,/deps\.requireAdminIdentity\(request\)/,'admin queue/review use server auth');
 assert.match(backend,/if \(uid === admin\.uid\)/,'admin cannot approve their own request');
