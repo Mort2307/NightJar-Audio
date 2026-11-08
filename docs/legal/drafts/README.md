@@ -19,6 +19,7 @@ Retain one Master Contributor Agreement as the common umbrella contract. Attach 
 7. **06 — Plain-English glossary:** explanations of legal and commercial terms.
 8. **09 — Execution and Signing Protocol:** document assembly, identity checks, e-signature evidence, recordkeeping and sequence.
 9. **04 — Review Register:** unresolved legal, factual and commercial decisions.
+10. **10 — Internal Contract Audit Report:** clause-by-clause assessment, legal-risk summary and items that must be resolved before signature.
 
 ## Important distinction
 
