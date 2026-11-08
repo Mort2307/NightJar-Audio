@@ -26,7 +26,7 @@ The Operator details are mandatory. NightJar Audio is a brand name and is not it
 
 1.1 The Operator runs NightJar Audio, an adults-only audio and creative platform. A Contributor may provide creative services, publish voluntary work, collaborate with other creators or qualify for a revenue-sharing arrangement.
 
-1.2 This Agreement is the umbrella agreement. A schedule forms part of it only if selected in the checklist below and signed by both parties or accepted by a legally effective electronic signature process that records the exact document and version accepted.
+1.2 This Agreement is the umbrella agreement. A schedule forms part of it only if selected in the checklist below and signed by both parties or accepted by a legally effective electronic signature process that records the exact document and version accepted. The separate creator-to-creator collaboration form (Schedule F) is not part of this Agreement and is signed only by those creators. Performer releases and moral-rights instruments (Schedules H and I) are separate, work-specific documents signed by the people whose rights they affect.
 
 1.3 Each paid commission requires a separate completed Statement of Work. A profile approval, upload, message, credit or platform setting does not itself create a paid commission, transfer copyright or give permission to record or exploit a performer's performance.
 
@@ -40,9 +40,11 @@ Tick only the schedules that apply:
 - [ ] Schedule C — Creator Pool and Revenue Share
 - [ ] Schedule D — Confidentiality and Data Handling
 - [ ] Schedule E — NightJar Originals (only for a named work)
-- [ ] Schedule F — Direct Creator Collaboration (signed by the collaborating creators; not a contract with the Operator)
 - [ ] Schedule G — Speech-to-Text Processing Permission
-- [ ] Schedule H — Performer Consent, Recording and Use Release (signed separately by every performer)
+- [ ] Schedule H — Performer Consent, Recording and Use Release (separate work-specific signature by every performer)
+- [ ] Schedule I — Moral Rights Consent or Waiver (only if a specific consent or waiver is needed)
+
+Schedule F is a standalone creator-to-creator contract template and is not selected as a schedule to this Agreement. Schedules H and I are ancillary instruments that must be signed separately by each relevant performer or author.
 
 A schedule may be added later by a dated written variation identifying the activity and work it covers. A signature for one project does not automatically cover another project or a future performance.
 
@@ -97,9 +99,9 @@ A schedule may be added later by a dated written variation identifying the activ
 
 6.5 The Contributor retains rights not expressly licensed or assigned in a signed schedule. Uploading work does not give the Operator permission to train generative AI models on it, clone a voice or create a synthetic performance.
 
-6.6 Moral rights are separate from copyright ownership and are not transferred by an assignment of copyright. Any consent or waiver must be specific, written, signed by the person holding the right, and no broader than reasonably needed for the agreed use.
+6.6 Moral rights are separate from copyright ownership and are not transferred by an assignment of copyright. Any consent or waiver must be specific, written, signed by the person holding the right, and no broader than reasonably needed for the agreed use. Use Schedule I where a separate instrument is required.
 
-6.7 Each Performer must sign Schedule H before their performance is recorded or used, unless NightJar has obtained another legally sufficient written release that covers the exact work and intended use. Schedule G is separate and is required for the optional transcription workflow.
+6.7 Each Performer must sign Schedule H before their performance is recorded or used, unless NightJar has obtained another legally sufficient written release that covers the exact work and intended use. Schedule G is separate and is required for the optional transcription workflow. A person's signature on this Master Agreement does not replace a work-specific Performer release.
 
 ## 7. Quality, delivery and revisions
 
