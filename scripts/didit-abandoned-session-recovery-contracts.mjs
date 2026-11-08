@@ -10,7 +10,6 @@ for (const fragment of [
   "workflow_id: DIDIT_WORKFLOW_ID.value()",
   "status: 'Not Started,In Progress,In Review,Resubmitted,Abandoned,Expired,Declined,Approved,Kyc Expired'",
   'if (payload.next)',
-  'if (!parsedUrl)',
   "parsedUrl.protocol !== 'https:'",
   "item.session_kind === 'user' && item.vendor_data === uid",
   "parsed.protocol === 'https:'",
