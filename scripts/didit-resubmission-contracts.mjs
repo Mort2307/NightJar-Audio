@@ -32,8 +32,10 @@ assert.match(backend,/new_status:'Resubmitted'/,'provider receives same-session 
 assert.match(backend,/nodes_to_resubmit:\[\{node_id:selection\.nodeId,feature:'OCR'\}\]/,
   'only one provider-selected document OCR step may be repeated');
 assert.match(backend,/send_email:false/,'no unreviewed provider email or PII disclosure');
-assert.match(diditStarter,/if \(oldId && existing\.provider === 'didit' && existing\.environment === env\(\)\)/,
-  'already linked checks cannot create a second billable provider session');
+assert.match(diditStarter,/const recovered = await recoverExistingDiditSession\(uid\)/,
+  'existing provider sessions are recovered before any new billable session POST');
+assert.match(diditStarter,/if \(recovered\) return recovered/,
+  'recovered terminal or active sessions stop a duplicate paid session creation');
 assert.match(app,/!\['FAIL','ABANDONED','EXPIRED','PENDING_REVIEW'\]\.includes\(ageProviderStatus\)/,
   'failed existing check must not show the start-new-check action');
 assert.match(policy,/id\.status==='Approved'/,'approved ID missing DOB must halt');
