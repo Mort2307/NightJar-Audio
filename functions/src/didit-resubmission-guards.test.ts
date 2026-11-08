@@ -11,6 +11,13 @@ test('only a single failed documentary OCR node may be resubmitted',()=>{
     assert.equal(selectDocumentResubmission({...base,status},false).allowed,false);
   assert.equal(selectDocumentResubmission({...base,status:'Approved'},true).allowed,false);
 });
+test('overall Approved with a Declined documentary ID step is eligible for same-session OCR resubmission',()=>{
+  const decision={status:'Approved',id_verifications:[{
+    node_id:'feature_ocr_1',verification_method:'document',status:'Declined',
+  }]};
+  assert.deepEqual(selectDocumentResubmission(decision,false),{allowed:true,nodeId:'feature_ocr_1'});
+  assert.equal(selectDocumentResubmission(decision,true).allowed,false);
+});
 test('missing DOB on an Approved ID requires configuration review, not another charge',()=>{
   assert.deepEqual(selectDocumentResubmission({
     status:'Approved',id_verifications:[{node_id:'feature_ocr_1',status:'Approved'}],
