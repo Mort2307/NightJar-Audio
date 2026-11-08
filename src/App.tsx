@@ -2536,7 +2536,8 @@ function App() {
         const unlocked=await refreshAgeStatus();
         if (!unlocked) setDiditRecoveryMessage('The provider approval was recognised, but NightJar still needs your current legal acknowledgements or account access to be confirmed. No new ID check is needed.');
       } else if (result.outcome==='adult_evidence_missing') {
-        setDiditRecoveryMessage('Didit reported an approval, but the result did not contain the required verified-adult evidence. Contact NightJar support; do not repeat your ID check.');
+        await refreshAgeStatus();
+        setDiditRecoveryMessage('Didit recorded an overall approval, but its documentary ID result did not confirm 18+. NightJar has kept protected access locked and opened the existing session for document review below. No new ID check has been started.');
       } else if (result.outcome==='provider_not_approved') {
         setDiditRecoveryMessage('The existing linked Didit session has not yet returned a validated 18+ approval to NightJar. Contact support with the approximate verification time; do not start another check.');
       } else {
