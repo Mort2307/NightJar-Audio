@@ -63,6 +63,7 @@ assert.match(member,/nightjarDiditResubmission\.request\(reason\)/);
 assert.match(admin,/window\.confirm\(question\)/);
 assert.match(admin,/Approve one ID resubmission/);
 assert.match(panel,/<AdminDiditResubmissions \/>/);
+assert.match(app,/await refreshAgeStatus\(\);\s*setDiditRecoveryMessage\('Didit recorded an overall approval/,'member recovery refreshes the saved review state so the resubmission panel appears');
 assert.match(app,/<DiditDocumentResubmission \/>/);
 assert.doesNotMatch(member,/startAgeAssurance|nightjarAge\.start|startDiditSession/,
   'member request must never start paid ID verification');
