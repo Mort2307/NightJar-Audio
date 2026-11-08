@@ -121,7 +121,7 @@ A schedule may be added later by a dated written variation identifying the activ
 
 8.2 NightJar pays contributors directly. The Operator does not hold, route or settle payments between creators for their private arrangements. Those arrangements are governed by a direct agreement between the creators.
 
-8.3 The intended payment method is direct bank transfer from the Operator's nominated business bank account, currently Monzo. This Agreement does not assume Stripe or any card processor. If the payment route changes, the Operator must update the payment information provided to the Contributor.
+8.3 The intended payment method is direct bank transfer from the Operator's nominated bank account, currently Monzo. This Agreement does not assume Stripe or any card processor. If the payment route changes, the Operator must update the payment information provided to the Contributor.
 
 8.4 The Contributor must provide accurate payment details and any invoice or tax information reasonably required by law. The Operator will never ask for online banking passwords, card PINs or security codes.
 
@@ -210,7 +210,7 @@ A schedule may be added later by a dated written variation identifying the activ
 
 14.3 A Statement of Work cannot silently override Creator Pool rules, performer consent or ownership of unrelated works. A rights assignment or performer release must identify the specific work and rights it covers.
 
-14.4 The platform Terms of Use and Privacy Notice govern use of the NightJar service and personal data respectively. They do not silently amend a separately signed commercial agreement. If a conflict arises, the parties must interpret the documents consistently where possible and comply with mandatory law.
+14.4 The platform Terms of Use govern members' use of the NightJar service and the Privacy Notice explains personal-data processing. Neither document silently expands the rights a Contributor has granted to the Operator under a separately signed commercial agreement. For a conflict about ownership, licence scope, performer consent, exclusivity or payment for a particular work, the signed work-specific agreement and applicable schedule control, subject always to mandatory law. The Privacy Notice does not create a contractual licence to use creative content.
 
 ## 15. Notices, electronic signatures and general terms
 
