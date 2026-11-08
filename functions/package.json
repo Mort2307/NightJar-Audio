@@ -19,7 +19,8 @@
     "test:commitment-eligibility": "npm run build && node --test lib/commitment-eligibility.test.js",
     "test:profile-types": "npm run build && node --test lib/profile-types.test.js",
     "test:systems": "npm run build && node --test lib/profile-types.test.js lib/commitment-eligibility.test.js lib/creator-pool.test.js lib/finance-settlement.test.js lib/finance-policy.test.js lib/finance-tax-estimate.test.js",
-    "test:finance-settlement": "npm run build && node --test lib/finance-settlement.test.js"
+    "test:finance-settlement": "npm run build && node --test lib/finance-settlement.test.js",
+    "test:didit-resubmission": "npm run build && node --test lib/didit-resubmission-guards.test.js"
   },
   "dependencies": {
     "@google-cloud/firestore": "^9.4.0",
