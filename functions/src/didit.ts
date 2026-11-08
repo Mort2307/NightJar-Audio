@@ -21,6 +21,73 @@ export const diditPass = (data: Record<string, any> | undefined) =>
   data?.provider === 'didit' && data?.verified === true && data?.status === 'COMPLETE'
   && data?.environment === 'live' && data?.testMode !== true && data?.reverifyRequired !== true;
 
+type RecoverableDiditSession = {
+  session_id?: unknown; session_kind?: unknown; session_url?: unknown;
+  status?: unknown; vendor_data?: unknown; workflow_id?: unknown; created_at?: unknown;
+};
+
+// A provider POST can succeed while its response is lost. Search Didit's
+// account-bound session list before ever considering another create request.
+const recoverExistingDiditSession = async (uid: string) => {
+  const query = new URLSearchParams({
+    session_kind: 'user',
+    vendor_data: uid,
+    workflow_id: DIDIT_WORKFLOW_ID.value(),
+    limit: '20',
+    offset: '0',
+  });
+  const response = await fetch('https://verification.didit.me/v3/sessions/?' + query.toString(), {
+    method: 'GET',
+    headers: { 'x-api-key': DIDIT_API_KEY.value(), Accept: 'application/json' },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error('Could not inspect existing Didit sessions');
+  const payload = await response.json() as { results?: unknown };
+  if (!Array.isArray(payload?.results)) throw new Error('Invalid Didit session-list response');
+  const recoverable = (payload.results as RecoverableDiditSession[]).filter(item => {
+    const status = text(item.status, 40).toLowerCase();
+    let host = '';
+    try { host = new URL(text(item.session_url, 2048)).hostname; } catch { /* invalid */ }
+    return item.session_kind === 'user' && item.vendor_data === uid &&
+      (!item.workflow_id || item.workflow_id === DIDIT_WORKFLOW_ID.value()) &&
+      ['not started', 'in progress', 'in review', 'resubmitted', 'pending'].includes(status) &&
+      Boolean(text(item.session_id, 128)) &&
+      ['verify.didit.me', 'verification.didit.me'].includes(host);
+  });
+  if (recoverable.length > 1) {
+    throw new HttpsError('failed-precondition',
+      'More than one unfinished Didit session is linked to this account. Nightjar has blocked another check and needs to review the existing sessions.');
+  }
+  if (recoverable.length === 0) return null;
+  const item = recoverable[0];
+  const sessionId = text(item.session_id, 128);
+  const url = text(item.session_url, 2048);
+  const createdAtMs = Date.parse(text(item.created_at, 64));
+  if (!Number.isFinite(createdAtMs)) throw new Error('Didit session has no valid creation timestamp');
+  await db().runTransaction(async tx => {
+    const ageDocument = ageRef(uid);
+    const current = (await tx.get(ageDocument)).data() ?? {};
+    if (diditPass(current)) return;
+    const currentSessionId = text(current.sessionId, 128);
+    if (currentSessionId && currentSessionId !== sessionId &&
+        ['PENDING', 'IN_PROGRESS', 'NOT_STARTED', 'RESUBMITTED', 'PENDING_REVIEW'].includes(String(current.status))) {
+      throw new HttpsError('failed-precondition',
+        'Nightjar found a different existing verification session. Contact support; no new check was started.');
+    }
+    tx.set(sessionRef(sessionId), {
+      uid, environment: env(), workflowId: DIDIT_WORKFLOW_ID.value(),
+      url, status: text(item.status, 40), createdAtMs,
+      recoveredFromProviderList: true, updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    tx.set(ageDocument, {
+      provider: 'didit', environment: env(), sessionId, status: 'PENDING',
+      verified: false, testMode: env() !== 'live', reverifyRequired: false,
+      creatingSinceMs: 0, memberIssueCodes: [], updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+  return { sessionId, launchUrl: url, status: 'PENDING', provider: 'didit', environment: env(), configured: true };
+};
+
 // Approval from a correctly configured 18+ Didit workflow is the age assurance.
 // No raw ID images, biometrics or complete Didit decisions are stored in Nightjar.
 export const startDiditSession = async (uid: string) => {
@@ -28,12 +95,23 @@ export const startDiditSession = async (uid: string) => {
   const existing = (await ageRef(uid).get()).data() ?? {};
   if (diditPass(existing)) return { verified: true, status: 'COMPLETE', provider: 'didit', environment: 'live', configured: true };
   const oldId = text(existing.sessionId);
-  if (oldId && ['PENDING', 'IN_PROGRESS', 'NOT_STARTED'].includes(String(existing.status))) {
+  if (oldId && ['PENDING', 'IN_PROGRESS', 'NOT_STARTED', 'RESUBMITTED', 'PENDING_REVIEW'].includes(String(existing.status))) {
     const old = (await sessionRef(oldId).get()).data() ?? {};
     if (old.uid === uid && old.environment === env() && old.workflowId === DIDIT_WORKFLOW_ID.value() &&
-        old.createdAtMs > Date.now() - 6 * 86400_000 && text(old.url, 2048)) {
+        text(old.url, 2048)) {
       return { sessionId: oldId, launchUrl: old.url, status: 'PENDING', provider: 'didit', environment: env(), configured: true };
     }
+  }
+  // This GET-only lookup also repairs legacy accounts whose uncertain provider
+  // creation was incorrectly reset to NOT_STARTED by an older backend release.
+  // It is safe to run before every new session POST: vendor_data + workflow_id
+  // are exact provider-side filters, and only one unfinished session is adopted.
+  const recovered = await recoverExistingDiditSession(uid);
+  if (recovered) return recovered;
+  if (existing.creationOutcomeUncertain === true || existing.status === 'CREATION_UNCERTAIN' ||
+      (existing.status === 'CREATING' && Number(existing.creatingSinceMs ?? 0) <= Date.now() - 45000)) {
+    throw new HttpsError('unavailable',
+      'Nightjar could not locate the earlier Didit session yet. No new verification was started. Please try the existing-session recovery again or contact support.');
   }
   // Transactional claim ensures concurrent devices cannot start duplicate paid checks.
   const claimed = await db().runTransaction(async (tx) => {
@@ -132,11 +210,18 @@ export const startDiditSession = async (uid: string) => {
     });
     return { sessionId, launchUrl: url, status: 'PENDING', provider: 'didit', environment: env(), configured: true };
   } catch (error) {
+    // A 5xx, timeout, malformed success payload or post-success binding error
+    // is ambiguous: Didit may already own a live session. Preserve that fact
+    // and require provider-list recovery; never silently reset to NOT_STARTED.
+    const outcomeUncertain = providerHttpStatus === null || providerHttpStatus >= 500 ||
+      failurePhase === 'provider-response' || failurePhase === 'account-binding';
     await db().runTransaction(async tx => {
       const ref = ageRef(uid);
       const snap = await tx.get(ref);
       if (snap.data()?.status === 'CREATING') tx.set(ref, {
-        status: 'NOT_STARTED', creatingSinceMs: 0, updatedAt: FieldValue.serverTimestamp(),
+        status: outcomeUncertain ? 'CREATION_UNCERTAIN' : 'NOT_STARTED',
+        creationOutcomeUncertain: outcomeUncertain,
+        creatingSinceMs: 0, updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     });
     // Safe diagnostics only: never log provider response bodies, keys, IDs,
