@@ -54,6 +54,7 @@ jobs:
       - run: npm ci --no-fund
       - run: npm run check
       - run: npm run build
+      - run: npm run test:didit-resubmission
       - name: Run profile, commitment, equal-share and finance policy contract tests
         run: npm run test:systems
       - name: Determine backend change scope
