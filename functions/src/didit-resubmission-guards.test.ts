@@ -55,7 +55,7 @@ test('known image warnings produce clear, safe member instructions',()=>{
   ] as const;
   for(const [warning,code,word] of cases){
     const result=describeDiditDocumentIssue({id_verifications:[{
-      status:'Declined',warnings:[{code,message:'PRIVATE PROVIDER TEXT'}],
+      status:'Declined',warnings:[{code:warning,message:'PRIVATE PROVIDER TEXT'}],
     }]},false);
     assert.equal(result.code,code);
     assert.match(result.action,new RegExp(word,'i'));
