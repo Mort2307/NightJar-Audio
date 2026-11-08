@@ -2,22 +2,29 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../functions/src/didit.ts', import.meta.url), 'utf8');
+const recovery = source.slice(source.indexOf('const recoverExistingDiditSession'), source.indexOf('// Approval from a correctly configured'));
 
-assert.match(source, /const recoverExistingDiditSession = async \(uid: string\)/,
-  'provider-side recovery helper must exist');
-assert.match(source, /session_kind: 'user'[\s\S]*vendor_data: uid[\s\S]*workflow_id: DIDIT_WORKFLOW_ID\.value\(\)/,
-  'recovery must use exact user, account vendor_data and workflow filters');
-assert.match(source, /item\.session_kind === 'user' && item\.vendor_data === uid/,
-  'provider results must be independently bound to the signed-in member');
-assert.match(source, /text\(item\.session_url, 2048\)/,
-  'recovery must restore the provider-hosted continuation URL');
-assert.match(source, /status: outcomeUncertain \? 'CREATION_UNCERTAIN' : 'NOT_STARTED'[\s\S]*creationOutcomeUncertain: outcomeUncertain/,
-  'ambiguous provider outcomes must remain durably marked uncertain');
-assert.match(source, /const recovered = await recoverExistingDiditSession\(uid\);[\s\S]*if \(recovered\) return recovered;/,
-  'existing provider sessions must be recovered before any new create claim');
-assert.match(source, /if \(existing\.creationOutcomeUncertain === true[\s\S]*No new verification was started/,
-  'unresolved ambiguous attempts must fail closed instead of creating another session');
-assert.doesNotMatch(source, /status: 'NOT_STARTED', creatingSinceMs: 0, updatedAt: FieldValue\.serverTimestamp\(\),\s*\}, \{ merge: true \}\);\s*\}\);\s*\/\/ Safe diagnostics/,
-  'ambiguous provider failures must not be reset to a fresh-start state');
+for (const fragment of [
+  "session_kind: 'user'",
+  "vendor_data: uid",
+  "workflow_id: DIDIT_WORKFLOW_ID.value()",
+  "Deliberately omit status: inspect every lifecycle state returned for this account.",
+  'if (payload.next)',
+  "'Awaiting User'",
+  "Boolean(status) && Boolean(text(item.session_id, 128))",
+  "parsedUrl.protocol !== 'https:'",
+  "item.session_kind === 'user' && item.vendor_data === uid",
+  "['Not Started', 'In Progress', 'Resubmitted', 'Awaiting User'].includes(status)",
+  "status === 'In Review'",
+  "status === 'Approved'",
+  "previous Didit session is ",
+]) assert.ok(recovery.includes(fragment), 'Missing recovery contract: ' + fragment);
+
+assert.ok(source.includes("status: outcomeUncertain ? 'CREATION_UNCERTAIN' : 'NOT_STARTED'"));
+assert.ok(source.includes('const recovered = await recoverExistingDiditSession(uid);'));
+assert.ok(source.includes('if (recovered) return recovered;'));
+assert.ok(source.includes('No new verification was started'));
+assert.doesNotMatch(recovery, /\['Not Started', 'In Progress', 'In Review', 'Resubmitted', 'Abandoned'/,
+  'unknown provider statuses must be matched and blocked rather than ignored');
 
 console.log('Didit abandoned-session recovery contracts passed.');

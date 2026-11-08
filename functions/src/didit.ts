@@ -29,12 +29,14 @@ type RecoverableDiditSession = {
 // A provider POST can succeed while its response is lost. Search Didit's
 // account-bound session list before ever considering another create request.
 const recoverExistingDiditSession = async (uid: string) => {
+  // Include terminal/review states in the lookup as well: finding an old
+  // abandoned/expired/approved session must never silently trigger a new paid POST.
   const query = new URLSearchParams({
     session_kind: 'user',
     vendor_data: uid,
     workflow_id: DIDIT_WORKFLOW_ID.value(),
-    status: 'Not Started,In Progress,In Review,Resubmitted,Pending',
-    limit: '20',
+    // Deliberately omit status: inspect every lifecycle state returned for this account.
+    limit: '100',
     offset: '0',
   });
   const response = await fetch('https://verification.didit.me/v3/sessions/?' + query.toString(), {
@@ -43,28 +45,49 @@ const recoverExistingDiditSession = async (uid: string) => {
     signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) throw new Error('Could not inspect existing Didit sessions');
-  const payload = await response.json() as { results?: unknown };
+  const payload = await response.json() as { results?: unknown; next?: unknown };
   if (!Array.isArray(payload?.results)) throw new Error('Invalid Didit session-list response');
-  const recoverable = (payload.results as RecoverableDiditSession[]).filter(item => {
-    const status = text(item.status, 40).toLowerCase();
-    let host = '';
-    try { host = new URL(text(item.session_url, 2048)).hostname; } catch { /* invalid */ }
+  if (payload.next) throw new HttpsError('unavailable',
+    'Nightjar could not inspect every existing Didit session. No new verification was started. Please contact support.');
+  const matching = (payload.results as RecoverableDiditSession[]).filter(item => {
+    const status = text(item.status, 40);
+    // Match the account-bound session regardless of its status. Unknown or newly
+    // introduced provider statuses must fail closed below, never fall through to a new POST.
     return item.session_kind === 'user' && item.vendor_data === uid &&
       (!item.workflow_id || item.workflow_id === DIDIT_WORKFLOW_ID.value()) &&
-      ['not started', 'in progress', 'in review', 'resubmitted', 'pending'].includes(status) &&
-      Boolean(text(item.session_id, 128)) &&
-      ['verify.didit.me', 'verification.didit.me'].includes(host);
+      Boolean(status) && Boolean(text(item.session_id, 128));
   });
-  if (recoverable.length > 1) {
+  if (matching.length > 1) {
     throw new HttpsError('failed-precondition',
-      'More than one unfinished Didit session is linked to this account. Nightjar has blocked another check and needs to review the existing sessions.');
+      'Nightjar found multiple existing Didit sessions linked to this account. No new check was started; support must review them.');
   }
-  if (recoverable.length === 0) return null;
-  const item = recoverable[0];
+  if (matching.length === 0) return null;
+  const item = matching[0];
+  const status = text(item.status, 40);
   const sessionId = text(item.session_id, 128);
   const url = text(item.session_url, 2048);
+  let parsedUrl: URL;
+  try { parsedUrl = new URL(url); } catch {
+    throw new HttpsError('unavailable', 'Nightjar found your existing Didit session but could not safely restore its link. No new verification was started; please contact support.');
+  }
+  if (parsedUrl.protocol !== 'https:' || !['verify.didit.me', 'verification.didit.me'].includes(parsedUrl.hostname)) {
+    throw new HttpsError('unavailable', 'Nightjar found your existing Didit session but could not safely restore its link. No new verification was started; please contact support.');
+  }
   const createdAtMs = Date.parse(text(item.created_at, 64));
   if (!Number.isFinite(createdAtMs)) throw new Error('Didit session has no valid creation timestamp');
+
+  // Only sessions that are genuinely awaiting member action can be resumed.
+  // In Review is a human-review state; Abandoned/Expired/Declined/Approved
+  // need reconciliation or an explicit controlled decision, not a blind restart.
+  if (!['Not Started', 'In Progress', 'Resubmitted', 'Awaiting User'].includes(status)) {
+    throw new HttpsError('failed-precondition',
+      status === 'In Review'
+        ? 'Your existing Didit verification is awaiting review. You do not need to start another check.'
+        : status === 'Approved'
+          ? 'Didit has already recorded a decision for your existing session. Nightjar must synchronise that result before another check can be considered.'
+          : 'Your previous Didit session is ' + status + '. Nightjar has preserved it and blocked a duplicate check. Please contact support for the correct next step.');
+  }
+
   await db().runTransaction(async tx => {
     const ageDocument = ageRef(uid);
     const current = (await tx.get(ageDocument)).data() ?? {};
@@ -77,7 +100,7 @@ const recoverExistingDiditSession = async (uid: string) => {
     }
     tx.set(sessionRef(sessionId), {
       uid, environment: env(), workflowId: DIDIT_WORKFLOW_ID.value(),
-      url, status: text(item.status, 40), createdAtMs,
+      url, status, createdAtMs,
       recoveredFromProviderList: true, updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
     tx.set(ageDocument, {
@@ -99,7 +122,7 @@ export const startDiditSession = async (uid: string) => {
   if (oldId && ['PENDING', 'IN_PROGRESS', 'NOT_STARTED', 'RESUBMITTED', 'PENDING_REVIEW'].includes(String(existing.status))) {
     const old = (await sessionRef(oldId).get()).data() ?? {};
     if (old.uid === uid && old.environment === env() && old.workflowId === DIDIT_WORKFLOW_ID.value() &&
-        text(old.url, 2048)) {
+        old.createdAtMs > Date.now() - 6 * 86400_000 && text(old.url, 2048)) {
       return { sessionId: oldId, launchUrl: old.url, status: 'PENDING', provider: 'didit', environment: env(), configured: true };
     }
   }
