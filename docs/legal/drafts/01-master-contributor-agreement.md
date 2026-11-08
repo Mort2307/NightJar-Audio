@@ -103,6 +103,8 @@ A schedule may be added later by a dated written variation identifying the activ
 
 6.7 Each Performer must sign Schedule H before their performance is recorded or used, unless NightJar has obtained another legally sufficient written release that covers the exact work and intended use. Schedule G is separate and is required for the optional transcription workflow. A person's signature on this Master Agreement does not replace a work-specific Performer release.
 
+6.8 The Operator confirms that it has authority to enter into this Agreement and will use Content only within the rights actually granted, pay sums properly due under the selected schedules and keep reasonable records of accepted work, rights permissions and payments. The Contributor confirms that they will provide accurate rights and permission information, comply with the agreed brief and not knowingly submit infringing or unlawfully obtained material. These obligations do not reduce any mandatory rights or remedies.
+
 ## 7. Quality, delivery and revisions
 
 7.1 The Contributor must deliver work in the format, quality and timeframe agreed in the applicable Statement of Work or written brief.
@@ -230,7 +232,9 @@ A schedule may be added later by a dated written variation identifying the activ
 
 15.8 A person who is not a party to this Agreement has no right to enforce its terms under the Contracts (Rights of Third Parties) Act 1999, except where a schedule expressly gives a named rights holder a direct enforceable right.
 
-15.9 This Agreement is governed by the law of England and Wales. The courts of England and Wales have jurisdiction, subject to mandatory rights and protections that apply to a party.
+15.9 Neither party is in breach to the extent that performance is delayed by an event outside its reasonable control that it could not reasonably prevent or overcome, provided it notifies the other promptly and takes reasonable steps to limit the effect. If the event continues for more than 30 calendar days and materially prevents the relevant engagement, either party may end the affected Statement of Work or schedule by written notice. This clause does not excuse payment already due, confidentiality, data security, rights restrictions or any obligation that can reasonably continue.
+
+15.10 This Agreement is governed by the law of England and Wales. The courts of England and Wales have jurisdiction, subject to mandatory rights and protections that apply to a party.
 
 ## 16. Signatures
 
