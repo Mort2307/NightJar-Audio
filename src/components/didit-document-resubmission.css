@@ -16,3 +16,17 @@
 .nj-didit-resubmission-actions {display:flex;flex-wrap:wrap;gap:.6rem}
 .nj-didit-resubmission-actions button {min-height:44px}
 @media(max-width:560px){.nj-didit-resubmission-actions{display:grid}.nj-didit-resubmission-review{padding:.7rem}}
+
+.nj-didit-guidance,.nj-didit-capture-standard {
+  margin:1rem 0;padding:1rem;border:1px solid var(--border-color,rgba(160,160,180,.3));
+  border-radius:12px;background:var(--surface,rgba(130,130,150,.07));
+}
+.nj-didit-guidance h4,.nj-didit-capture-standard h4 {margin:.3rem 0 .55rem;font-size:1rem}
+.nj-didit-guidance p,.nj-didit-capture-standard p {line-height:1.55}
+.nj-didit-guidance-hold {padding:.7rem;border-left:3px solid var(--accent-color,#c5a46d);background:rgba(145,125,160,.08);border-radius:.4rem}
+.nj-didit-capture-heading {display:flex;gap:.55rem;align-items:center}
+.nj-didit-capture-heading h4 {margin:0}
+.nj-didit-capture-standard ul {padding-left:1.25rem;margin:.8rem 0;display:grid;gap:.55rem}
+.nj-didit-capture-standard li {line-height:1.45;padding-left:.15rem}
+.nj-didit-capture-standard .access-fine {display:flex;gap:.45rem;align-items:flex-start}
+.nj-didit-continue {margin:.6rem 0}
