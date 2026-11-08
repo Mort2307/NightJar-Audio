@@ -88,10 +88,11 @@ const guidanceByWarning:Record<string,DiditDocumentGuidance> = {
 function warningCodes(value:unknown,depth=0):string[] {
   if(depth>5 || !value) return [];
   if(Array.isArray(value)) return value.flatMap(item=>warningCodes(item,depth+1)).slice(0,40);
+  if(typeof value==='string') return /^[A-Z][A-Z0-9_]{2,80}$/.test(value.trim()) ? [value.trim()] : [];
   if(typeof value!=='object') return [];
   const item=value as Record<string,unknown>;
   const found:string[]=[];
-  for(const key of ['code','warning_code','warningCode']) {
+  for(const key of ['code','warning_code','warningCode','warning']) {
     if(typeof item[key]==='string') found.push(String(item[key]).trim().toUpperCase());
   }
   for(const key of ['warnings','warning_codes','warningCodes','codes']) {
