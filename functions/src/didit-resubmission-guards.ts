@@ -112,6 +112,11 @@ export function describeDiditDocumentIssue(
   for(const code of warningCodes(id)) {
     if(guidanceByWarning[code]) return guidanceByWarning[code];
   }
+  if(value.status==='Approved' && !adultEvidenceConfirmed && ids.length===0) return {
+    code:'adult_evidence_missing',title:'NightJar did not receive the required documentary 18+ evidence',
+    explanation:'Didit returned an overall approval but no individual ID verification result that NightJar can use to confirm age. This is a provider/workflow result issue, not a problem with your photograph.',
+    action:'Do not upload your ID again. NightJar needs to review the Didit workflow and result configuration first.',canRetake:false,
+  };
   if(id.status==='Approved' && !adultEvidenceConfirmed) return {
     code:'adult_evidence_missing',title:'NightJar could not confirm the required 18+ evidence',
     explanation:'Didit approved the document step, but the result did not contain the documentary age evidence NightJar must receive. This is not a photo-quality problem.',
