@@ -1,6 +1,6 @@
 # NIGHTJAR CREATOR CONTRACTS — SCHEDULES D TO G
 
-**DRAFT FOR INTERNAL REVIEW ONLY — NOT FOR SIGNATURE**
+**DRAFT FOR INTERNAL REVIEW ONLY — NOT FOR SIGNATURE OR ISSUE**
 
 These schedules form part of the Master Contributor Agreement only when selected and signed by the relevant parties.
 
@@ -20,7 +20,7 @@ A party discovering suspected loss, unauthorised access or disclosure must notif
 
 ### D3. Exceptions and lawful disclosures
 
-Confidential Information does not include information the receiving party can show became public without breach, was lawfully known before disclosure, was independently developed without using it, was lawfully received from an unrestricted third party, or must be disclosed by law or court order.
+Confidential Information does not include information the receiving party can show became public without breach, was lawfully known before disclosure, was independently developed without using it, was lawfully received from a third party without a confidentiality restriction, or must be disclosed by law or court order.
 
 Nothing prevents a party from obtaining legal, tax, medical or professional advice; reporting suspected crime or unlawful conduct; making a protected disclosure; reporting harassment, discrimination, abuse or safety concerns; exercising data-protection, employment, consumer or other statutory rights; or retaining evidence reasonably required for a complaint, legal advice or proceedings.
 
@@ -29,6 +29,8 @@ Where disclosure is compelled by law, the receiving party must, where lawful, gi
 ### D4. Duration and return
 
 Confidentiality obligations apply during the Agreement and for five years after it ends. Trade secrets and personal data remain protected for as long as they retain that status or the law requires. On request or termination, the receiving party must return or securely delete information no longer needed, except lawful records, dispute evidence or secure backups that cannot reasonably be isolated for immediate deletion. Any retained copy remains protected.
+
+Publicly released material may be used by a Contributor in a portfolio only to the extent the relevant rights holder has authorised it and no confidentiality, embargo, exclusivity or privacy restriction applies.
 
 ## Part B — Data Processing Addendum
 
@@ -44,32 +46,43 @@ Nature and purpose: [INSERT]
 Personal data types: [INSERT]  
 Categories of individuals: [INSERT]  
 Processing operations: [INSERT]  
-Approved systems and locations: [INSERT]
+Approved systems and locations: [INSERT]  
+Documented instructions: [ATTACH OR IDENTIFY]
 
 ### D6. Processor obligations
 
 The Processor must:
-(a) process personal data only on documented instructions unless law requires otherwise;
-(b) ensure authorised people are bound by confidentiality;
+(a) process personal data only on the Controller's documented instructions, including for any international transfer, unless applicable UK law requires otherwise;
+(b) ensure authorised people are bound by an enforceable duty of confidentiality;
 (c) implement appropriate technical and organisational security measures;
-(d) not appoint a sub-processor without prior written authorisation and a written contract imposing equivalent data-protection obligations;
-(e) assist the Controller, taking account of the processing, with requests from individuals exercising their rights;
-(f) assist with security, breach notifications, data-protection impact assessments and regulatory consultation where required;
-(g) notify the Controller without undue delay, and where reasonably possible within 24 hours, after becoming aware of a personal-data breach affecting the processing;
-(h) provide information reasonably necessary to demonstrate compliance and allow proportionate audits on reasonable notice;
-(i) not transfer personal data outside the UK unless authorised in writing and required legal safeguards are in place; and
-(j) at the Controller's choice, return or securely delete personal data at the end of the services unless law requires retention.
+(d) not appoint a sub-processor without the Controller's prior written authorisation;
+(e) where the Controller gives general written authorisation for sub-processors, give advance written notice of any intended addition or replacement and allow the Controller a reasonable opportunity to object before the change takes effect;
+(f) impose written data-protection obligations on every approved sub-processor that provide at least the same level of protection as this Schedule, and remain responsible to the Controller for the sub-processor's performance;
+(g) assist the Controller, taking account of the processing, with requests from individuals exercising their data-protection rights;
+(h) assist with security, personal-data breach notifications, data-protection impact assessments and regulatory consultation where required;
+(i) notify the Controller without undue delay, and where reasonably possible within 24 hours, after becoming aware of a personal-data breach affecting the processing;
+(j) provide information reasonably necessary to demonstrate compliance and allow proportionate audits or inspections on reasonable notice, subject to confidentiality and security safeguards;
+(k) not transfer personal data outside the UK unless authorised in writing, acting on documented instructions, and the required legal transfer safeguards are in place; and
+(l) at the Controller's choice, return or securely delete personal data at the end of the services unless applicable law requires retention.
+
+The Processor must not use personal data for its own advertising, profiling, unrelated analytics, portfolio publication or generative AI training.
 
 ### D7. Controller obligations
 
 The Controller must provide lawful and clear instructions, ensure an appropriate legal basis and privacy information, assess the Processor's security guarantees, approve sub-processors and international transfers, and respond to data-subject requests and regulatory matters for which it is responsible.
 
-The Processor must keep reasonable records and must not use personal data for its own advertising, profiling, unrelated analytics or generative AI training.
+### D8. Audit and assistance
 
-This Part does not make a party a processor if the factual relationship is that of an independent controller. Do not attach a generic processor addendum to every creator automatically.
+The Processor must make available all information reasonably necessary to demonstrate compliance with this Part and allow for and contribute to audits, including inspections, conducted by the Controller or an auditor appointed by the Controller. Audits must be proportionate, normally on reasonable notice, and arranged to avoid unnecessary disruption or access to unrelated confidential information.
+
+### D9. Priority and role accuracy
+
+If this Part conflicts with Part A, the stricter data-protection requirement applies to the processing activity. This Part does not make a party a processor if the factual relationship is that of an independent controller. The parties must review their roles if the activity changes.
 
 Controller signature: __________________ Date: ______  
 Processor signature: ___________________ Date: ______
+
+**Completion rule:** Do not attach a generic processor addendum to every creator automatically. Determine whether the creator actually accesses or handles personal data on NightJar's behalf. Most ordinary creative contributors may not need this Part.
 
 ---
 
@@ -82,16 +95,15 @@ Processor signature: ___________________ Date: ______
 Title/project: [INSERT]  
 Description/version: [INSERT]  
 Contributor(s) and legal names: [INSERT]  
-Other rights holders/performers: [INSERT]  
+Other authors, rights holders and performers: [INSERT]  
 Release reference: [INSERT]  
 Effective date: [INSERT]
 
 ## E2. Exclusive status
 
 The parties expressly agree that the identified work will be designated a NightJar Original. Select one arrangement and complete all details:
-
 - [ ] Exclusive licence to NightJar for the rights, territory, media and period in E3.
-- [ ] Assignment of copyright to the Operator using the assignment terms in Schedule B, adapted to this work.
+- [ ] Assignment of copyright and/or performer property rights to the Operator using Schedule B's signed assignment terms, adapted to this work.
 - [ ] Other specifically described arrangement: [ATTACH].
 
 The designation does not automatically cover the Contributor's general style, ideas, skills, know-how, unrelated work, pre-existing material or future work.
@@ -119,9 +131,9 @@ State whether the work is a paid commission, voluntary contribution with separat
 
 The Creator Pool must not be treated as payment for an assignment unless the parties expressly and clearly agree that arrangement.
 
-## E5. Rights clearances
+## E5. Rights clearances and performer releases
 
-Every writer, performer, voice actor, editor, artist, composer and other rights holder must be identified. The signatory may grant only rights they own or control. Third-party permissions must be documented before release. Any performer consent, voice/image consent, moral-rights consent or waiver must be separately identified and signed by the relevant person.
+Every writer, performer, voice actor, editor, artist, composer and other rights holder must be identified. The signatory may grant only rights they own or control. Third-party permissions must be documented before release. Every identifiable performer must sign Schedule H or an equivalent work-specific release that identifies the recording and intended use. Any moral-rights consent or waiver must be separately identified and signed by the relevant person.
 
 ## E6. Release, withdrawal and termination
 
@@ -168,7 +180,7 @@ Each creator retains ownership of material they create unless this agreement exp
 - [ ] One named creator receives an assignment of specified rights from the others using a separate written signed assignment.
 - [ ] Other arrangement: [ATTACH].
 
-Permitted uses, territory, duration, exclusivity and sublicensing: [INSERT]. Ownership proportions, if applicable: [INSERT]. Do not assume equal joint ownership unless deliberately agreed. Identify pre-existing materials and third-party content. Any voice, image, performance, moral-rights or performer-rights consent required must be obtained in a separate written consent.
+Permitted uses, territory, duration, exclusivity and sublicensing: [INSERT]. Ownership proportions, if applicable: [INSERT]. Do not assume equal joint ownership unless deliberately agreed. Identify pre-existing materials and third-party content. Each creator may grant only rights they own or control. Any voice, image, performance, moral-rights or performer-rights consent required must be obtained in a separate written consent from the relevant holder.
 
 ## F4. Payments between creators
 
@@ -184,7 +196,7 @@ Credit wording and placement: [INSERT]. Who may approve publication: [INSERT]. W
 
 Each creator must protect unpublished work, private messages, personal information and confidential project material. Changes to scope, deadlines, ownership or payment must be agreed in writing by all affected creators.
 
-If a creator cannot continue, the parties must discuss fair handover, payment for completed work and rights needed to use delivered contributions. Withdrawal rights and the effect on the combined work: [INSERT].
+If a creator cannot continue, the parties must discuss fair handover, payment for completed work and rights needed to use delivered contributions. Withdrawal rights and the effect on the combined work: [INSERT]. The agreement must specify whether completed contributions can still be used and on what licence or ownership basis.
 
 ## F7. Disputes and law
 
@@ -221,7 +233,7 @@ It does not include:
 (a) training, fine-tuning or improving a generative AI or speech model;
 (b) creating synthetic voices, voice clones or imitations;
 (c) generating new creative content based on the Contributor's voice or performance;
-(d) using the audio or transcript for unrelated advertising; or
+(d) using the audio or transcript for unrelated advertising or profiling; or
 (e) providing the material to another provider except the named provider and approved technical sub-processors needed for transcription.
 
 ## G3. Human review
@@ -235,9 +247,10 @@ Provider terms/privacy link: [INSERT]
 Provider source-audio retention: [INSERT]  
 Transcript retention: [INSERT]  
 Access controls: [INSERT]  
-Deletion/contact route: [INSERT]
+Deletion/contact route: [INSERT]  
+Confirmation of no training/model improvement using the submitted audio/transcript: [EVIDENCE REQUIRED]
 
-The Operator must verify actual provider settings and terms before processing. It must not promise that a provider does not train on data unless verified in the applicable service terms and configuration.
+The Operator must verify the provider's actual terms, settings, sub-processors and retention before processing. It must not promise that a provider does not train on data unless verified in the applicable service terms and configuration. If the provider does not offer the required restrictions, NightJar must not send the audio to that provider under this Schedule.
 
 ## G5. Withdrawal
 
