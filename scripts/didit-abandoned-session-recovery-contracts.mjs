@@ -11,7 +11,7 @@ assert.match(source, /item\.session_kind === 'user' && item\.vendor_data === uid
   'provider results must be independently bound to the signed-in member');
 assert.match(source, /text\(item\.session_url, 2048\)/,
   'recovery must restore the provider-hosted continuation URL');
-assert.match(source, /status: outcomeUncertain \? 'CREATION_UNCERTAIN' : 'NOT_STARTED'[\\s\\S]*creationOutcomeUncertain: outcomeUncertain/,
+assert.match(source, /status: outcomeUncertain \? 'CREATION_UNCERTAIN' : 'NOT_STARTED'[\s\S]*creationOutcomeUncertain: outcomeUncertain/,
   'ambiguous provider outcomes must remain durably marked uncertain');
 assert.match(source, /const recovered = await recoverExistingDiditSession\(uid\);[\s\S]*if \(recovered\) return recovered;/,
   'existing provider sessions must be recovered before any new create claim');
