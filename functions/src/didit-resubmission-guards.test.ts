@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { selectDocumentResubmission, canRequestNewReview } from './didit-resubmission-guards.js';
+import { selectDocumentResubmission, canRequestNewReview, describeDiditDocumentIssue } from './didit-resubmission-guards.js';
 
 const base={status:'Declined',id_verifications:[{
   node_id:'feature_ocr_1',verification_method:'document',status:'Declined',
@@ -42,4 +42,47 @@ test('member requests are bounded, serialized, and have a cooldown',()=>{
     {requestStatus:'ready',lastProviderRequestMs:initial.now-100},
   ]) assert.equal(canRequestNewReview({...initial,...change}),false);
   assert.equal(canRequestNewReview({...initial,requestStatus:'ready',lastProviderRequestMs:initial.now-90000000}),true);
+});
+
+test('known image warnings produce clear, safe member instructions',()=>{
+  const cases=[
+    ['IMAGE_TOO_BLURRY','image_blurry','focus'],
+    ['IMAGE_TOO_DARK','image_dark','natural daylight'],
+    ['IMAGE_TOO_BRIGHT','image_bright','glare'],
+    ['DOCUMENT_EXPIRED','document_expired','unexpired'],
+    ['MRZ_VALIDATION_FAILED','mrz_invalid','MRZ'],
+    ['NFC_DATA_DOES_NOT_MATCH_OCR','nfc_mismatch','chip'],
+  ] as const;
+  for(const [warning,code,word] of cases){
+    const result=describeDiditDocumentIssue({id_verifications:[{
+      status:'Declined',warnings:[{code:warning,message:'PRIVATE PROVIDER TEXT'}],
+    }]},false);
+    assert.equal(result.code,code);
+    assert.match(result.action,new RegExp(word,'i'));
+    assert.equal(JSON.stringify(result).includes('PRIVATE PROVIDER TEXT'),false);
+  }
+});
+test('approved ID without age evidence is not presented as a photo problem',()=>{
+  const result=describeDiditDocumentIssue({id_verifications:[{status:'Approved'}]},false);
+  assert.equal(result.code,'adult_evidence_missing');
+  assert.equal(result.canRetake,false);
+  assert.match(result.action,/Do not retake/);
+});
+test('other-check and unknown provider reasons do not invent a document failure',()=>{
+  const result=describeDiditDocumentIssue({id_verifications:[],status:'Declined'},false);
+  assert.equal(result.code,'other_check');
+  assert.equal(result.canRetake,false);
+});
+
+test('overall approval without any ID verification step requires NightJar configuration review',()=>{
+  const result=describeDiditDocumentIssue({status:'Approved',id_verifications:[]},false);
+  assert.equal(result.code,'adult_evidence_missing');
+  assert.equal(result.canRetake,false);
+  assert.match(result.action,/Do not upload your ID again/);
+});
+test('warning codes supplied as strings are safely mapped',()=>{
+  const result=describeDiditDocumentIssue({
+    id_verifications:[{status:'Declined',warnings:['IMAGE_TOO_BLURRY']}],
+  },false);
+  assert.equal(result.code,'image_blurry');
 });

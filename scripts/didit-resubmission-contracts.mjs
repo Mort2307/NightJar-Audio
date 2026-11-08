@@ -58,8 +58,24 @@ assert.doesNotMatch(backend,/console\.(?:log|warn|error)|date_of_birth|document_
 assert.match(api,/myDiditResubmission/);
 assert.match(api,/requestDiditResubmission/);
 assert.match(api,/adminReviewDiditResubmission/);
-assert.match(member,/Request document resubmission review/);
+assert.match(member,/Request document review/);
 assert.match(member,/nightjarDiditResubmission\.request\(reason\)/);
+assert.match(member,/original, real physical identity document/,'member receives physical-document-only guidance');
+assert.match(member,/screenshot, scan, photocopy, printout/,'member is explicitly told not to use copies or screen images');
+assert.match(member,/even natural light/,'member receives natural-light guidance');
+assert.match(member,/all four corners visible/,'member receives full-frame guidance');
+assert.match(member,/both front and back/,'member is told to capture both sides when requested');
+assert.match(member,/Continue to your document retake/,'member has a direct action to resume the existing resubmitted session');
+assert.match(member,/only the selected step/,'member is told Didit will repeat only the selected step');
+assert.match(backend,/describeDiditDocumentIssue/,'member status uses whitelisted provider issue guidance');
+assert.match(backend,/decision\?\.session_id === age\.sessionId/,'guidance decision is bound to the current session');
+assert.match(backend,/guidance\?\.canRetake === true/,'unknown and non-document failures cannot trigger blind resubmission');
+assert.match(policy,/IMAGE_TOO_BLURRY/,'known Didit image warnings are mapped');
+assert.match(policy,/IMAGE_TOO_DARK/,'dark image warning is mapped');
+assert.match(policy,/IMAGE_TOO_BRIGHT/,'bright image warning is mapped');
+assert.match(policy,/DOCUMENT_EXPIRED/,'expired document warning is mapped');
+assert.match(policy,/adult_evidence_missing/,'missing adult evidence is not mislabelled as a photo problem');
+
 assert.match(admin,/window\.confirm\(question\)/);
 assert.match(admin,/Approve one ID resubmission/);
 assert.match(panel,/<AdminDiditResubmissions \/>/);
