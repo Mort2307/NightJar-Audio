@@ -1,0 +1,11 @@
+{
+  "pr": 348,
+  "reason": "Adds the member-facing same-session Didit document resubmission route and keeps the age-verification recovery gate fail-closed. The App changes are anchored to the previously approved PR #339 App blob; no unrelated release-candidate provenance is relaxed.",
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "05931969befcd2fbc5991e16facabfec994f623f",
+      "sha": "a9321891288ab9616861ac7aa109e65771488bef"
+    }
+  ]
+}

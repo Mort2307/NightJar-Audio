@@ -207,6 +207,20 @@ for(const item of adminProfileSearchFollowup.files){
   overrides.set(item.path,item);
 }
 
+// PR #348 adds the controlled member document-resubmission path while
+// preserving the mandatory age gate and all previously approved UI provenance.
+const diditResubmissionFollowup=JSON.parse(string('docs/NIGHTJAR_DIDIT_RESUBMISSION_FOLLOWUP.json'));
+assert.equal(diditResubmissionFollowup.pr,348,'Didit resubmission UI requires its own exact-blob review');
+assert.deepEqual(diditResubmissionFollowup.files.map(item=>item.path),['src/App.tsx'],
+  'Didit resubmission follow-up may change only the previously approved App surface');
+for(const item of diditResubmissionFollowup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'Didit resubmission App must anchor to the prior approved App version');
+  assert.equal(item.baselineSha,previous.sha,'preserve the previous App approval SHA');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){

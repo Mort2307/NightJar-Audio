@@ -1,0 +1,18 @@
+.nj-didit-resubmission,.nj-didit-resubmission-admin {
+  margin: 1rem 0; padding: 1rem; border: 1px solid var(--border-color,rgba(160,160,180,.3));
+  border-radius: 16px; background: var(--surface,rgba(130,130,150,.07));
+}
+.nj-didit-resubmission header,.nj-didit-resubmission-admin header {
+  display:flex; gap:.8rem; align-items:flex-start; margin-bottom:.75rem;
+}
+.nj-didit-resubmission header h3,.nj-didit-resubmission-admin header h3 {margin:0;font-size:1.06rem}
+.nj-didit-resubmission header p,.nj-didit-resubmission-admin header p {margin:.35rem 0 0}
+.nj-didit-resubmission-request {display:grid;gap:.65rem;margin:1rem 0}
+.nj-didit-resubmission-request label {font-weight:600}
+.nj-didit-resubmission-request select {width:100%;max-width:100%;padding:.72rem;border-radius:.65rem;background:var(--surface,rgba(80,80,90,.12));color:inherit;border:1px solid var(--border-color,rgba(160,160,180,.45))}
+.nj-didit-resubmission-message {display:flex;align-items:center;gap:.5rem;padding:.7rem;margin:.65rem 0;border-radius:.6rem;background:rgba(145,125,160,.10)}
+.nj-didit-resubmission-review {margin:1rem 0;padding:.9rem;border:1px solid var(--border-color,rgba(160,160,180,.3));border-radius:.8rem}
+.nj-didit-resubmission-review p {overflow-wrap:anywhere}
+.nj-didit-resubmission-actions {display:flex;flex-wrap:wrap;gap:.6rem}
+.nj-didit-resubmission-actions button {min-height:44px}
+@media(max-width:560px){.nj-didit-resubmission-actions{display:grid}.nj-didit-resubmission-review{padding:.7rem}}

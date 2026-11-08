@@ -246,6 +246,37 @@ jobs:
           gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Didit existing-result recovery backend verified before Hosting."
 
+      # Same-session Didit ID resubmission must be deployed before the member/admin UI.
+      # The provider PATCH is explicit, owner-reviewed and scoped to one failed OCR node.
+      - name: Deploy controlled Didit document resubmission before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-didit-resubmission-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/didit-resubmission-contracts.mjs
+          node scripts/firebase-callable-contracts.mjs
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=myDiditResubmission,requestDiditResubmission,adminListDiditResubmissions,adminReviewDiditResubmission' \
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          RUN_ID=""
+          for attempt in $(seq 1 48); do
+            RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "${GITHUB_SHA}" --arg start "${START_TIME}" \
+                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$RUN_ID" ]]; then
+            echo "::error::Didit document resubmission backend deployment not observed; Hosting blocked."
+            exit 1
+          fi
+          gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          echo "Controlled same-session Didit resubmission backend deployed before Hosting."
+
       # Expose the Admin-only read-only storage audit only after its backend
       # has been deployed. No storage deletion or periodic cleanup is included.
       - name: Deploy private audio audit before Hosting

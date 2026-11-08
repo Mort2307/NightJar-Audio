@@ -27,6 +27,7 @@ import { scrollNightjarToTop } from './platform/scroll-navigation';
 import { revealHomeSection, revealWorkspaceSection } from './platform/reveal-navigation';
 import { nightjarAge } from './platform/firebase-age';
 import { nightjarDiditControlled } from './platform/firebase-didit-controlled';
+import DiditDocumentResubmission from './components/DiditDocumentResubmission';
 import { nightjarLegal } from './platform/firebase-legal';
 import { NIGHTJAR_AGE_NOTICE_VERSION } from './legal/nightjarLegal';
 import { nightjarScripts } from './platform/firebase-scripts';
@@ -2535,7 +2536,8 @@ function App() {
         const unlocked=await refreshAgeStatus();
         if (!unlocked) setDiditRecoveryMessage('The provider approval was recognised, but NightJar still needs your current legal acknowledgements or account access to be confirmed. No new ID check is needed.');
       } else if (result.outcome==='adult_evidence_missing') {
-        setDiditRecoveryMessage('Didit reported an approval, but the result did not contain the required verified-adult evidence. Contact NightJar support; do not repeat your ID check.');
+        await refreshAgeStatus();
+        setDiditRecoveryMessage('Didit recorded an overall approval, but its documentary ID result did not confirm 18+. NightJar has kept protected access locked and opened the existing session for document review below. No new ID check has been started.');
       } else if (result.outcome==='provider_not_approved') {
         setDiditRecoveryMessage('The existing linked Didit session has not yet returned a validated 18+ approval to NightJar. Contact support with the approximate verification time; do not start another check.');
       } else {
@@ -4009,7 +4011,7 @@ function App() {
       const message = result.verified
         ? 'The existing Didit 18+ approval is now securely confirmed. This applicant can be reviewed for professional access.'
         : result.outcome === 'adult_evidence_missing'
-          ? 'Didit reports overall Approved, but approved 18+ documentary ID evidence is missing from the provider decision. Review the individual ID Verification step in Didit.' + idStatuses
+          ? 'Didit reports overall Approved, but its documentary ID step has not confirmed 18+. Nightjar has kept 18+ access locked and recorded a review-required state. The member can request a same-session document resubmission from their age-verification screen after refreshing. Review the individual ID Verification step in Didit first; no new session was started.' + idStatuses
           : result.outcome === 'provider_not_approved'
             ? 'Didit has not returned an Approved overall decision for this linked session (provider: ' + String(result.providerStatus ?? 'unknown') + ').' + idStatuses
             : 'No safely reconcilable live Didit session was found. Review the member in the Didit operations desk; do not start another check.';
@@ -5023,7 +5025,7 @@ function App() {
             </label>}
           </section>}
           {ageStatusError && <div className="access-note" role="alert">{ageStatusError}</div>}
-          {!DIDIT_VERIFICATION_PAUSED && <button className="primary-button wide-button" disabled={ageLoading ||
+          {!DIDIT_VERIFICATION_PAUSED && !['FAIL','ABANDONED','EXPIRED','PENDING_REVIEW'].includes(ageProviderStatus) && <button className="primary-button wide-button" disabled={ageLoading ||
             (!ageNoticeAccepted && !ageNoticeAcknowledged) ||
             (!ageProviderVerified && !ageDiditPermission) ||
             (ageProviderStatus === 'PENDING_REVIEW')} onClick={() => void beginAgeVerificationFromGate()}>
@@ -5049,6 +5051,7 @@ function App() {
             </button>
             {diditRecoveryMessage&&<p role="status" className="nj-didit-recovery-message">{diditRecoveryMessage}</p>}
           </section>}
+          {!ageProviderVerified && ['FAIL','ABANDONED','EXPIRED','PENDING_REVIEW'].includes(ageProviderStatus) && <DiditDocumentResubmission />}
           <button type="button" className="secondary-button wide-button" disabled={ageLoading} onClick={() => void refreshAgeStatus()}><RefreshCw size={16} /> Refresh verification status</button>
           {ageProviderStatus === 'PENDING_REVIEW' && <p className="access-fine">Your previous check is under review. Contact Nightjar support instead of starting another paid verification.</p>}
           <p className="access-fine">{ageTemporaryBypass ? 'Testing only: this account has controlled QA access while production age assurance is unavailable. It has not been marked as Didit verified.' : 'Adult catalogue access is granted only after a verified age-assurance result.'}</p>
