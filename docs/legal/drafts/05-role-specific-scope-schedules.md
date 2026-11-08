@@ -2,7 +2,7 @@
 
 **DRAFT FOR INTERNAL REVIEW ONLY — NOT FOR SIGNATURE**
 
-These role schedules are scope templates used alongside Schedule B1 (Project Statement of Work). They do not independently transfer rights or promise payment. The relevant rights and fee terms must still be completed in the Master Agreement and applicable schedules.
+These role schedules are scope templates used alongside Schedule B1 (Project Statement of Work). They do not independently transfer rights or promise payment. The relevant rights and fee terms must still be completed in the Master Agreement and applicable schedules. Every identifiable performer must also sign Schedule H for the specific recording. Any moral-rights consent or waiver required for a writer or artist must be documented separately under Schedule I. A role label or profile approval is not a rights clearance.
 
 # R1 — Voice Actor / VA Creator
 
@@ -20,7 +20,7 @@ Editing/cleaning responsibility: [VOICE ACTOR / AUDIO EDITOR / OTHER]
 Credit wording: [INSERT]  
 Fee and payment milestones: [INSERT]
 
-The performer retains all rights not expressly granted. The parties must identify the permitted recording, reproduction, distribution, streaming, adaptation, promotion and archival uses. The performer must separately consent to any use of their name, image, voice, likeness or performance beyond the agreed work. No voice cloning, synthetic voice generation, voice model training or imitation is permitted unless separately and specifically agreed in a distinct signed document. Consent to ordinary speech-to-text processing must be obtained under Schedule G and is not implied by this role schedule.
+The performer must sign Schedule H for the exact performance. The parties must identify the permitted recording, reproduction, distribution, streaming, adaptation, promotion and archival uses. The performer must separately consent to any use of their name, image, voice, likeness or performance beyond the agreed work. No voice cloning, synthetic voice generation, voice model training or imitation is permitted unless separately and specifically agreed in a distinct signed document. Consent to ordinary speech-to-text processing must be obtained under Schedule G and is not implied by this role schedule.
 
 # R2 — Writer
 
