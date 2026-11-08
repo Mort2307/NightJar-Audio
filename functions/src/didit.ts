@@ -122,7 +122,7 @@ export const startDiditSession = async (uid: string) => {
   if (oldId && ['PENDING', 'IN_PROGRESS', 'NOT_STARTED', 'RESUBMITTED', 'PENDING_REVIEW'].includes(String(existing.status))) {
     const old = (await sessionRef(oldId).get()).data() ?? {};
     if (old.uid === uid && old.environment === env() && old.workflowId === DIDIT_WORKFLOW_ID.value() &&
-        text(old.url, 2048)) {
+        Number(old.createdAtMs) > Date.now() - 6 * 86400_000 && text(old.url, 2048)) {
       return { sessionId: oldId, launchUrl: old.url, status: 'PENDING', provider: 'didit', environment: env(), configured: true };
     }
   }
