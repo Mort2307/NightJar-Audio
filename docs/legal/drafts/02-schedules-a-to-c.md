@@ -82,7 +82,7 @@ The Operator must not unreasonably delay acceptance or use minor issues to avoid
 
 The fee and milestones are those in the Statement of Work. Unless it states otherwise, the Operator will pay the final undisputed balance within 14 calendar days after acceptance and receipt of a valid invoice or other legally sufficient payment request.
 
-If part of an invoice is disputed in good faith, the Operator must explain the disputed amount promptly and pay any undisputed amount by the due date. Payment is by direct bank transfer to the Contributor's nominated account, currently from the Operator's Monzo business account. NightJar does not route commission payments between creators.
+If part of an invoice is disputed in good faith, the Operator must explain the disputed amount promptly and pay any undisputed amount by the due date. Payment is by direct bank transfer to the Contributor's nominated account, currently using the Operator's nominated Monzo account. NightJar does not route commission payments between creators.
 
 The Contributor must disclose VAT registration and provide a valid VAT invoice where required. No party should charge VAT unless legally entitled or required.
 
