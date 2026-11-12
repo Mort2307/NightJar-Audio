@@ -103,6 +103,7 @@ test('unsupported document types are identified as workflow configuration, not p
       id_verifications:[{status:'Declined',warnings:[{code:warning,message:'PRIVATE PROVIDER TEXT'}]}],
     },false);
     assert.equal(result.code,'document_unsupported');
+    assert.equal(result.canRetake,false);
     assert.match(result.title,/not enabled/i);
     assert.match(result.explanation,/workflow/i);
     assert.match(result.action,/do not keep retrying/i);
