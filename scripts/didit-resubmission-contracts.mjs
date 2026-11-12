@@ -82,6 +82,9 @@ assert.match(policy,/IMAGE_TOO_BRIGHT/,'bright image warning is mapped');
 assert.match(policy,/COULD_NOT_RECOGNIZE_DOCUMENT/,'unreadable document results explain what needs attention');
 assert.match(policy,/DOCUMENT_EXPIRED/,'expired document warning is mapped');
 assert.match(policy,/adult_evidence_missing/,'missing adult evidence is not mislabelled as a photo problem');
+assert.match(policy,/nonRetakeableWarningCodes/,'the server selector has an explicit non-retakeable warning allowlist');
+assert.match(policy,/warningCodes\(id\)\.some\(code=>nonRetakeableWarningCodes\.has\(code\)\)/,'admin/server resubmission is blocked before provider PATCH for unsupported documents');
+assert.match(backend,/document_not_retakeable:[\s\S]*No provider resubmission was sent/,'blocked admin requests are routed to manual review without a provider mutation');
 
 assert.match(admin,/window\.confirm\(question\)/);
 assert.match(admin,/Approve one ID resubmission/);
