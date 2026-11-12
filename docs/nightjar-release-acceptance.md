@@ -58,3 +58,31 @@ Deploy backend dependencies first, in controlled selected-resource batches, then
 
 ### Release decision
 The release owner may approve merge and controlled deployment when the change meets the criteria above. A critical security, privacy, rights, account-isolation or 18+ failure blocks the affected release. Non-critical incomplete work may be deferred transparently; it does not automatically prohibit merging and deploying unrelated work that is already satisfactory. Preview deployment is not a production launch.
+
+
+## 12 November 2026 — release evidence reconciliation
+
+### Completed source/release work
+- **Release policy:** PR #354 merged to `main` as `cd9912cd7f87861fbd1a740ca43a45b70aeb01ca`. The blanket release freeze was replaced with satisfactory-quality merge/deploy criteria. This is a policy change only; all hard gates remain.
+- **Notification readability:** PR #355 merged to `main` as `32aa87c654ed259f797def61b42e23ecd88f532c`. CI validation/build/preflight passed and Firebase Hosting deploy [43197683195](https://github.com/Mort2307/NightJar-Audio/actions/runs/43197683195) succeeded. Notification titles are at least 14px; supporting summaries at least 12px; rows wrap at a 56px minimum height. Vision Access selections and Midnight Gold styling are preserved.
+- **Public-repository secret scanning:** PR #356 merged to `main` as `465f6702d8a3061f6dcd7d80ddd5c04ae0ce3cde`. Six CI checks passed, including the full-history redacted Gitleaks scan [43198773478](https://github.com/Mort2307/NightJar-Audio/actions/runs/43198773478). A scheduled weekly scan and manual dispatch are now available. Reviewed false-positive/public Firebase Web SDK fingerprints are allowlisted by exact path/rule/line only; future findings at other locations still fail. This does not certify Google Cloud API restrictions or GitHub Security alert history.
+
+### Security details still requiring owner evidence
+- GitHub repository intentionally remains **public**. The connected account cannot inspect secret-scanning alerts or branch protections/rulesets, and a full review of historical Actions logs/artifacts still requires owner/admin access.
+- Firebase web API keys are public client identifiers, not Admin SDK credentials. The current web key remains in `public/service-worker.js` for Firebase Messaging; the auth client reads `VITE_FIREBASE_API_KEY` from build configuration. Owner must verify the production key is restricted to required Firebase APIs, inspect Identity Toolkit quotas and confirm App Check. No `initializeAppCheck` / `enforceAppCheck` source references were found. Firestore client rules default-deny all access; Storage rules restrict owner/role uploads and deny client reads.
+- A separate historical Firebase key belonged to a different, older project and is not referenced by current source search. Verify there is no remaining dependency before disabling that key/project.
+
+### Didit: code prepared; live provider settings not yet verified
+- PR #353 has passed its six CI workflows at head `79d2992e72b44a53ec49f6dda857c26a58da9e4f`, but remains open. It corrects unsupported-document guidance, avoids repeat retakes and uses the existing account-bound session. The helper affects `myDiditResubmission` and `adminReviewDiditResubmission`.
+- Before merging #353, deploy those selected Functions first with `.github/workflows/firebase-backend-deploy.yml` (`functions:selected`, `myDiditResubmission,adminReviewDiditResubmission`, confirmation `DEPLOY-NIGHTJAR`), then verify deployed revisions and merge the matching frontend/docs.
+- The live Didit workflow cannot be queried from this connected environment. Owner must verify the correct published workflow and all OCR/ID nodes: `image_capture_methods_allowed: ["CAMERA_SCAN"]`, `UPLOAD` disabled, `is_image_capture_review_screen_enabled: true`; record current `id_document_quality_threshold` without changing it absent evidence. Test only a fresh sandbox QA session. Do not alter existing sessions or approvals.
+
+### Human/device acceptance is still NOT RUN
+- The 16-workstream matrix above is unchanged. The user had previously confirmed Didit and notifications work in general, but complete role/platform evidence is still not recorded.
+- Real Android/iOS/desktop acceptance, 320/390/768px layouts, 200% zoom, keyboard/screen-reader, reduced motion, cross-account permissions, real opted-in push deep-links and role-specific end-to-end journeys remain NOT RUN until a test operator records role-only, platform and result.
+- There is no separate Firebase staging project. Use designated approved test accounts and non-sensitive content only after the relevant controlled release; do not create new paid Didit sessions or weaken the 18+ gate.
+
+### Non-negotiable safety
+- **Never weaken, bypass, remove or make optional the mandatory fail-closed 18+ gate.** Existing approval must remain account-bound; revocation must continue to block access.
+- Keep CLOSED_BETA, public signup and charging controls as they are until the separate legal, privacy, age-verification, rights, moderation, payment-provider and security-launch criteria are evidenced and owner-approved.
+- Work may be merged/deployed once each coherent change meets the satisfactory quality gate. Non-critical untested work does not freeze unrelated safe work; critical security/privacy/rights/account-isolation/18+ issues block the affected release.
