@@ -269,6 +269,7 @@ export function buildDiditResubmissionCallables(deps: {
         already_adult:'Didit already provides adult evidence. Reconcile the existing approval.',
         missing_or_multiple_id_steps:'Review the ID step and workflow settings in Didit before requesting resubmission.',
         unsupported_document_node:'No single supported documentary ID step was found. Review the workflow in Didit.',
+        document_not_retakeable:'This Didit result cannot be safely resubmitted. Review the document warning and active workflow settings first. No provider resubmission was sent.',
         approved_id_without_adult_evidence:'ID step already Approved. Check missing date-of-birth return settings before requesting another paid check.',
         id_not_rejectable:'The ID step is not an eligible failed document check. Review the result in Didit.',
       };

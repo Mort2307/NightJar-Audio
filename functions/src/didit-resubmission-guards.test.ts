@@ -23,6 +23,16 @@ test('missing DOB on an Approved ID requires configuration review, not another c
     status:'Approved',id_verifications:[{node_id:'feature_ocr_1',status:'Approved'}],
   },false),{allowed:false,reason:'approved_id_without_adult_evidence'});
 });
+test('unsupported document and non-retakeable warnings are blocked at the backend selector',()=>{
+  for(const warning of ['DOCUMENT_TYPE_NOT_SUPPORTED','DOCUMENT_NOT_SUPPORTED_FOR_APPLICATION','NFC_DATA_DOES_NOT_MATCH_OCR']){
+    const decision={...base,id_verifications:[{...base.id_verifications[0],warnings:[{code:warning,message:'PRIVATE PROVIDER TEXT'}]}]};
+    assert.deepEqual(selectDocumentResubmission(decision,false),{allowed:false,reason:'document_not_retakeable'});
+    const guidance=describeDiditDocumentIssue(decision,false);
+    assert.equal(guidance.canRetake,false);
+    assert.equal(JSON.stringify(guidance).includes('PRIVATE PROVIDER TEXT'),false);
+  }
+});
+
 test('ambiguous, missing, non-document and unattempted ID checks fail closed',()=>{
   for(const ids of [[],[base.id_verifications[0],base.id_verifications[0]],
     [{node_id:'https://evil.example',status:'Declined'}],

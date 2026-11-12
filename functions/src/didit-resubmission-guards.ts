@@ -6,9 +6,13 @@ export type DocumentResubmissionDecision =
   | { allowed:true; nodeId:string }
   | { allowed:false; reason:
       'provider_status'|'already_adult'|'missing_or_multiple_id_steps'|
-      'unsupported_document_node'|'approved_id_without_adult_evidence'|'id_not_rejectable' };
+      'unsupported_document_node'|'document_not_retakeable'|'approved_id_without_adult_evidence'|'id_not_rejectable' };
 
 const providerStates = new Set(['Approved','Declined','In Review','Kyc Expired','Abandoned']);
+const nonRetakeableWarningCodes = new Set([
+  'DOCUMENT_TYPE_NOT_SUPPORTED','DOCUMENT_NOT_SUPPORTED_FOR_APPLICATION',
+  'NFC_DATA_DOES_NOT_MATCH_OCR',
+]);
 
 export function selectDocumentResubmission(
   decision:unknown, alreadyVerifiedAdult:boolean,
@@ -27,6 +31,11 @@ export function selectDocumentResubmission(
   if(typeof node !== 'string'||!/^feature_[a-zA-Z0-9_-]{2,100}$/.test(node) ||
     (id.verification_method && id.verification_method !== 'document'))
     return {allowed:false,reason:'unsupported_document_node'};
+  // Never let an admin review trigger a provider PATCH for an outcome whose
+  // member guidance explicitly says not to retake. The server enforces this;
+  // hiding a client button is not a security boundary.
+  if(warningCodes(id).some(code=>nonRetakeableWarningCodes.has(code)))
+    return {allowed:false,reason:'document_not_retakeable'};
   // An Approved ID without DOB is likely a return-data/workflow issue.
   // Repeating it is costly and cannot reliably solve that misconfiguration.
   if(id.status==='Approved') return {allowed:false,reason:'approved_id_without_adult_evidence'};
