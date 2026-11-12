@@ -96,3 +96,17 @@ test('unreadable document warning explains the possible missing side or unsuppor
   assert.match(result.action,/required details|side that contains/i);
   assert.match(result.action,/document type is enabled/i);
 });
+
+test('unsupported document types are identified as workflow configuration, not poor photography',()=>{
+  for(const warning of ['DOCUMENT_TYPE_NOT_SUPPORTED','DOCUMENT_NOT_SUPPORTED_FOR_APPLICATION']){
+    const result=describeDiditDocumentIssue({
+      id_verifications:[{status:'Declined',warnings:[{code:warning,message:'PRIVATE PROVIDER TEXT'}]}],
+    },false);
+    assert.equal(result.code,'document_unsupported');
+    assert.equal(result.canRetake,false);
+    assert.match(result.title,/not enabled/i);
+    assert.match(result.explanation,/workflow/i);
+    assert.match(result.action,/do not keep retrying/i);
+    assert.equal(JSON.stringify(result).includes('PRIVATE PROVIDER TEXT'),false);
+  }
+});
