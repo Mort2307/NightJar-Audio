@@ -72,3 +72,8 @@ Didit controls its hosted flow's internal navigation. NightJar can select the st
 - Didit failed verification guidance: https://help.didit.me/end-users/verification-failed
 - Didit resubmission and session status guidance: https://help.didit.me/verification-sessions/retry-a-verification
 - Didit update session status API: https://docs.didit.me/sessions-api/update-status
+
+ 
+### Unsupported document types are not photo-quality failures
+
+For Didit warning codes `DOCUMENT_TYPE_NOT_SUPPORTED` and `DOCUMENT_NOT_SUPPORTED_FOR_APPLICATION`, do not tell the member to improve lighting or retake the same document. These results indicate that the active workflow may not allow the country/document subtype. Set the guidance to a support/configuration hold (`canRetake: false`), and have an administrator verify the live workflow's country and subtype allowlist before authorising another step. This does not change the 18+ evidence requirement or approve the member.
