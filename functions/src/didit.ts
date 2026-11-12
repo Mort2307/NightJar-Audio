@@ -1,4 +1,5 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import { diditWebhookSignatureValid } from './didit-webhook-security.js';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onRequest } from 'firebase-functions/v2/https';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
@@ -259,12 +260,6 @@ export const startDiditSession = async (uid: string) => {
   }
 };
 
-const canonicalJson = (value: any): string => {
-  if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
-  if (value && typeof value === 'object') return '{' + Object.keys(value).sort()
-    .map(key => JSON.stringify(key) + ':' + canonicalJson(value[key])).join(',') + '}';
-  return JSON.stringify(value);
-};
 // Only mundane, user-actionable warnings from HMAC-verified Didit events
 // can be stored. Fraud/risk signals, biometrics, identity data and free text
 // must never enter this member-facing feedback channel.
@@ -336,11 +331,6 @@ export const diditDocumentBirthDateReturned = (decision: unknown): boolean => {
   });
 };
 
-const equalHmac = (message: string | Buffer, signature: string, secret: string) => {
-  if (!/^[a-f\d]{64}$/i.test(signature)) return false;
-  const expected = createHmac('sha256', secret).update(message).digest();
-  return timingSafeEqual(expected, Buffer.from(signature, 'hex'));
-};
 export const diditWebhook = onRequest({
   region: 'europe-west2', secrets: [DIDIT_WEBHOOK_SECRET, DIDIT_ENVIRONMENT],
   timeoutSeconds: 30, maxInstances: 8,
@@ -354,8 +344,12 @@ export const diditWebhook = onRequest({
   catch { response.status(400).end(); return; }
   if (!value || typeof value !== 'object' || Array.isArray(value)) { response.status(400).end(); return; }
   const secret = DIDIT_WEBHOOK_SECRET.value();
-  const verified = equalHmac(canonicalJson(value), text(request.get('X-Signature-V2')), secret) ||
-    equalHmac(raw, text(request.get('X-Signature')), secret);
+  const verified = diditWebhookSignatureValid(
+    raw,
+    text(request.get('X-Signature-V2')),
+    text(request.get('X-Signature')),
+    secret,
+  );
   // Do not trust deprecated X-Signature-Simple (it does not cover decision body).
   if (!verified) {
     console.warn('Rejected Didit signature', { bodySha256: createHash('sha256').update(raw).digest('hex') });
