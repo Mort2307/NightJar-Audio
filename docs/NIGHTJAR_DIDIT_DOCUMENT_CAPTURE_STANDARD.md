@@ -24,7 +24,17 @@ For a successful capture:
 
 Accepted document types vary by country and by the live workflow configuration. NightJar must not promise that a particular document type is accepted unless it is enabled in that workflow.
 
-**Enforcement setting to verify in Didit:** configure the ID Verification step to allow live camera capture only (`CAMERA_SCAN`) and disable the file-upload path (`UPLOAD`) if the active workflow and member-device support permit it. This is a Didit workflow setting; NightJar's on-screen instructions alone cannot technically prevent a user from selecting an upload. Do not claim camera-only enforcement until the live workflow configuration has been checked.
+**Required live workflow settings to verify in Didit Business Console:**
+
+1. Open the exact workflow used by NightJar's live sessions, then open its **ID Verification** step.
+2. Under **Advanced**, turn **Document upload** off. The allowed capture method must be live camera capture only (`CAMERA_SCAN`); do not leave file upload (`UPLOAD`) enabled or rely on an empty/default capture-method setting.
+3. Under **Advanced**, turn the **Image capture review screen** on. This lets the member inspect each camera capture and retake it before submission.
+4. Check the workflow's accepted countries, document types and exact subtypes. A supported document family with no matching subtype selected can still reject every document of that subtype.
+5. Save/publish the intended workflow version, then verify the live workflow again. A draft or a different workflow/application does not change the live session flow.
+
+NightJar's on-screen instructions alone cannot technically prevent a user from selecting an upload. Do not claim camera-only enforcement or capture-review availability until the exact live workflow has been inspected and a fresh sandbox test confirms both. Existing sessions retain the configuration they were created with; use a fresh sandbox session to test a workflow change before relying on it in production.
+
+**Acceptance test:** on a new sandbox session, the member must be offered live camera capture, not a file picker; after capture, the review screen must offer confirm/retake; a deliberately poor capture must be retakable; and the workflow must request both sides only for document types that actually require a back image.
 
 ## How NightJar explains a failed check
 
@@ -62,3 +72,8 @@ Didit controls its hosted flow's internal navigation. NightJar can select the st
 - Didit failed verification guidance: https://help.didit.me/end-users/verification-failed
 - Didit resubmission and session status guidance: https://help.didit.me/verification-sessions/retry-a-verification
 - Didit update session status API: https://docs.didit.me/sessions-api/update-status
+
+ 
+### Unsupported document types are not photo-quality failures
+
+For Didit warning codes `DOCUMENT_TYPE_NOT_SUPPORTED` and `DOCUMENT_NOT_SUPPORTED_FOR_APPLICATION`, do not tell the member to improve lighting or retake the same document. These results indicate that the active workflow may not allow the country/document subtype. Set the guidance to a support/configuration hold (`canRetake: false`), and have an administrator verify the live workflow's country and subtype allowlist before authorising another step. This does not change the 18+ evidence requirement or approve the member.

@@ -48,8 +48,9 @@ export default function DiditDocumentResubmission() {
   useEffect(()=>{
     const code=status?.guidance?.code;
     if(code==='document_expired') setReason('expired_document');
-    else if(code==='mrz_invalid'||code==='nfc_mismatch') setReason('document_not_detected');
-    else if(code==='image_blurry'||code==='image_dark'||code==='image_bright'||code==='image_quality'||code==='document_issue')
+    else if(code==='mrz_invalid'||code==='nfc_mismatch'||code==='document_issue'||code==='document_unsupported')
+      setReason('document_not_detected');
+    else if(code==='image_blurry'||code==='image_dark'||code==='image_bright'||code==='image_quality')
       setReason('unclear_document');
   },[status?.guidance?.code]);
   const submit=async()=>{
@@ -95,7 +96,7 @@ export default function DiditDocumentResubmission() {
     </section>
 
     {status?.status==='ready' && <p className="nj-didit-resubmission-message" role="status">
-      NightJar has authorised the replacement document step in your existing session. Didit will ask you to repeat only the selected step, not restart the whole verification.
+      NightJar has authorised the replacement document step in your existing session. Open the same secure Didit session; Didit will ask you to repeat only the selected step. Didit controls the exact screen shown inside its hosted flow.
     </p>}
     {link && <a className="secondary-button wide-button nj-didit-continue" href={link} target="_blank" rel="noopener noreferrer">
       {status?.status==='ready'?'Continue to your document retake':'Open existing Didit session'}
