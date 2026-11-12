@@ -9,7 +9,7 @@
 
 NightJar's stored Didit compliance profile already describes a global adult-content service: persons, no minors, remote onboarding, ongoing relationship, adult content over one-third of activity, 256 country/territory entries and all 50 US states plus DC. The profile is complete; replacing it is unnecessary.
 
-That profile is a statement of intended reach, **not evidence that every country is legally cleared**. The current Didit requirements engine covers a limited set of specific obligations, not every applicable law in all 256 entries.
+That profile is a statement of intended reach, **not evidence that every country is legally cleared**. The current Didit requirements engine covers a limited set of specific obligations, not every applicable law in all 256 entries. The fresh 12 November workflow check confirms that the live `Free KYC` does not perform age assurance; the separate published `Compliance workflow` passes the engine's listed checks except Germany's session-authentication obligation. However, the engine's pass for France and Italy conflicts with its own requirement list, which specifies a double-anonymous age token while the generated workflow uses `AGE_ESTIMATION`. Treat those passes as unreliable until Didit resolves the discrepancy in writing.
 
 The account-level rule remains mandatory: NightJar grants adult access only after a live, account-bound Didit result containing approved documentary date-of-birth evidence that proves the person is at least 18. A generic provider-level `Approved` status, sandbox result, manual approval without age evidence, or age-estimation result without a separately validated adapter must never grant access.
 
@@ -18,9 +18,9 @@ The account-level rule remains mandatory: NightJar grants adult access only afte
 | Control | Observed state | Readiness |
 |---|---|---|
 | Stored compliance profile | Global scope already recorded | Complete as profile data only |
-| Live session workflow | `Free KYC` (workflow `87c1aa80-4d4b-4147-b7e5-a14d8d91788a`), OCR absent; provider reports no age assurance | Blocker |
+| Live session workflow | `Free KYC` (workflow `87c1aa80-4d4b-4147-b7e5-a14d8d91788a`), features include OCR, liveness, face match and IP analysis, but Didit confirms age assurance is **false** because OCR age restrictions are not enabled | Blocker |
 | Improved `Free KYC` draft | OCR minimum age 18; draft only, not live | Needs review and test |
-| Separate `Compliance workflow` | Published, includes OCR, liveness, face match, IP analysis, AML, age estimation and NFC; no sessions in last 30 days | Not integrated/validated as NightJar's live flow |
+| Separate `Compliance workflow` | Published, includes OCR, liveness, face match, IP analysis, AML, age estimation and NFC; age assurance is true; no sessions in last 30 days. Didit's checker reports all listed obligations passing except Germany's post-verification session-authentication control | Not integrated/validated as NightJar's live flow |
 | Live Didit webhook | Enabled URL is the site root `https://nightjar-audio.web.app` | Blocker: this is not the Firebase handler |
 | Actual webhook handler | Firebase rewrite `/api/webhooks/didit` → `diditWebhook` in `europe-west2` | Correct route exists |
 | Webhook secret | Provider exposes only a masked suffix; Firebase secret cannot be compared through the available integration | Unverified |
