@@ -34,6 +34,13 @@ assert.match(css,/\.nj-next-action span:nth-child\(2\) small/,
   'quick actions need readable descriptions');
 assert.match(css,/\.nj-notification-group-label/,
   'notification headings need readable labels');
+assert.match(css,/\.notification-row > span:last-child > strong[\s\S]*?font-size:max\(0\.875rem,14px\)/,
+  'notification titles must remain readable rather than inherit 9px legacy styling');
+assert.match(css,/\.notification-row > span:last-child > small[\s\S]*?font-size:max\(0\.75rem,12px\)/,
+  'notification summaries must remain readable rather than inherit 8px legacy styling');
+assert.match(css,/\.notification-row \{[\s\S]*?min-height:56px/,
+  'notification rows must provide enough room for readable text');
+
 assert.match(css,/\.nj-mobile-nav button > \.nj-mobile-nav-label/,
   'navigation labels need mobile sizes');
 assert.match(css,/font-size:max\(0\.6875rem, 11px\)/,
