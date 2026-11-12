@@ -221,6 +221,25 @@ for(const item of diditResubmissionFollowup.files){
   overrides.set(item.path,item);
 }
 
+
+/* PR #355: notification hierarchy is a narrowly-scoped shared UI follow-up.
+   Preserve all integrated RC hashes; pin only the exact reviewed CSS and test
+   blobs and require both to originate from the original approved human-first batch. */
+const notificationReadabilityFollowup=JSON.parse(string('docs/NIGHTJAR_NOTIFICATION_READABILITY_FOLLOWUP.json'));
+assert.equal(notificationReadabilityFollowup.pr,355,'notification readability follow-up requires its own PR');
+assert.deepEqual(notificationReadabilityFollowup.files.map(item=>item.path).sort(),[
+  'scripts/app-wide-human-first-contracts.mjs',
+  'src/styles/human-first-operational-ui.css',
+].sort(),'notification readability may change only its shared UI stylesheet and regression suite');
+for(const item of notificationReadabilityFollowup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path) ??
+    manifest.includes.flatMap(pr=>pr.files).find(entry=>entry.path===item.path);
+  assert.ok(previous,'notification readability must anchor to the approved human-first source');
+  assert.equal(item.baselineSha,previous.sha,'preserve the original human-first RC blob reference');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){

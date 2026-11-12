@@ -129,3 +129,39 @@
     letter-spacing:0;
   }
 }
+
+
+/* Notification text carries real account actions and must not inherit legacy
+   8–9px microtype. Keep the icon column compact; let copy wrap naturally. */
+:root:not([data-nightjar-vision]) .notification-row {
+  min-height:56px;
+  align-items:start;
+}
+:root:not([data-nightjar-vision]) .notification-row > span:last-child {
+  min-width:0;
+  align-content:start;
+}
+:root:not([data-nightjar-vision]) .notification-row > span:last-child > strong {
+  display:block;
+  font-size:max(0.875rem,14px);
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+:root:not([data-nightjar-vision]) .notification-row > span:last-child > small {
+  display:block;
+  font-size:max(0.75rem,12px);
+  line-height:1.45;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+:root:not([data-nightjar-vision]) .notification-row > span:last-child > .notification-inline-update {
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  min-height:28px;
+  font-size:max(0.75rem,12px);
+}
+:root:not([data-nightjar-vision]) .notification-empty {
+  font-size:max(0.75rem,12px);
+  line-height:1.45;
+}

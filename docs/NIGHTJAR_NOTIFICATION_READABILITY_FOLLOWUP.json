@@ -1,0 +1,15 @@
+{
+  "pr": 355,
+  "files": [
+    {
+      "path": "src/styles/human-first-operational-ui.css",
+      "baselineSha": "b55294699c7f0330a4a53e04384cef82c20f6a1e",
+      "sha": "a4bd78acdd98271f85c843443cb34897fbec419c"
+    },
+    {
+      "path": "scripts/app-wide-human-first-contracts.mjs",
+      "baselineSha": "e5d92e3724bc5bfdae77145b4f1975adbb312c28",
+      "sha": "fcd4a71e090261a4774e59add9273d5e4b7ae423"
+    }
+  ]
+}
