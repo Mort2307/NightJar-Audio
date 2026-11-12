@@ -1,0 +1,19 @@
+# Exact, reviewed Gitleaks false-positive / public-client-config fingerprints.
+# This is deliberately line-specific. Do not add broad path/rule allowlists.
+#
+# generic-api-key: these values are environment-attestation names and a
+# passkey continuity storage key, not credentials or bearer secrets.
+docs/NIGHTJAR_PUBLIC_LAUNCH_SAFETY_GATE.md:generic-api-key:7
+scripts/passkey-security-contracts.mjs:generic-api-key:69
+src/platform/nightjar-quick-unlock.ts:generic-api-key:11
+#
+# gcp-api-key: these were Firebase Web SDK configuration keys. Firebase
+# documents Web API keys as public client identifiers; they are not Admin SDK
+# credentials. The active production key is still subject to the owner check
+# that Google Cloud API restrictions permit only required Firebase APIs and
+# Firebase Auth quotas/App Check/Rules remain correctly configured.
+# The second fingerprint is a historic key from a previous Firebase project
+# no longer referenced by current source; disable it in that retired project
+# only after confirming no remaining production dependency.
+public/service-worker.js:gcp-api-key:5
+src/platform/firebase-auth.ts:gcp-api-key:19
