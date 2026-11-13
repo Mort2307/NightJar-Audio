@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { diditWebhookSignatureValid } from './didit-webhook-security.js';
-import { diditDocumentBirthDateReturned, verifiedAdultFromDecision } from './didit-adult-evidence.js';
+import { verifiedAdultFromDecision } from './didit-adult-evidence.js';
 export { diditDocumentBirthDateReturned, verifiedAdultFromDecision } from './didit-adult-evidence.js';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onRequest } from 'firebase-functions/v2/https';
