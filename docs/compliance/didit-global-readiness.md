@@ -1,7 +1,7 @@
 # NightJar Audio — Didit global compliance readiness
 
 **Status:** Not cleared for global launch  
-**Last reviewed:** 12 November 2026  
+**Last reviewed:** 13 November 2026  
 **Scope:** NightJar Audio adult-content access and account verification, including user-submitted material and platform-published material.  
 **Purpose:** Engineering and compliance control register. This is not legal advice or a substitute for jurisdiction-specific counsel.
 
@@ -9,7 +9,7 @@
 
 NightJar's stored Didit compliance profile already describes a global adult-content service: persons, no minors, remote onboarding, ongoing relationship, adult content over one-third of activity, 256 country/territory entries and all 50 US states plus DC. The profile is complete; replacing it is unnecessary.
 
-That profile is a statement of intended reach, **not evidence that every country is legally cleared**. The current Didit requirements engine covers a limited set of specific obligations, not every applicable law in all 256 entries. The fresh 12 November workflow check confirms that the live `Free KYC` does not perform age assurance; the separate published `Compliance workflow` passes the engine's listed checks except Germany's session-authentication obligation. However, the engine's pass for France and Italy conflicts with its own requirement list, which specifies a double-anonymous age token while the generated workflow uses `AGE_ESTIMATION`. Treat those passes as unreliable until Didit resolves the discrepancy in writing.
+That profile is a statement of intended reach, **not evidence that every country is legally cleared**. The current Didit requirements engine covers a limited set of specific obligations, not every applicable law in all 256 entries. The fresh 13 November workflow check confirms that the live `Free KYC` does not perform age assurance; the separate published `Compliance workflow` passes the engine's listed checks except Germany's session-authentication obligation. However, the engine's pass for France and Italy conflicts with its own requirement list, which specifies a double-anonymous age token while the generated workflow uses `AGE_ESTIMATION`. Treat those passes as unreliable until Didit resolves the discrepancy in writing.
 
 The account-level rule remains mandatory: NightJar grants adult access only after a live, account-bound Didit result containing approved documentary date-of-birth evidence that proves the person is at least 18. A generic provider-level `Approved` status, sandbox result, manual approval without age evidence, or age-estimation result without a separately validated adapter must never grant access.
 
@@ -21,13 +21,13 @@ The account-level rule remains mandatory: NightJar grants adult access only afte
 | Live session workflow | `Free KYC` (workflow `87c1aa80-4d4b-4147-b7e5-a14d8d91788a`), features include OCR, liveness, face match and IP analysis, but Didit confirms age assurance is **false** because OCR age restrictions are not enabled | Blocker |
 | Improved `Free KYC` draft | OCR minimum age 18; draft only, not live | Needs review and test |
 | Separate `Compliance workflow` | Published, includes OCR, liveness, face match, IP analysis, AML, age estimation and NFC; age assurance is true; no sessions in last 30 days. Didit's checker reports all listed obligations passing except Germany's post-verification session-authentication control | Not integrated/validated as NightJar's live flow |
-| Live Didit webhook | Enabled URL is the site root `https://nightjar-audio.web.app` | Blocker: this is not the Firebase handler |
+| Live Didit webhook | Enabled v3 destination `https://nightjar-audio.web.app/api/webhooks/didit`; subscriptions remain `status.updated`, `data.updated`, `user.status.updated` | Destination corrected; signed end-to-end delivery still unverified |
 | Actual webhook handler | Firebase rewrite `/api/webhooks/didit` → `diditWebhook` in `europe-west2` | Correct route exists |
-| Webhook secret | Provider exposes only a masked suffix; Firebase secret cannot be compared through the available integration | Unverified |
+| Webhook secret | Didit displays suffix `37Fg`; the Firebase `DIDIT_WEBHOOK_SECRET` suffix was separately confirmed by the owner as `37Fg` | Suffix match confirmed; do not expose or rotate the secret; deployed runtime verification still required |
 | Returned data | Draft workflow has `response_attributes: null` (all feature outputs returned) | Privacy/data-minimisation blocker |
 | Public launch | `CLOSED_BETA = true` | Still private testing |
 
-Provider delivery success to the website root does not prove signed events reached the function or were processed. Do not enable or redirect another endpoint until the signing secret is confirmed to match the deployed Firebase secret and a signed test event is processed end-to-end.
+The Didit destination was updated on 13 November 2026 to the Firebase rewrite path after the owner confirmed the Firebase Secret Manager value ends in the same four characters (`37Fg`) shown by Didit. The stale disabled destination was deleted; the active v3 destination and all three event subscriptions were preserved. Didit's historical delivery metrics still show the last success on 8 November, before this URL change, so they do not prove the new route works. A signed test event must still be received by the deployed function, pass raw-body HMAC verification, be safely persisted/queued, and update the correct account before this control is marked complete. The code implementing exact-raw-body verification is on PR #361 and is not deployed yet.
 
 ## Regional control matrix
 
@@ -172,11 +172,12 @@ Official source:
 
 ## Immediate next actions
 
-1. Correct and test the raw-body Didit v3 webhook signature verification in NightJar code.
-2. Correct the live webhook destination only after comparing the provider signing secret with Firebase Secret Manager and running a signed test.
-3. Ask Didit for written answers on France/Italy double anonymity, Germany closed-user-group/session authentication, Australia alternative methods, age-estimation response fields and thresholds, data residency/retention and exact regional certification evidence.
-4. Build a country-aware age-assurance adapter and test it in Sandbox before changing the live workflow.
-5. Configure Returned data, retention and model-training controls in the Didit Console.
-6. Complete the country-by-country legal inventory and obtain qualified counsel sign-off.
+1. Merge PR #361 only after its green CI is confirmed against the latest head; deploy the backend change through the normal controlled release path, not from the PR.
+2. Run a signed Didit test delivery against `/api/webhooks/didit`; verify raw-body HMAC, idempotency, persistence/queueing and account-bound processing in Firebase logs/data.
+3. Review and harden the unpublished `Free KYC` draft (18+ document-age restriction, fail-closed branches, anti-spoof settings, data minimisation and retention); run sandbox pass/under-18/review/attack tests before considering publication.
+4. Ask Didit for written answers on France/Italy double anonymity, Germany closed-user-group/session authentication, Australia alternative methods, age-estimation response fields and thresholds, data residency/retention and exact regional certification evidence.
+5. Configure Returned data to the minimum required fields in the Didit Console; current `response_attributes: null` means all feature outputs are returned. Confirm retention, face-search/template controls and model-training terms.
+6. Implement NightJar-side session authentication/credential-sharing controls for Germany, or restrict Germany until validated.
+7. Complete the country-by-country legal inventory and obtain qualified counsel sign-off before enabling any additional market.
 
-**No workflow publication, live webhook change, public launch or relaxation of the 18+ gate is authorised by this register.**
+**No workflow publication, public launch or relaxation of the 18+ gate is authorised by this register. The live webhook destination correction described above has already been approved and applied; it is not evidence of a successful signed delivery.**
