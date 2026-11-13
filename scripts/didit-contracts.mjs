@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const read = path => fs.readFileSync(path, 'utf8');
 const backend = read('functions/src/index.ts');
 const didit = read('functions/src/didit.ts');
+const diditWebhookSecurity = read('functions/src/didit-webhook-security.ts');
 const ui = read('src/App.tsx');
 const nightjars = read('functions/src/nightjars.ts');
 const hosting = JSON.parse(read('firebase.json'));
@@ -16,7 +17,7 @@ for (const [marker,label] of [
   ['(session.applicationId && payload.applicationId && session.applicationId !== payload.applicationId)', 'Provider application echo is compared whenever supplied on signed webhooks'],
   ['X-Signature-V2','Signed V2 webhook verification'],
   ["text(request.get('X-Signature'))", 'Strong raw-body signature fallback'],
-  ['timingSafeEqual','Constant-time HMAC comparison'],
+  
   ['Math.abs(Date.now()/1000 - dispatched) > 300','Five-minute replay protection'],
   ['const dispatched = Number(value.timestamp);', 'Replay clock comes from signed payload'],
   ['headerTimestamp !== dispatched', 'Unsigned header must agree with signed timestamp'],
@@ -35,6 +36,7 @@ for (const [marker,label] of [
   ["data?.environment === 'live'", 'Sandbox and live pass isolation'],
   ["data?.reverifyRequired !== true", 'Revocation enforcement'],
 ]) requireMarker(didit, marker, label);
+requireMarker(diditWebhookSecurity, 'timingSafeEqual','Constant-time HMAC comparison');
 requireMarker(backend, 'diditPass(data)', 'Protected audio checks Didit status');
 requireMarker(backend, 'startDiditSession(identity.uid)', 'Didit session callable');
 requireMarker(backend, "requireCurrentLegalAcceptance(identity.uid, 'age_assurance_notice')", 'The server must require recorded notice acknowledgement before beginning Didit');
