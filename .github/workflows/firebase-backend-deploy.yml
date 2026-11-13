@@ -180,6 +180,8 @@ jobs:
           npm --prefix functions run audit:guard
           npm --prefix functions run build
           npm --prefix functions run test:didit-resubmission
+          npm --prefix functions run test:didit-webhook-signature
+          npm --prefix functions run test:didit-adult-evidence
 
       - name: Deploy exact requested backend resources
         if: ${{ inputs.scope != 'auth-check' && inputs.scope != 'plan' && inputs.scope != 'audio-eq-cors' }}
