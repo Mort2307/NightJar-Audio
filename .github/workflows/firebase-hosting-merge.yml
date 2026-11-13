@@ -122,6 +122,37 @@ jobs:
           gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Selected published-listening reader functions deployed before Hosting."
 
+      # This narrowly scoped release deploys only the Didit webhook receiver
+      # and durable event processor before Hosting. No verification is started.
+      - name: Deploy signed Didit webhook security before Hosting
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[nightjar-didit-webhook-security-release]') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/didit-contracts.mjs
+          START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[scope]=functions:selected' \
+            -f 'inputs[function_names]=diditWebhook,processDiditWebhook' \
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          RUN_ID=""
+          for attempt in $(seq 1 48); do
+            RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
+              | jq -r --arg head "${GITHUB_SHA}" --arg start "${START_TIME}" \
+                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -z "$RUN_ID" ]]; then
+            echo "::error::Didit webhook backend deploy not observed; Hosting blocked."
+            exit 1
+          fi
+          gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
+          echo "Didit signed webhook backend verified before Hosting."
+
       # Deploy and verify the signed-webhook reader and the safe per-member
       # reason endpoints together, before exposing any new client guidance.
       # No new Didit sessions, raw KYC export or automatic resubmissions.
