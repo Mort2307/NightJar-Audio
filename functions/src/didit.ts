@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
 import { diditWebhookSignatureValid } from './didit-webhook-security.js';
+import { diditDocumentBirthDateReturned, verifiedAdultFromDecision as verifyAdultEvidence } from './didit-adult-evidence.js';
+export { diditDocumentBirthDateReturned };
+export const verifiedAdultFromDecision = verifyAdultEvidence;
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onRequest } from 'firebase-functions/v2/https';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
@@ -294,41 +297,6 @@ export const diditMemberWarningCodesFromDecision = (value: unknown): string[] =>
     }
   }
   return diditSafeMemberWarningCodes(codes);
-};
-
-// Confirm adulthood from approved documentary KYC evidence without storing a birth date.
-// A generic Approved identity decision MUST NOT, on its own, unlock 18+ content.
-// Adaptive age-estimation workflows need a separate evidence adapter before use.
-export const verifiedAdultFromDecision = (decision: unknown, at = new Date()) => {
-  const obj = decision && typeof decision === 'object' ? decision as Record<string, any> : {};
-  const checks = Array.isArray(obj.id_verifications) ? obj.id_verifications : [];
-  return checks.some((item: unknown) => {
-    if (!item || typeof item !== 'object') return false;
-    const id = item as Record<string, unknown>;
-    if (!['Approved', 'APPROVED'].includes(String(id.status)) || typeof id.date_of_birth !== 'string') return false;
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(id.date_of_birth);
-    if (!match) return false;
-    const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
-    const dob = new Date(Date.UTC(year, month - 1, day));
-    if (dob.getUTCFullYear() !== year || dob.getUTCMonth() !== month - 1 ||
-        dob.getUTCDate() !== day || dob.getTime() > at.getTime()) return false;
-    const min = new Date(Date.UTC(at.getUTCFullYear() - 18, at.getUTCMonth(), at.getUTCDate()));
-    return dob.getTime() <= min.getTime();
-  });
-};
-
-// Only a safe categorical signal leaves this helper. No raw date of birth is
-// logged, persisted or returned to the Nightjar administrative UI.
-export const diditDocumentBirthDateReturned = (decision: unknown): boolean => {
-  const obj = decision && typeof decision === 'object' ? decision as Record<string, any> : {};
-  const ids = Array.isArray(obj.id_verifications) ? obj.id_verifications : [];
-  return ids.some((id: unknown) => {
-    if (!id || typeof id !== 'object') return false;
-    const feature = id as Record<string, unknown>;
-    return ['Approved','APPROVED'].includes(String(feature.status)) &&
-      typeof feature.date_of_birth === 'string' &&
-      /^\d{4}-\d{2}-\d{2}$/.test(feature.date_of_birth);
-  });
 };
 
 export const diditWebhook = onRequest({

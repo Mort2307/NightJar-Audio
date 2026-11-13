@@ -4,15 +4,17 @@ const read = path => fs.readFileSync(path, 'utf8');
 const backend = read('functions/src/index.ts');
 const didit = read('functions/src/didit.ts');
 const diditWebhookSecurity = read('functions/src/didit-webhook-security.ts');
+const diditAdultEvidence = read('functions/src/didit-adult-evidence.ts');
 const ui = read('src/App.tsx');
 const nightjars = read('functions/src/nightjars.ts');
 const hosting = JSON.parse(read('firebase.json'));
+const backendFirstRelease = read('.github/workflows/firebase-hosting-merge.yml');
+const backendDeployWorkflow = read('.github/workflows/firebase-backend-deploy.yml');
 const failures = [];
 const requireMarker = (value, marker, label) => { if (!value.includes(marker)) failures.push(label); };
 for (const [marker,label] of [
   ['request.rawBody', 'Didit raw webhook bytes'],
   ['verifiedAdultFromDecision(value.decision)', 'Approved KYC requires verified 18+ ID evidence'],
-  ["!['Approved', 'APPROVED'].includes(String(id.status))", 'Only approved ID checks count as adult evidence'],
   ['payload.adultEvidence === true', 'Adult evidence checked before any live verified pass'],
   ['(session.applicationId && payload.applicationId && session.applicationId !== payload.applicationId)', 'Provider application echo is compared whenever supplied on signed webhooks'],
   ['X-Signature-V2','Signed V2 webhook verification'],
@@ -37,6 +39,13 @@ for (const [marker,label] of [
   ["data?.reverifyRequired !== true", 'Revocation enforcement'],
 ]) requireMarker(didit, marker, label);
 requireMarker(diditWebhookSecurity, 'timingSafeEqual','Constant-time HMAC comparison');
+requireMarker(diditAdultEvidence, "!['Approved', 'APPROVED'].includes(String(id.status))", 'Only approved ID checks count as adult evidence');
+requireMarker(diditAdultEvidence, "String(id.verification_method ?? '').toLowerCase() !== 'document'", 'Only documentary ID verification can grant adult access');
+requireMarker(backendFirstRelease, '[nightjar-didit-webhook-security-release]', 'Didit webhook changes require the dedicated backend-first release tag');
+requireMarker(backendFirstRelease, "inputs[function_names]=diditWebhook,processDiditWebhook", 'Backend-first Didit release is scoped to the webhook receiver and processor');
+requireMarker(backendFirstRelease, 'gh run watch "$RUN_ID"', 'Hosting waits for successful selected-function backend deployment');
+requireMarker(backendDeployWorkflow, 'npm --prefix functions run test:didit-webhook-signature', 'Backend deploy runs raw-body webhook signature tests');
+requireMarker(backendDeployWorkflow, 'npm --prefix functions run test:didit-adult-evidence', 'Backend deploy runs documentary adult evidence tests');
 requireMarker(backend, 'diditPass(data)', 'Protected audio checks Didit status');
 requireMarker(backend, 'startDiditSession(identity.uid)', 'Didit session callable');
 requireMarker(backend, "requireCurrentLegalAcceptance(identity.uid, 'age_assurance_notice')", 'The server must require recorded notice acknowledgement before beginning Didit');
