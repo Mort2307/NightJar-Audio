@@ -4,6 +4,7 @@ const read = path => fs.readFileSync(path, 'utf8');
 const backend = read('functions/src/index.ts');
 const didit = read('functions/src/didit.ts');
 const diditWebhookSecurity = read('functions/src/didit-webhook-security.ts');
+const diditAdultEvidence = read('functions/src/didit-adult-evidence.ts');
 const ui = read('src/App.tsx');
 const nightjars = read('functions/src/nightjars.ts');
 const hosting = JSON.parse(read('firebase.json'));
@@ -37,6 +38,7 @@ for (const [marker,label] of [
   ["data?.reverifyRequired !== true", 'Revocation enforcement'],
 ]) requireMarker(didit, marker, label);
 requireMarker(diditWebhookSecurity, 'timingSafeEqual','Constant-time HMAC comparison');
+requireMarker(diditAdultEvidence, "String(id.verification_method ?? '').toLowerCase() !== 'document'", 'Only documentary ID verification can grant adult access');
 requireMarker(backend, 'diditPass(data)', 'Protected audio checks Didit status');
 requireMarker(backend, 'startDiditSession(identity.uid)', 'Didit session callable');
 requireMarker(backend, "requireCurrentLegalAcceptance(identity.uid, 'age_assurance_notice')", 'The server must require recorded notice acknowledgement before beginning Didit');
