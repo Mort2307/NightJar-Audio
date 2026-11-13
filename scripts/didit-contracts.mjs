@@ -14,7 +14,6 @@ const requireMarker = (value, marker, label) => { if (!value.includes(marker)) f
 for (const [marker,label] of [
   ['request.rawBody', 'Didit raw webhook bytes'],
   ['verifiedAdultFromDecision(value.decision)', 'Approved KYC requires verified 18+ ID evidence'],
-  ["!['Approved', 'APPROVED'].includes(String(id.status))", 'Only approved ID checks count as adult evidence'],
   ['payload.adultEvidence === true', 'Adult evidence checked before any live verified pass'],
   ['(session.applicationId && payload.applicationId && session.applicationId !== payload.applicationId)', 'Provider application echo is compared whenever supplied on signed webhooks'],
   ['X-Signature-V2','Signed V2 webhook verification'],
@@ -39,6 +38,7 @@ for (const [marker,label] of [
   ["data?.reverifyRequired !== true", 'Revocation enforcement'],
 ]) requireMarker(didit, marker, label);
 requireMarker(diditWebhookSecurity, 'timingSafeEqual','Constant-time HMAC comparison');
+requireMarker(diditAdultEvidence, "!['Approved', 'APPROVED'].includes(String(id.status))", 'Only approved ID checks count as adult evidence');
 requireMarker(diditAdultEvidence, "String(id.verification_method ?? '').toLowerCase() !== 'document'", 'Only documentary ID verification can grant adult access');
 requireMarker(backendFirstRelease, '[nightjar-didit-webhook-security-release]', 'Didit webhook changes require the dedicated backend-first release tag');
 requireMarker(backendFirstRelease, "inputs[function_names]=diditWebhook,processDiditWebhook", 'Backend-first Didit release is scoped to the webhook receiver and processor');
