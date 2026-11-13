@@ -8,6 +8,7 @@ const diditAdultEvidence = read('functions/src/didit-adult-evidence.ts');
 const ui = read('src/App.tsx');
 const nightjars = read('functions/src/nightjars.ts');
 const hosting = JSON.parse(read('firebase.json'));
+const backendFirstRelease = read('.github/workflows/firebase-hosting-merge.yml');
 const failures = [];
 const requireMarker = (value, marker, label) => { if (!value.includes(marker)) failures.push(label); };
 for (const [marker,label] of [
@@ -39,6 +40,9 @@ for (const [marker,label] of [
 ]) requireMarker(didit, marker, label);
 requireMarker(diditWebhookSecurity, 'timingSafeEqual','Constant-time HMAC comparison');
 requireMarker(diditAdultEvidence, "String(id.verification_method ?? '').toLowerCase() !== 'document'", 'Only documentary ID verification can grant adult access');
+requireMarker(backendFirstRelease, '[nightjar-didit-webhook-security-release]', 'Didit webhook changes require the dedicated backend-first release tag');
+requireMarker(backendFirstRelease, "inputs[function_names]=diditWebhook,processDiditWebhook", 'Backend-first Didit release is scoped to the webhook receiver and processor');
+requireMarker(backendFirstRelease, 'gh run watch "$RUN_ID"', 'Hosting waits for successful selected-function backend deployment');
 requireMarker(backend, 'diditPass(data)', 'Protected audio checks Didit status');
 requireMarker(backend, 'startDiditSession(identity.uid)', 'Didit session callable');
 requireMarker(backend, "requireCurrentLegalAcceptance(identity.uid, 'age_assurance_notice')", 'The server must require recorded notice acknowledgement before beginning Didit');
