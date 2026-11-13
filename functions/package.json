@@ -21,7 +21,8 @@
     "test:systems": "npm run build && node --test lib/profile-types.test.js lib/commitment-eligibility.test.js lib/creator-pool.test.js lib/finance-settlement.test.js lib/finance-policy.test.js lib/finance-tax-estimate.test.js",
     "test:finance-settlement": "npm run build && node --test lib/finance-settlement.test.js",
     "test:didit-resubmission": "node --test lib/didit-resubmission-guards.test.js",
-    "test:didit-webhook-signature": "npm run build && node --test lib/didit-webhook-security.test.js"
+    "test:didit-webhook-signature": "npm run build && node --test lib/didit-webhook-security.test.js",
+    "test:didit-adult-evidence": "npm run build && node --test lib/didit-adult-evidence.test.js"
   },
   "dependencies": {
     "@google-cloud/firestore": "^9.4.0",
