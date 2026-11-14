@@ -201,3 +201,5 @@ Official source:
 - Release only the two scoped functions `diditWebhook` and `processDiditWebhook` through the backend-first guarded workflow. Then use Didit's Try Webhook console test to prove a real provider-signed test delivery receives 2xx and is safely acknowledged without changing account state.
 - The Didit connector available here does not expose the Try Webhook action or delivery replay. Do not create a billable live verification just to manufacture a test event.
 - Closed beta and the mandatory fail-closed 18+ gate remain unchanged. Do not publish the global compliance draft as part of this webhook repair.
+
+- Follow-up regression correction: the first canonical-V2 patch still contained an over-escaped hex-character regex. The backend signature test correctly rejected it before deployment. The regex was corrected in commit `704aadab`; the latest main-branch validation, frontend/Functions build and secret-history scan are green. No backend deploy was performed by the failed test run.
