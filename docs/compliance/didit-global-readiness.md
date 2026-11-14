@@ -190,3 +190,14 @@ Official source:
 - The protected release remains backend-first and limited to `diditWebhook` and `processDiditWebhook`; Hosting must wait for backend success.
 - A successful build is not proof of a live signed Didit delivery. Verify signature acceptance, duplicate/idempotent handling, durable event processing and account-bound state before marking the integration complete.
 - Closed beta and the mandatory fail-closed 18+ gate remain unchanged. No verification workflow was published and no new verification session was started.
+
+## 14 November 2026 — Didit V2 signature canonicalisation correction
+
+- Didit's current v3 webhook specification distinguishes the signatures: `X-Signature-V2` is HMAC-SHA256 over recursively sorted, compact JSON with Unicode preserved; legacy `X-Signature` is HMAC-SHA256 over the exact raw request bytes.
+- Corrected `functions/src/didit-webhook-security.ts` to verify V2 against canonical JSON first, then accept the legacy raw-body signature as a fallback. `X-Signature-Simple` remains rejected because it does not authenticate the decision payload.
+- Added regression coverage for canonical key ordering, nested objects, Unicode, legacy raw-body verification, tampering, malformed signatures and invalid JSON.
+- Signature freshness remains enforced against the authenticated body timestamp and matching `X-Timestamp` header with a five-minute tolerance. Provider test deliveries are acknowledged without mutating member/account state.
+- Main-branch validation, Functions build/typecheck and secret-history scan passed for the verifier correction.
+- Release only the two scoped functions `diditWebhook` and `processDiditWebhook` through the backend-first guarded workflow. Then use Didit's Try Webhook console test to prove a real provider-signed test delivery receives 2xx and is safely acknowledged without changing account state.
+- The Didit connector available here does not expose the Try Webhook action or delivery replay. Do not create a billable live verification just to manufacture a test event.
+- Closed beta and the mandatory fail-closed 18+ gate remain unchanged. Do not publish the global compliance draft as part of this webhook repair.
