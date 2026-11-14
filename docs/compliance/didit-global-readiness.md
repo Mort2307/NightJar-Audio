@@ -182,3 +182,11 @@ Official source:
 7. Complete the country-by-country legal inventory and obtain qualified counsel sign-off before enabling any additional market.
 
 **No workflow publication, public launch or relaxation of the 18+ gate is authorised by this register. The live webhook destination correction described above has already been approved and applied; it is not evidence of a successful signed delivery.**
+
+## 14 November 2026 — webhook verifier repair
+
+- Corrected the hexadecimal HMAC signature validation expression in `functions/src/didit-webhook-security.ts` (commit `e6187b1`).
+- Main-branch validation, frontend build, Firebase Functions typecheck/build and secret-history scan passed.
+- The protected release remains backend-first and limited to `diditWebhook` and `processDiditWebhook`; Hosting must wait for backend success.
+- A successful build is not proof of a live signed Didit delivery. Verify signature acceptance, duplicate/idempotent handling, durable event processing and account-bound state before marking the integration complete.
+- Closed beta and the mandatory fail-closed 18+ gate remain unchanged. No verification workflow was published and no new verification session was started.
