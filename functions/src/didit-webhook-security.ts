@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const equalHmac = (payload: Buffer | string, signature: string, secret: string): boolean => {
-  if (!/^[a-f\\d]{64}$/i.test(signature) || !secret) return false;
+  if (!/^[a-f\d]{64}$/i.test(signature) || !secret) return false;
   const expected = createHmac('sha256', secret).update(payload).digest();
   const supplied = Buffer.from(signature, 'hex');
   return supplied.length === expected.length && timingSafeEqual(expected, supplied);
