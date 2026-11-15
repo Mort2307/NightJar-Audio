@@ -7681,16 +7681,13 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
 
 export const creatorDashboard = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator','admin']);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const targetCreatorId = identity.role === 'creator'
     ? identity.uid
     : cleanText((request.data as { creatorUserId?: unknown } | undefined)?.creatorUserId, 160) || identity.uid;
 
   const releasesSnapshot = await db.collection('releases').where('creatorUserId', '==', targetCreatorId).limit(500).get();
-  const releases = releasesSnapshot.docs.filter((doc) => doc.data().status !== 'removed').map((doc) => {
-    const { transcriptText: protectedTranscript, ...safeRelease } = releaseOwnerPayload(doc.data(), doc.id);
-    void protectedTranscript;
-    return safeRelease;
-  });
+  const releases = releasesSnapshot.docs.filter((doc) => doc.data().status !== 'removed').map((doc) => releaseOwnerPayload(doc.data(), doc.id));
   const listeningSnapshot = await db.collection('listeningEvents').where('creatorUserId', '==', targetCreatorId).limit(5000).get();
 
   const verified = calculateVerifiedListening(listeningSnapshot.docs.map((doc) => doc.data()));
