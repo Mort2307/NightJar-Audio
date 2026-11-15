@@ -31,8 +31,9 @@ for(const name of [
   const body=backend.slice(start,next<0?undefined:next);
   assert.match(body,/requireGenuineAgeVerified\(/,'genuine age assurance is mandatory for '+name);
 }
-const dashboard=backend.slice(backend.indexOf('export const creatorDashboard = onCall'),
-  backend.indexOf('export const ',backend.indexOf('export const creatorDashboard = onCall')+20));
+const dashboardStart=backend.indexOf('export const creatorDashboard = onCall');
+const dashboardEnd=backend.indexOf('\\n});',dashboardStart)+4;
+const dashboard=backend.slice(dashboardStart,dashboardEnd);
 assert.match(dashboard,/transcriptText: protectedTranscript/,'creator dashboard strips full transcript text while retaining general workspace access');
 assert.doesNotMatch(dashboard,/requireGenuineAgeVerified/,'general creator dashboard remains available during Didit maintenance');
 const listening=backend.slice(backend.indexOf('export const myListeningAccess = onCall'),
