@@ -32,7 +32,7 @@ test('approved adult closed-beta testers can listen without a paid subscription,
   const eligible = {
     closedBeta: true, administrator: false, accountExists: true,
     accountSuspended: false, accountEmailMatches: true,
-    providerVerifiedAdult: true, explicitTester: true,
+    ageAccessAllowedForBeta: true, explicitTester: true,
   };
   assert.equal(canUseBetaListening(eligible), true);
   for (const change of [
