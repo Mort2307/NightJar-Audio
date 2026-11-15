@@ -74,4 +74,4 @@ assert.match(app, /const DIDIT_VERIFICATION_PAUSED = true/, 'frontend shows norm
 assert.match(app, /Verify securely with Didit/, 'mandatory age gate offers secure verification');
 assert.match(status, /verificationPaused: DIDIT_VERIFICATION_PAUSED/, 'client receives authoritative verification status');
 
-console.log('Nightjar Didit mandatory public verification and legacy pilot security contracts PASS (source level).');
+console.log('Nightjar paused Didit entry, trusted beta admission and legacy pilot security contracts PASS (source level).');
