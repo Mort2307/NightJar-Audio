@@ -54,7 +54,7 @@ assert.match(transcript,/data\.status !== 'released' && !ownDraft && !adminPrevi
 assert.match(transcript,/playbackAccessFor\(data, identity\.uid, \{ subscription, betaTester \}\)/);
 const listener=backend.slice(backend.indexOf('export const myListeningAccess = onCall'),
   backend.indexOf('const professionalRolesForAccount',backend.indexOf('export const myListeningAccess = onCall')));
-assert.match(listener,/closedBetaListening: betaTester/);
+assert.match(listener,/closedBetaListening: genuineAgeAssurance && betaTester/);
 assert.match(listener,/genuineAgeAssurance && \(identity\.admin \|\| Boolean\(subscription\) \|\| betaTester\)/,'invited but unverified members cannot be told audio playback is available');
 assert.match(listener,/subscribed: identity\.admin \|\| Boolean\(subscription\)/,'beta cannot falsify subscribed');
 assert.match(workflow,/\[nightjar-beta-listening-release\]/,'Hosting must wait for reviewable selected Functions deploy');
