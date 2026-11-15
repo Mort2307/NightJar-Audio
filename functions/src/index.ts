@@ -10010,6 +10010,7 @@ export const startAgeAssurance = onCall({
   region: REGION, secrets: [DIDIT_API_KEY, DIDIT_WORKFLOW_ID, DIDIT_ENVIRONMENT],
 }, async request => {
   const identity = await requireActiveIdentity(request);
+  if (DIDIT_VERIFICATION_PAUSED) throw new HttpsError('failed-precondition', 'Didit verification is paused during closed-beta maintenance. No new session was started.');
   // The public shutdown stays ON. During maintenance, only an authenticated
   // administrator explicitly requesting the one-shot test may proceed.
   // Old clients, ordinary members, and tester-pilot accounts all fail closed.
