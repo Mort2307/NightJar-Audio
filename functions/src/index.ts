@@ -6906,15 +6906,19 @@ export const myListeningAccess = onCall({ region: REGION }, async (request) => {
   return {
     role,
     subscribed: identity.admin || Boolean(subscription),
-    closedBetaListening: genuineAgeAssurance && betaTester,
-    cataloguePlaybackAvailable: genuineAgeAssurance && (identity.admin || Boolean(subscription) || betaTester),
+    // App admission is already checked above. The tester entitlement is a
+    // temporary feature grant, not a Didit approval or paid subscription.
+    closedBetaListening: betaTester,
+    cataloguePlaybackAvailable: identity.admin || Boolean(subscription) || betaTester,
     subscriptionStatus: identity.admin ? 'admin' : subscription?.status ?? null,
     planningMonthlyPricePence: identity.admin ? settings?.planningMonthlyPricePence ?? null : null,
     subscriptionUrl: identity.admin ? settings?.listenerSubscriptionUrl ?? null : null,
     creditedWorkIncluded: true,
-    rule: !genuineAgeAssurance
-      ? 'Genuine live Didit age assurance is required for protected audio. Closed-beta invitation does not satisfy this requirement.'
-      : identity.admin ? 'Owner subscription access diagnostics.' : betaTester ? 'Verified closed-beta tester: published listening included at no charge during testing.' : 'Published catalogue listening requires a subscription or a verified work credit.',
+    rule: betaTester
+      ? 'Selected closed-beta adult tester: the complete paid-feature experience is temporarily included at no charge. This is not a paid subscription or Didit approval.'
+      : !genuineAgeAssurance
+        ? 'Genuine live Didit age assurance is required outside the approved closed beta.'
+        : identity.admin ? 'Owner subscription access diagnostics.' : 'Published catalogue listening requires a subscription or a verified work credit.',
   };
 });
 
