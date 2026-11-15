@@ -7,6 +7,7 @@
 - Existing genuine provider approvals remain distinguishable from beta admission.
 - An active account whose verified Firebase email exactly matches an enabled server-side `closedBetaAllowlist` entry receives temporary closed-beta access to the general non-administrator app and creator workspaces without completing Didit during maintenance.
 - Protected adult audio, audio transcripts, Editor audio samples, full manuscripts, protected manuscript samples and administrator previews still require a genuine live Didit approval. Invitation, `testAccess`, and temporary beta admission never satisfy this check.
+- Creator dashboard summaries remain available, but full transcript text is omitted. Creating or editing release audio/transcripts, submitting adult releases, listening to protected audio, and accessing manuscript content or review workflows still require genuine Didit approval.
 - The temporary path is account-bound, checks the current allowlist entry and account status, and does not write to `ageAssurance` or set `providerVerified`.
 - Free catalogue listening is available only to allowlisted testers who independently hold genuine live Didit approval; an invitation alone never unlocks audio and is not represented as a paid subscription.
 - Administrator permissions remain governed by the existing server-side administrator checks. The tester path does not grant admin capabilities.
