@@ -20,7 +20,7 @@ assert.match(helper,/cleanEmail\(data\.email\) === email/,'do not grant to misma
 assert.match(helper,/data\.testAccess === true \|\| Boolean\(await testerAccessForEmail\(email\)\)/,'admin-controlled tester approval only');
 assert.match(helper,/canUseBetaListening/,'pure gate for test coverage');
 assert.match(policy,/!policy\.accountSuspended/,'suspended users stay blocked');
-assert.match(policy,/policy\.providerVerifiedAdult/,'no age bypass');
+assert.match(policy,/policy\.providerVerifiedAdult/,'backend supplies a separately gated beta-only access decision; policy does not grant access by itself');
 assert.match(policy,/policy\.closedBeta/,'beta expiry is automatic when public launch begins');
 assert.match(unit,/test\('approved adult closed-beta testers can listen/,'policy boundaries have unit tests');
 
