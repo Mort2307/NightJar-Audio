@@ -56,7 +56,7 @@ const affected=[...backend.matchAll(/export const ([A-Za-z0-9_]+)\s*=\s*onCall[\
     || match[1]==='closedBetaRegistrationStatus')
   .map(match=>match[1]);
 for(const name of affected) assert.ok(betaScope.includes('functions:'+name),'backend-first beta preset must deploy changed callable '+name);
-const assuranceGate=backend.slice(backend.indexOf('const requireAgeAssuranceOrApprovedBeta'),backend.indexOf('export const getEditorPortfolioAudioUrl'));
+const assuranceGate=backend.slice(backend.indexOf('const requireAgeAssuranceOrApprovedBeta'),backend.indexOf('export const getReleasePlaybackUrl'));
 assert.match(assuranceGate,/diditPass\(data\)/,'genuine Didit approval is always accepted');
 assert.match(assuranceGate,/temporaryAgeBypassFor\(uid\)/,'only the explicit closed-beta adult allowlist can use the temporary test path');
 assert.match(assuranceGate,/verified: false/,'temporary beta admission never reports age assurance as verified');
