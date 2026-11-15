@@ -6827,7 +6827,7 @@ const betaListeningEntitlementFor = async (uid: string, emailValue: unknown, adm
   return canUseBetaListening({
     closedBeta: CLOSED_BETA, administrator, accountExists: account.exists,
     accountSuspended: data.status === 'suspended', accountEmailMatches,
-    providerVerifiedAdult: diditPass(assurance.data()) || (TESTING_AGE_ASSURANCE_BYPASS && CLOSED_BETA && explicitTester), explicitTester,
+    ageAccessAllowedForBeta: diditPass(assurance.data()) || (TESTING_AGE_ASSURANCE_BYPASS && CLOSED_BETA && explicitTester), explicitTester,
   });
 };
 
