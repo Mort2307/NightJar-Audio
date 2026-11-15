@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const backend=readFileSync('functions/src/index.ts','utf8');
+const frontend=readFileSync('src/App.tsx','utf8');
 const hosting=readFileSync('.github/workflows/firebase-hosting-merge.yml','utf8');
 const deploy=readFileSync('.github/workflows/firebase-backend-deploy.yml','utf8');
 const helperStart=backend.indexOf('const requireGenuineAgeVerified = async');
@@ -48,7 +49,7 @@ const betaScopeEnd=deploy.indexOf('admin-attention)',betaScopeStart);
 assert.ok(betaScopeStart>0 && betaScopeEnd>betaScopeStart,'the backend workflow has a bounded beta-access deployment preset');
 const betaScope=deploy.slice(betaScopeStart,betaScopeEnd);
 const affected=[...backend.matchAll(/export const ([A-Za-z0-9_]+)\s*=\s*onCall[\s\S]*?(?=\nexport const |$)/g)]
-  .filter(match=>/requireAgeVerified\(|requireGenuineAgeVerified\(|betaListeningEntitlementFor\(|temporaryAgeBypassFor\(|DIDIT_VERIFICATION_PAUSED|DIDIT_ACCOUNT_SELF_SERVICE_ENABLED|TESTING_AGE_ASSURANCE_BYPASS/.test(match[0])
+  .filter(match=>/requireAgeVerified\(|requireAgeAssuranceOrApprovedBeta\(|betaListeningEntitlementFor\(|temporaryAgeBypassFor\(|DIDIT_VERIFICATION_PAUSED|DIDIT_ACCOUNT_SELF_SERVICE_ENABLED|TESTING_AGE_ASSURANCE_BYPASS/.test(match[0])
     || match[1]==='closedBetaRegistrationStatus')
   .map(match=>match[1]);
 for(const name of affected) assert.ok(betaScope.includes('functions:'+name),'backend-first beta preset must deploy changed callable '+name);
@@ -59,4 +60,6 @@ assert.match(assuranceGate,/verified: false/,'temporary beta admission never rep
 assert.match(assuranceGate,/temporary-closed-beta-admission/,'temporary admission is clearly identified as non-Didit');
 assert.match(backend,/const CLOSED_BETA = true/,'temporary full-feature access is restricted to closed beta');
 assert.match(backend,/const TESTING_AGE_ASSURANCE_BYPASS = true/,'temporary age gate is explicitly enabled only for the test window');
+assert.match(frontend,/setAgeVerified\(verified \|\| betaAccess\)/,'the complete app UI is unlocked for temporary beta admission');
+assert.match(frontend,/ageTemporaryBypass \? 'TEST ACCESS'/,'the UI labels temporary access honestly instead of claiming Didit verification');
 console.log('NightJar closed-beta: selected adult testers receive full-feature access; genuine Didit records remain separate and public access stays gated.');
