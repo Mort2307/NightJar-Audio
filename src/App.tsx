@@ -2408,7 +2408,7 @@ function App() {
         : ['FAIL','ERROR','CANCELLED','EXPIRED','BLOCKED'].includes(String(data.status)) ? 'FAIL' : 'NOT_STARTED');
       // Once approved, only the current privacy notice can be outstanding:
       // never ask an approved member to repeat their ID check.
-      const mayEnter = verified && noticeAccepted;
+      const mayEnter = betaAccess || (verified && noticeAccepted);
       setAgeStage(mayEnter ? 'app' : 'assurance');
       return mayEnter;
     } catch (error) {
