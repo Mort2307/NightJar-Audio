@@ -202,3 +202,8 @@ Profiles marked private are not returned by the public profile endpoint and cann
 ### Adult-content boundary
 
 Catalogue discovery, recommendations, trending, creator/writer discovery, spotlight state, audio playback and protected manuscript listing/opening all enforce age assurance in Firebase Functions. UI gating is not treated as the security boundary.
+
+
+## Closed-beta release sequence
+
+The closed-beta access rollout is backend-first. The Hosting workflow must dispatch and observe the scoped `beta:access` backend run, then verify that deployment succeeds before publishing the matching frontend. A failed or unobserved backend hand-off blocks Hosting. Beta admission remains separate from genuine age assurance; protected adult content continues to require a genuine verified-age result.
