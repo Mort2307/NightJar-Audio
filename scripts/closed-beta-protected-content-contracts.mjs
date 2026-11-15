@@ -22,6 +22,8 @@ for(const name of [
   'listScriptPermissions','setScriptPermission','updateScriptRightsAndListing',
   'adminPreviewScriptMarketplace','listScriptMarketplace','createScriptLicenceOffer',
   'listMyScriptLicenceOffers','respondScriptLicenceOffer','expressScriptInterest','adminAssignEditor',
+  'createRelease','updateRelease','finalizeReleaseAudio','submitReleaseForModeration',
+  'saveSyncedReleaseTranscript','adminReleaseAudioLibrary','releaseModerationQueue','creatorDashboard',
 ]){
   const start=backend.indexOf('export const '+name+' = onCall');
   assert.ok(start>0,'missing protected-content endpoint '+name);
