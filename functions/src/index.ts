@@ -7734,10 +7734,10 @@ const requireAgeVerified = async (uid: string) => {
   const bypass = await temporaryAgeBypassFor(uid);
   if (bypass.allowed) {
     return {
-      verified: true,
-      status: 'COMPLETE',
+      verified: false,
+      status: 'TEMPORARY_ACCESS',
       provider: 'temporary-test-access',
-      environment: 'development',
+      environment: 'closed-beta',
       temporaryBypass: true,
       temporaryBypassReason: bypass.reason,
     };
