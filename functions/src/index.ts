@@ -6811,8 +6811,9 @@ const activeListeningSubscriptionFor = async (userId: string) => {
   return eligible ? { id: eligible.id, status: 'active' as const } : null;
 };
 
-// Approved testers receive free listening ONLY in closed beta, with a valid
-// account-bound Didit 18+ result. This never changes a paid subscription.
+// Approved, explicitly allowlisted testers receive free listening ONLY in
+// closed beta. Temporary access is separate from provider verification and
+// never changes a paid subscription or writes an ageAssurance approval.
 const betaListeningEntitlementFor = async (uid: string, emailValue: unknown, administrator: boolean) => {
   if (!CLOSED_BETA || administrator) return false;
   const [account, assurance] = await Promise.all([
