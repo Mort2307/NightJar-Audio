@@ -22,7 +22,7 @@ assert.match(helper,/canUseBetaListening/,'pure gate for test coverage');
 assert.match(policy,/!policy\.accountSuspended/,'suspended users stay blocked');
 assert.match(policy,/policy\.ageAccessAllowedForBeta/,'policy accepts a distinct beta-only age-access decision without changing provider evidence');
 assert.match(policy,/policy\.closedBeta/,'beta expiry is automatic when public launch begins');
-assert.match(unit,/test\('approved adult closed-beta testers can listen/,'policy boundaries have unit tests');
+assert.match(unit,/test\('explicitly admitted closed-beta testers can listen/,'policy boundaries have unit tests');
 
 const access=backend.slice(backend.indexOf('const playbackAccessFor = ('),backend.indexOf('const decorateReleaseAccess = ('));
 assert.match(access,/if \(options\.subscription\)/,'paid entitlement remains');
