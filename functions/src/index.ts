@@ -10356,8 +10356,8 @@ const scriptPayload = (data: Record<string, any>, id: string, includeContent = t
 
 export const listWriterScripts = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer', 'admin']);
-    await requireGenuineAgeVerified(identity.uid);
-if (identity.role === 'admin') return { scripts: [] };
+  await requireGenuineAgeVerified(identity.uid);
+  if (identity.role === 'admin') return { scripts: [] };
   const snapshot = await db.collection('scripts').where('writerUserId', '==', identity.uid).limit(500).get();
   const scripts = snapshot.docs
     .map((doc) => scriptPayload(doc.data(), doc.id, true))
@@ -10367,8 +10367,8 @@ if (identity.role === 'admin') return { scripts: [] };
 
 export const createWriterScript = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-    await requireGenuineAgeVerified(identity.uid);
-const input = (request.data ?? {}) as Record<string, unknown>;
+  await requireGenuineAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
   const title = cleanText(input.title, 180) || 'Untitled manuscript';
   const clientRequestId = privateCreateRequestId(input);
   const ref = clientRequestId ? db.collection('scripts').doc(clientRequestId) : db.collection('scripts').doc();
@@ -10396,8 +10396,8 @@ export const uploadWriterScriptFile = onCall({
   memory: '512MiB',
 }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-    await requireGenuineAgeVerified(identity.uid);
-const input = (request.data ?? {}) as Record<string, unknown>;
+  await requireGenuineAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
   const fileName = safeWriterUploadName(input.fileName);
   const extension = writerUploadExtension(fileName);
   const contentType = WRITER_SCRIPT_UPLOAD_TYPES[extension];
@@ -10525,8 +10525,8 @@ const input = (request.data ?? {}) as Record<string, unknown>;
 
 export const updateWriterScript = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-    await requireGenuineAgeVerified(identity.uid);
-const input = (request.data ?? {}) as Record<string, unknown>;
+  await requireGenuineAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const expectedRevision = Number(input.expectedRevision);
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
@@ -10600,8 +10600,8 @@ export const deleteWriterScript = onCall({ region: REGION }, async (request) => 
 
 export const createWriterScriptVersion = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-    await requireGenuineAgeVerified(identity.uid);
-const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
+  await requireGenuineAgeVerified(identity.uid);
+  const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
   const ref = scriptRef(scriptId);
 
   const nextVersion = await db.runTransaction(async (transaction) => {
@@ -10628,8 +10628,8 @@ const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?
 
 export const submitWriterScript = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-    await requireGenuineAgeVerified(identity.uid);
-await requireProfessionalLegalTerms(identity.uid);
+  await requireGenuineAgeVerified(identity.uid);
+  await requireProfessionalLegalTerms(identity.uid);
   const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
   const ref = scriptRef(scriptId);
   await db.runTransaction(async (tx) => {
@@ -10673,8 +10673,8 @@ export const listEditorQueue = onCall({ region: REGION }, async (request) => {
 
 export const reviewEditorScript = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['editor']);
-    await requireGenuineAgeVerified(identity.uid);
-const input = (request.data ?? {}) as Record<string, unknown>;
+  await requireGenuineAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const status = cleanText(input.status, 40);
   if (!['Under review','Revision requested','Approved','Rejected'].includes(status)) {
@@ -10903,8 +10903,8 @@ export const getAdminScriptReview = onCall({ region: REGION }, async (request) =
 // cannot change a private manuscript into a public listing.
 export const adminReviewWriterScript = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
-    await requireGenuineAgeVerified(admin.uid);
-const input = (request.data ?? {}) as Record<string, unknown>;
+  await requireGenuineAgeVerified(admin.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const decision = cleanText(input.decision, 30);
   const note = cleanText(input.note, 2000);
@@ -10999,8 +10999,8 @@ const scriptReviewEntryPayload = (value: Record<string, any>, id: string) => ({
 });
 export const listManuscriptReviewThread = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer','admin']);
-    await requireGenuineAgeVerified(identity.uid);
-const scriptId = cleanText((request.data as {scriptId?: unknown}|undefined)?.scriptId, 160);
+  await requireGenuineAgeVerified(identity.uid);
+  const scriptId = cleanText((request.data as {scriptId?: unknown}|undefined)?.scriptId, 160);
   if (!scriptId) throw new HttpsError('invalid-argument','Select a manuscript.');
   const script = await scriptRef(scriptId).get();
   if (!script.exists) throw new HttpsError('not-found','Manuscript not found.');
@@ -11013,8 +11013,8 @@ const scriptId = cleanText((request.data as {scriptId?: unknown}|undefined)?.scr
 });
 export const postManuscriptReviewEntry = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer','admin']);
-    await requireGenuineAgeVerified(identity.uid);
-const input = (request.data ?? {}) as Record<string, unknown>;
+  await requireGenuineAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const body = cleanText(input.body, 2400);
   const visibility = identity.role === 'admin' && input.visibility === 'internal' ? 'internal' : 'writer';
@@ -11067,8 +11067,8 @@ const input = (request.data ?? {}) as Record<string, unknown>;
 
 export const adminAssignEditor = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
-    await requireGenuineAgeVerified(admin.uid);
-const input = (request.data ?? {}) as Record<string, unknown>;
+  await requireGenuineAgeVerified(admin.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const editorUserId = cleanText(input.editorUserId, 160);
   if (!scriptId || !editorUserId) throw new HttpsError('invalid-argument', 'Script and Audio Editor are required.');
@@ -11510,8 +11510,8 @@ export const openProtectedScript = onCall({ region: REGION }, async (request) =>
 
 export const listScriptPermissions = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-    await requireGenuineAgeVerified(identity.uid);
-const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
+  await requireGenuineAgeVerified(identity.uid);
+  const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
   const script = await scriptRef(scriptId).get();
   if (!script.exists || script.data()?.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
   const snapshot = await script.ref.collection('permissions').limit(500).get();
@@ -11529,8 +11529,8 @@ const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?
 
 export const setScriptPermission = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-    await requireGenuineAgeVerified(identity.uid);
-const input = (request.data ?? {}) as Record<string, unknown>;
+  await requireGenuineAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const recipientUserId = cleanText(input.recipientUserId ?? input.creatorUserId, 160);
   if (!scriptId || !recipientUserId) throw new HttpsError('invalid-argument', 'Recipient account is required.');
@@ -12194,8 +12194,8 @@ const collaborationPayload = (data: Record<string, any>, id: string) => ({
 
 export const updateScriptRightsAndListing = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-    await requireGenuineAgeVerified(identity.uid);
-const input = (request.data ?? {}) as Record<string, unknown>;
+  await requireGenuineAgeVerified(identity.uid);
+  const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const ref = scriptRef(scriptId);
   const snapshot = await ref.get();
@@ -12386,8 +12386,8 @@ export const createScriptLicenceOffer = onCall({region:REGION},async request => 
 });
 export const listMyScriptLicenceOffers = onCall({region:REGION},async request=>{
   const identity=await requireAccountRole(request,['creator','writer','admin']);
-    await requireGenuineAgeVerified(identity.uid);
-const snapshot=await db.collection('scriptLicenceOffers').limit(1000).get();
+  await requireGenuineAgeVerified(identity.uid);
+  const snapshot=await db.collection('scriptLicenceOffers').limit(1000).get();
   return {offers:snapshot.docs
     .filter(doc=>identity.role==='admin'||doc.data().writerUserId===identity.uid||doc.data().creatorUserId===identity.uid)
     .map(doc=>licenceOfferPayload(doc.data(),doc.id))
@@ -12395,8 +12395,8 @@ const snapshot=await db.collection('scriptLicenceOffers').limit(1000).get();
 });
 export const respondScriptLicenceOffer = onCall({region:REGION},async request=>{
   const identity=await requireAccountRole(request,['creator','writer']);
-    await requireGenuineAgeVerified(identity.uid);
-const input=(request.data??{}) as Record<string,unknown>;
+  await requireGenuineAgeVerified(identity.uid);
+  const input=(request.data??{}) as Record<string,unknown>;
   const offerId=cleanText(input.offerId,160);
   const action=cleanText(input.action,20);
   if (!offerId||!['accept','counter','decline','withdraw'].includes(action))
