@@ -31,7 +31,8 @@ assert.match(app, /onOpenImages=\{\(\) => openAdminPanel\('images'\)\}/, 'clicki
 assert.match(app, /onOpenApplications=\{\(\) => openAdminPanel\('approvals'\)\}/, 'clicking applications opens real workpage');
 assert.match(styles, /\.release-readiness-gate:focus-visible/, 'keyboard focus must be clearly visible');
 assert.match(styles, /@media \(max-width: 460px\)/, 'narrow mobile gate layout is present');
-assert.match(backend, /const TESTING_AGE_ASSURANCE_BYPASS = false/, 'mandatory Didit rollout disables temporary beta adult access');
+assert.match(backend, /const TESTING_AGE_ASSURANCE_BYPASS = true/, 'temporary trusted-tester access is enabled only for the private beta');
+assert.match(backend, /if \(!TESTING_AGE_ASSURANCE_BYPASS \|\| !CLOSED_BETA\)/, 'temporary beta access fails closed when closed beta ends');
 assert.match(backend, /const CLOSED_BETA = true/, 'closed beta remains active');
 assert.match(launch, /livePilotReviewed = process.env.NIGHTJAR_DIDIT_LIVE_VERIFIED === 'true'/, 'launch attestation cannot be silently bypassed');
 console.log('Nightjar owner release-gate clickable navigation and private-beta safety contracts PASS (source-level only).');
