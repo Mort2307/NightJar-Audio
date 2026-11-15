@@ -38,7 +38,7 @@ test('approved adult closed-beta testers can listen without a paid subscription,
   for (const change of [
     {closedBeta: false}, {administrator: true}, {accountExists: false},
     {accountSuspended: true}, {accountEmailMatches: false},
-    {providerVerifiedAdult: false}, {explicitTester: false},
+    {ageAccessAllowedForBeta: false}, {explicitTester: false},
   ]) assert.equal(canUseBetaListening({...eligible, ...change}), false);
   assert.equal(hasPaidEntitlement(null,'tester-uid'),false,
     'free beta listening must not masquerade as paid subscription');
