@@ -5506,7 +5506,7 @@ export const moderateEditorPortfolioItem = onCall({ region: REGION }, async (req
 
 export const getEditorPortfolioAudioUrl = onCall({ region: REGION }, async (request) => {
   const identity=await requireActiveIdentity(request);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input=(request.data ?? {}) as Record<string,unknown>;
   const itemId=cleanText(input.itemId,160);
   const slot=cleanText(input.slot,20);
@@ -6816,9 +6816,7 @@ const activeListeningSubscriptionFor = async (userId: string) => {
 // never changes a paid subscription or writes an ageAssurance approval.
 const betaListeningEntitlementFor = async (uid: string, emailValue: unknown, administrator: boolean) => {
   if (!CLOSED_BETA || administrator) return false;
-  const [account, assurance] = await Promise.all([
-    accountRef(uid).get(), db.collection('ageAssurance').doc(uid).get(),
-  ]);
+  const account = await accountRef(uid).get();
   const data = account.data() ?? {};
   const email = cleanEmail(emailValue);
   const accountEmailMatches = Boolean(email && cleanEmail(data.email) === email);
@@ -6826,8 +6824,7 @@ const betaListeningEntitlementFor = async (uid: string, emailValue: unknown, adm
     (data.testAccess === true || Boolean(await testerAccessForEmail(email)));
   return canUseBetaListening({
     closedBeta: CLOSED_BETA, administrator, accountExists: account.exists,
-    accountSuspended: data.status === 'suspended', accountEmailMatches,
-    genuineAgeAssurance: diditPass(assurance.data()), explicitTester,
+    accountSuspended: data.status === 'suspended', accountEmailMatches, explicitTester,
   });
 };
 
@@ -6909,15 +6906,19 @@ export const myListeningAccess = onCall({ region: REGION }, async (request) => {
   return {
     role,
     subscribed: identity.admin || Boolean(subscription),
-    closedBetaListening: genuineAgeAssurance && betaTester,
-    cataloguePlaybackAvailable: genuineAgeAssurance && (identity.admin || Boolean(subscription) || betaTester),
+    // App admission is already checked above. The tester entitlement is a
+    // temporary feature grant, not a Didit approval or paid subscription.
+    closedBetaListening: betaTester,
+    cataloguePlaybackAvailable: identity.admin || Boolean(subscription) || betaTester,
     subscriptionStatus: identity.admin ? 'admin' : subscription?.status ?? null,
     planningMonthlyPricePence: identity.admin ? settings?.planningMonthlyPricePence ?? null : null,
     subscriptionUrl: identity.admin ? settings?.listenerSubscriptionUrl ?? null : null,
     creditedWorkIncluded: true,
-    rule: !genuineAgeAssurance
-      ? 'Genuine live Didit age assurance is required for protected audio. Closed-beta invitation does not satisfy this requirement.'
-      : identity.admin ? 'Owner subscription access diagnostics.' : betaTester ? 'Verified closed-beta tester: published listening included at no charge during testing.' : 'Published catalogue listening requires a subscription or a verified work credit.',
+    rule: betaTester
+      ? 'Selected closed-beta adult tester: the complete paid-feature experience is temporarily included at no charge. This is not a paid subscription or Didit approval.'
+      : !genuineAgeAssurance
+        ? 'Genuine live Didit age assurance is required outside the approved closed beta.'
+        : identity.admin ? 'Owner subscription access diagnostics.' : 'Published catalogue listening requires a subscription or a verified work credit.',
   };
 });
 
@@ -7201,7 +7202,7 @@ export const saveReleaseCalendarTeaser = onCall({region: REGION},async request=>
 
 export const createRelease = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const profile = await profileRef(identity.uid).get();
   const profileData = profile.data() ?? {};
@@ -7277,7 +7278,7 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
 
 export const updateRelease = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
   if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
@@ -7477,7 +7478,7 @@ export const adminVerifyAudioUpload = onCall({ region: REGION }, async (request)
 
 export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
   const storagePath = cleanText(input.storagePath, 500);
@@ -7618,7 +7619,7 @@ export const removeReleaseAudio = onCall({ region: REGION }, async (request) => 
 
 export const submitReleaseForModeration = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   await requireProfessionalLegalTerms(identity.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   const ref = releaseRef(releaseId);
@@ -7680,16 +7681,13 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
 
 export const creatorDashboard = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator','admin']);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const targetCreatorId = identity.role === 'creator'
     ? identity.uid
     : cleanText((request.data as { creatorUserId?: unknown } | undefined)?.creatorUserId, 160) || identity.uid;
 
   const releasesSnapshot = await db.collection('releases').where('creatorUserId', '==', targetCreatorId).limit(500).get();
-  const releases = releasesSnapshot.docs.filter((doc) => doc.data().status !== 'removed').map((doc) => {
-    const { transcriptText: protectedTranscript, ...safeRelease } = releaseOwnerPayload(doc.data(), doc.id);
-    void protectedTranscript;
-    return safeRelease;
-  });
+  const releases = releasesSnapshot.docs.filter((doc) => doc.data().status !== 'removed').map((doc) => releaseOwnerPayload(doc.data(), doc.id));
   const listeningSnapshot = await db.collection('listeningEvents').where('creatorUserId', '==', targetCreatorId).limit(5000).get();
 
   const verified = calculateVerifiedListening(listeningSnapshot.docs.map((doc) => doc.data()));
@@ -7710,17 +7708,19 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
 });
 
 const temporaryAgeBypassFor = async (uid: string) => {
-  // This access path is deliberately bounded to the private beta. Turning off
-  // CLOSED_BETA automatically disables it even if the test flag is left on.
+  // This is a temporary, server-side admission for deliberately selected
+  // closed-beta adults. It is never written to ageAssurance or represented as
+  // a Didit result. Turning off CLOSED_BETA disables it immediately.
   if (!TESTING_AGE_ASSURANCE_BYPASS || !CLOSED_BETA) {
     return { allowed: false, reason: null as string | null };
   }
   const snapshot = await accountRef(uid).get();
   const data = snapshot.data() ?? {};
   const email = cleanEmail(data.email);
+  if (data.status === 'suspended') return { allowed: false, reason: null as string | null };
   if (ADMIN_EMAILS.has(email)) return { allowed: true, reason: 'administrator' };
   if (data.testAccess === true || await testerAccessForEmail(email)) {
-    return { allowed: true, reason: 'approved-tester' };
+    return { allowed: true, reason: 'approved-closed-beta-adult-tester' };
   }
   return { allowed: false, reason: null as string | null };
 };
@@ -7734,10 +7734,10 @@ const requireAgeVerified = async (uid: string) => {
   const bypass = await temporaryAgeBypassFor(uid);
   if (bypass.allowed) {
     return {
-      verified: true,
-      status: 'COMPLETE',
+      verified: false,
+      status: 'TEMPORARY_ACCESS',
       provider: 'temporary-test-access',
-      environment: 'development',
+      environment: 'closed-beta',
       temporaryBypass: true,
       temporaryBypassReason: bypass.reason,
     };
@@ -7746,25 +7746,33 @@ const requireAgeVerified = async (uid: string) => {
   throw new HttpsError('permission-denied', 'Age assurance is required before playing Nightjar audio.');
 };
 
-// Protected adult audio, transcripts and manuscripts must never use the
-// temporary closed-beta app-admission path. Only a genuine live Didit result
-// satisfies this check; invitation and legacy testAccess are not age evidence.
-const requireGenuineAgeVerified = async (uid: string) => {
+// Protected adult audio, transcripts and manuscripts require genuine Didit
+// age assurance in normal operation. During this private closed beta only,
+// deliberately selected adult testers receive a separate temporary admission.
+// That admission never changes ageAssurance, providerVerified or Didit records.
+const requireAgeAssuranceOrApprovedBeta = async (uid: string) => {
   const snapshot = await db.collection('ageAssurance').doc(uid).get();
   const data = snapshot.data();
-  if (!diditPass(data)) {
-    throw new HttpsError(
-      'permission-denied',
-      'Genuine live Didit age assurance is required before accessing protected NightJar content.',
-      { code: 'genuine_age_assurance_required' },
-    );
+  if (diditPass(data)) return data;
+  const bypass = await temporaryAgeBypassFor(uid);
+  if (bypass.allowed) {
+    return {
+      verified: false,
+      provider: 'temporary-closed-beta-admission',
+      temporaryBypass: true,
+      temporaryBypassReason: bypass.reason,
+    };
   }
-  return data;
+  throw new HttpsError(
+    'permission-denied',
+    'Genuine live Didit age assurance is required outside the approved closed beta.',
+    { code: 'genuine_age_assurance_required' },
+  );
 };
 
 export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   const snapshot = await releaseRef(releaseId).get();
   const data = snapshot.data();
@@ -7801,7 +7809,7 @@ export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) 
 
 export const getReleaseSyncAudioUrl = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
   const data = (await releaseRef(releaseId).get()).data();
@@ -7810,7 +7818,7 @@ export const getReleaseSyncAudioUrl = onCall({ region: REGION }, async (request)
   }
   if (!identity.admin) {
     const creator = await requireAccountRole(request, ['creator']);
-    await requireGenuineAgeVerified(creator.uid);
+    await requireAgeAssuranceOrApprovedBeta(creator.uid);
     if (data.creatorUserId !== creator.uid || !['draft', 'rejected'].includes(String(data.status))) {
       throw new HttpsError('permission-denied', 'Only the owner can synchronise an editable recording.');
     }
@@ -7826,7 +7834,7 @@ export const getReleaseSyncAudioUrl = onCall({ region: REGION }, async (request)
 // The original writer script is not processed by a transcription engine.
 export const saveSyncedReleaseTranscript = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
   const rawTranscript = String(input.transcript ?? '');
@@ -7881,7 +7889,7 @@ export const saveSyncedReleaseTranscript = onCall({ region: REGION }, async (req
 
 export const getReleaseTranscript = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
 
@@ -7947,7 +7955,7 @@ const adminReleasePageInput=(raw:unknown,size:number)=>{
 };
 export const adminReleaseAudioLibrary = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
-  await requireGenuineAgeVerified(admin.uid);
+  await requireAgeAssuranceOrApprovedBeta(admin.uid);
   const {cursor,size}=adminReleasePageInput((request.data as Record<string,unknown>|undefined)?.cursor,60);
   let query=db.collection('releases').orderBy(FieldPath.documentId()).limit(size+1);
   if(cursor)query=query.startAfter(cursor);
@@ -8008,7 +8016,7 @@ export const adminAuditReleaseAudioStorage = onCall({region:REGION},async reques
 
 export const releaseModerationQueue = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
-  await requireGenuineAgeVerified(admin.uid);
+  await requireAgeAssuranceOrApprovedBeta(admin.uid);
   const {cursor,size}=adminReleasePageInput((request.data as Record<string,unknown>|undefined)?.cursor,30);
   let query=db.collection('releases').where('status','==','pending_review').orderBy(FieldPath.documentId()).limit(size+1);
   if(cursor)query=query.startAfter(cursor);
@@ -8531,7 +8539,7 @@ export const getReleaseListenCounts = onCall({ region: REGION }, async (request)
 
 export const recordListeningEvent = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
   const release = await releaseRef(releaseId).get();
@@ -10239,7 +10247,7 @@ export const startSingleMemberDiditMaintenanceCheck = onCall({
 
 export const getAdminReleasePreviewUrl = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
-  await requireGenuineAgeVerified(admin.uid);
+  await requireAgeAssuranceOrApprovedBeta(admin.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   const snapshot = await releaseRef(releaseId).get();
   const data = snapshot.data();
@@ -10356,7 +10364,7 @@ const scriptPayload = (data: Record<string, any>, id: string, includeContent = t
 
 export const listWriterScripts = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer', 'admin']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   if (identity.role === 'admin') return { scripts: [] };
   const snapshot = await db.collection('scripts').where('writerUserId', '==', identity.uid).limit(500).get();
   const scripts = snapshot.docs
@@ -10367,7 +10375,7 @@ export const listWriterScripts = onCall({ region: REGION }, async (request) => {
 
 export const createWriterScript = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const title = cleanText(input.title, 180) || 'Untitled manuscript';
   const clientRequestId = privateCreateRequestId(input);
@@ -10396,7 +10404,7 @@ export const uploadWriterScriptFile = onCall({
   memory: '512MiB',
 }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const fileName = safeWriterUploadName(input.fileName);
   const extension = writerUploadExtension(fileName);
@@ -10525,7 +10533,7 @@ export const uploadWriterScriptFile = onCall({
 
 export const updateWriterScript = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const expectedRevision = Number(input.expectedRevision);
@@ -10600,7 +10608,7 @@ export const deleteWriterScript = onCall({ region: REGION }, async (request) => 
 
 export const createWriterScriptVersion = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
   const ref = scriptRef(scriptId);
 
@@ -10628,7 +10636,7 @@ export const createWriterScriptVersion = onCall({ region: REGION }, async (reque
 
 export const submitWriterScript = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   await requireProfessionalLegalTerms(identity.uid);
   const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
   const ref = scriptRef(scriptId);
@@ -10673,7 +10681,7 @@ export const listEditorQueue = onCall({ region: REGION }, async (request) => {
 
 export const reviewEditorScript = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['editor']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const status = cleanText(input.status, 40);
@@ -10740,7 +10748,7 @@ export const listEditorAccounts = onCall({ region: REGION }, async (request) => 
 
 export const adminListScripts = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
-  await requireGenuineAgeVerified(admin.uid);
+  await requireAgeAssuranceOrApprovedBeta(admin.uid);
   const snapshot = await db.collection('scripts').limit(1000).get();
   return {
     // Review provenance is admin-only. Do not return these identifiers to
@@ -10848,7 +10856,7 @@ const adminSourcePreview = async (storagePath: string, fileName: string): Promis
 // These signed links expire quickly and every preview is audited.
 export const getAdminScriptReview = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
-  await requireGenuineAgeVerified(admin.uid);
+  await requireAgeAssuranceOrApprovedBeta(admin.uid);
   const scriptId = cleanText((request.data as {scriptId?:unknown}|undefined)?.scriptId, 160);
   if (!scriptId) throw new HttpsError('invalid-argument', 'Choose a script to review.');
   const snapshot = await scriptRef(scriptId).get();
@@ -10903,7 +10911,7 @@ export const getAdminScriptReview = onCall({ region: REGION }, async (request) =
 // cannot change a private manuscript into a public listing.
 export const adminReviewWriterScript = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
-  await requireGenuineAgeVerified(admin.uid);
+  await requireAgeAssuranceOrApprovedBeta(admin.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const decision = cleanText(input.decision, 30);
@@ -10999,7 +11007,7 @@ const scriptReviewEntryPayload = (value: Record<string, any>, id: string) => ({
 });
 export const listManuscriptReviewThread = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer','admin']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const scriptId = cleanText((request.data as {scriptId?: unknown}|undefined)?.scriptId, 160);
   if (!scriptId) throw new HttpsError('invalid-argument','Select a manuscript.');
   const script = await scriptRef(scriptId).get();
@@ -11013,7 +11021,7 @@ export const listManuscriptReviewThread = onCall({ region: REGION }, async (requ
 });
 export const postManuscriptReviewEntry = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer','admin']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const body = cleanText(input.body, 2400);
@@ -11067,7 +11075,7 @@ export const postManuscriptReviewEntry = onCall({ region: REGION }, async (reque
 
 export const adminAssignEditor = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
-  await requireGenuineAgeVerified(admin.uid);
+  await requireAgeAssuranceOrApprovedBeta(admin.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const editorUserId = cleanText(input.editorUserId, 160);
@@ -11117,7 +11125,7 @@ const activePermissionFor = async (scriptId: string, userId: string) => {
 
 export const listProtectedScripts = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator','writer','editor','admin']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const snapshot = await db.collection('scripts').limit(1000).get();
 
   const visible: any[] = [];
@@ -11423,7 +11431,7 @@ export const recordProtectionEvent = onCall({ region: REGION }, async (request) 
 
 export const openProtectedScript = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator','writer','editor','admin']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
   const ref = scriptRef(scriptId);
   const snapshot = await ref.get();
@@ -11510,7 +11518,7 @@ export const openProtectedScript = onCall({ region: REGION }, async (request) =>
 
 export const listScriptPermissions = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
   const script = await scriptRef(scriptId).get();
   if (!script.exists || script.data()?.writerUserId !== identity.uid) throw new HttpsError('not-found', 'Script not found.');
@@ -11529,7 +11537,7 @@ export const listScriptPermissions = onCall({ region: REGION }, async (request) 
 
 export const setScriptPermission = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const recipientUserId = cleanText(input.recipientUserId ?? input.creatorUserId, 160);
@@ -12194,7 +12202,7 @@ const collaborationPayload = (data: Record<string, any>, id: string) => ({
 
 export const updateScriptRightsAndListing = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['writer']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const ref = scriptRef(scriptId);
@@ -12222,7 +12230,7 @@ export const updateScriptRightsAndListing = onCall({ region: REGION }, async (re
 // reader tokens, permissions or private source-file paths are returned.
 export const adminPreviewScriptMarketplace = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
-  await requireGenuineAgeVerified(admin.uid);
+  await requireAgeAssuranceOrApprovedBeta(admin.uid);
   const snapshot = await db.collection('scripts').limit(1000).get();
   const diagnostics = snapshot.docs.map((doc) => {
     const data = doc.data() ?? {};
@@ -12253,7 +12261,7 @@ export const adminPreviewScriptMarketplace = onCall({ region: REGION }, async (r
 
 export const listScriptMarketplace = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const snapshot = await db.collection('scripts').limit(1000).get();
   const scripts = (await Promise.all(snapshot.docs
     .filter((doc) => {
@@ -12285,7 +12293,7 @@ export const listScriptMarketplace = onCall({ region: REGION }, async (request) 
 // VA. Neither protected script text nor private uploaded source files are returned.
 export const getMarketplaceScriptSample = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const scriptId = cleanText((request.data as {scriptId?:unknown}|undefined)?.scriptId, 160);
   if (!scriptId) throw new HttpsError('invalid-argument','Select a marketplace script.');
   const snapshot = await scriptRef(scriptId).get();
@@ -12343,7 +12351,7 @@ const sanitiseLicenceTerms = (value: Record<string,unknown>) => {
 };
 export const createScriptLicenceOffer = onCall({region:REGION},async request => {
   const identity = await requireAccountRole(request,['creator']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data??{}) as Record<string,unknown>;
   const scriptId = cleanText(input.scriptId,160);
   if (!scriptId) throw new HttpsError('invalid-argument','Select a script.');
@@ -12386,7 +12394,7 @@ export const createScriptLicenceOffer = onCall({region:REGION},async request => 
 });
 export const listMyScriptLicenceOffers = onCall({region:REGION},async request=>{
   const identity=await requireAccountRole(request,['creator','writer','admin']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const snapshot=await db.collection('scriptLicenceOffers').limit(1000).get();
   return {offers:snapshot.docs
     .filter(doc=>identity.role==='admin'||doc.data().writerUserId===identity.uid||doc.data().creatorUserId===identity.uid)
@@ -12395,7 +12403,7 @@ export const listMyScriptLicenceOffers = onCall({region:REGION},async request=>{
 });
 export const respondScriptLicenceOffer = onCall({region:REGION},async request=>{
   const identity=await requireAccountRole(request,['creator','writer']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input=(request.data??{}) as Record<string,unknown>;
   const offerId=cleanText(input.offerId,160);
   const action=cleanText(input.action,20);
@@ -12568,7 +12576,7 @@ export const sendCollaborationProposal = onCall({ region: REGION }, async (reque
 
 export const expressScriptInterest = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeAssuranceOrApprovedBeta(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const scriptId = cleanText(input.scriptId, 160);
   const message = cleanText(input.message, 1800);
