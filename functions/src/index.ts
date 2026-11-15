@@ -10143,6 +10143,7 @@ export const startSingleMemberDiditMaintenanceCheck = onCall({
   timeoutSeconds: 30, maxInstances: 2,
 }, async request => {
   const identity = await requireActiveIdentity(request);
+  if (DIDIT_VERIFICATION_PAUSED) throw new HttpsError('failed-precondition', 'Didit verification is paused during closed-beta maintenance. No new session was started.');
   if (!isMegDiditMaintenanceMember(identity) ||
       !DIDIT_VERIFICATION_PAUSED || !DIDIT_LIVE_PILOT_ADMINS_ONLY ||
       !diditConfigured() || diditMode() !== 'live') {
