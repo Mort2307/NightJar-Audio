@@ -29,7 +29,7 @@ assert.match(api,/previewExcerpt: cleanText\(input\.previewExcerpt, 3200\)/);
 assert.match(rights,/Optional protected VA sample/);
 assert.match(listing,/const \{ previewExcerpt, \.\.\.listing \} = normaliseScriptMarketplace/, 'protected sample is excluded while writer-selected asking price remains in marketplace listing');
 assert.match(sample,/requireAccountRole\(request, \['creator'\]\)/);
-assert.match(sample,/await requireGenuineAgeVerified\(identity\.uid\)/);
+assert.match(sample,/await requireAgeAssuranceOrApprovedBeta\(identity\.uid\)/);
 assert.match(sample,/script_sample_view/);
 assert.match(sample,/listing\.previewExcerpt/);
 assert.doesNotMatch(sample,/data\.content|originalUpload/, 'sample may never expose the protected manuscript');
