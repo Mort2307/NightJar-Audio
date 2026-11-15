@@ -5,7 +5,7 @@
 - New Didit sessions are paused across the ordinary member flow, account self-service, administrator maintenance and single-member maintenance routes.
 - Existing signed Didit webhook processing and already-approved account records are preserved.
 - Existing genuine provider approvals remain distinguishable from beta admission.
-- An active, email-verified account on the server-side `closedBetaAllowlist` receives temporary closed-beta access to the full non-administrator product, including creator workspaces, manuscripts and audio playback.
+- An active account whose verified Firebase email exactly matches an enabled server-side `closedBetaAllowlist` entry receives temporary closed-beta access to the full non-administrator product, including creator workspaces, manuscripts and audio playback.
 - The temporary path is account-bound, checks the current allowlist entry and account status, and does not write to `ageAssurance` or set `providerVerified`.
 - Beta listening access is free during this closed-beta period and is not represented as a paid subscription.
 - Administrator permissions remain governed by the existing server-side administrator checks. The tester path does not grant admin capabilities.
