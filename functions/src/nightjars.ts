@@ -1,11 +1,14 @@
 import { getFirestore, FieldValue, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
+import { createHash } from 'node:crypto';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { diditPass } from './didit';
 
 const db = () => getFirestore();
 const REGION = 'europe-west2';
-const TESTING_AGE_ASSURANCE_BYPASS = false; // Mandatory approved 18+ Didit access, including gifts.
+const TESTING_AGE_ASSURANCE_BYPASS = true; // CLOSED-BETA ONLY: invited testers use separate temporary access, never a Didit approval.
+const CLOSED_BETA = true;
+const CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist';
 const GIFT_CLEARANCE_DAYS = 7;
 const ELIGIBLE_RECIPIENT_ROLES = new Set(['creator', 'writer', 'editor', 'artist']);
 const professionalRolesFor = (data: Record<string, any>) => {
@@ -34,7 +37,16 @@ const requireIdentity = async (request: { auth?: { uid: string; token: Record<st
   const data = account.data() ?? {};
   if (data.status === 'suspended') throw new HttpsError('permission-denied', 'This Nightjar account is suspended.');
   const age = await db().collection('ageAssurance').doc(uid).get();
-  const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && (data.testAccess === true || data.role === 'admin');
+  const email = String(request.auth.token.email ?? '').trim().toLowerCase();
+  const allowlistSnapshot = TESTING_AGE_ASSURANCE_BYPASS && CLOSED_BETA && request.auth.token.email_verified === true && email
+    ? await db().collection(CLOSED_BETA_ALLOWLIST_COLLECTION)
+      .doc(createHash('sha256').update(email).digest('hex')).get()
+    : null;
+  const allowlistData = allowlistSnapshot?.data() ?? {};
+  const explicitlyInvited = Boolean(allowlistSnapshot?.exists && allowlistData.enabled === true &&
+    String(allowlistData.email ?? '').trim().toLowerCase() === email);
+  const temporaryTestAccess = TESTING_AGE_ASSURANCE_BYPASS && CLOSED_BETA &&
+    (data.testAccess === true || data.role === 'admin' || explicitlyInvited);
   if (!diditPass(age.data()) && !temporaryTestAccess) {
     throw new HttpsError('permission-denied', 'Age assurance is required before using Nightjar gifts.');
   }
