@@ -3,6 +3,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const backend=readFileSync('functions/src/index.ts','utf8');
+const hosting=readFileSync('.github/workflows/firebase-hosting-merge.yml','utf8');
+const deploy=readFileSync('.github/workflows/firebase-backend-deploy.yml','utf8');
 const helperStart=backend.indexOf('const requireGenuineAgeVerified = async');
 const helperEnd=backend.indexOf('\nexport const getReleasePlaybackUrl',helperStart);
 assert.ok(helperStart>0 && helperEnd>helperStart,'strict protected-content age gate exists');
@@ -30,4 +32,17 @@ for(const name of [
 const listening=backend.slice(backend.indexOf('export const myListeningAccess = onCall'),
   backend.indexOf('const professionalRolesForAccount',backend.indexOf('export const myListeningAccess = onCall')));
 assert.match(listening,/genuineAgeAssurance &&/,'unverified beta members are shown as unable to play protected audio');
-console.log('NightJar closed-beta separation: genuine age assurance remains mandatory for protected audio, transcripts and manuscripts.');
+
+// The merge workflow must deploy the matching backend before publishing Hosting.
+assert.match(hosting,/\[nightjar-closed-beta-access-release\]/,'closed-beta changes require their dedicated backend-first release tag');
+assert.match(hosting,/inputs\[scope\]=beta:access/,'Hosting waits for the exact closed-beta backend deployment');
+const betaScopeStart=deploy.indexOf('beta:access)');
+const betaScopeEnd=deploy.indexOf('admin-attention)',betaScopeStart);
+assert.ok(betaScopeStart>0 && betaScopeEnd>betaScopeStart,'the backend workflow has a bounded beta-access deployment preset');
+const betaScope=deploy.slice(betaScopeStart,betaScopeEnd);
+const affected=[...backend.matchAll(/export const ([A-Za-z0-9_]+)\\s*=\\s*onCall[\\s\\S]*?(?=\\nexport const |$)/g)]
+  .filter(match=>/requireAgeVerified\\(|requireGenuineAgeVerified\\(|betaListeningEntitlementFor\\(|temporaryAgeBypassFor\\(|DIDIT_VERIFICATION_PAUSED|DIDIT_ACCOUNT_SELF_SERVICE_ENABLED|TESTING_AGE_ASSURANCE_BYPASS/.test(match[0])
+    || match[1]==='closedBetaRegistrationStatus')
+  .map(match=>match[1]);
+for(const name of affected) assert.ok(betaScope.includes('functions:'+name),'backend-first beta preset must deploy changed callable '+name);
+console.log('NightJar closed-beta separation: genuine age assurance remains mandatory for protected content, and all affected callables deploy backend-first.');
