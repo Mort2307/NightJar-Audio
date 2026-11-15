@@ -15,7 +15,7 @@ const helper=backend.slice(marker,stop);
 assert.match(helper,/!CLOSED_BETA \|\| administrator/,'beta is closed-only and never replaces administrator');
 assert.match(helper,/accountRef\(uid\)\.get\(\)/,'check current account');
 assert.match(helper,/db\.collection\('ageAssurance'\)\.doc\(uid\)\.get\(\)/,'check same user Didit');
-assert.match(helper,/diditPass\(assurance\.data\(\)\)/,'only authentic live Didit 18+ approval');
+assert.match(helper,/diditPass\(assurance\.data\(\)\) \|\| \(TESTING_AGE_ASSURANCE_BYPASS && CLOSED_BETA && explicitTester\)/,'authentic Didit approval or explicit private-beta tester admission');
 assert.match(helper,/cleanEmail\(data\.email\) === email/,'do not grant to mismatched account');
 assert.match(helper,/data\.testAccess === true \|\| Boolean\(await testerAccessForEmail\(email\)\)/,'admin-controlled tester approval only');
 assert.match(helper,/canUseBetaListening/,'pure gate for test coverage');
