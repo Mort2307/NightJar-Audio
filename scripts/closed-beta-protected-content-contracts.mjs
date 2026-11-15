@@ -35,8 +35,8 @@ for(const name of [
 const dashboardStart=backend.indexOf('export const creatorDashboard = onCall');
 const dashboardEnd=backend.indexOf('\n});',dashboardStart)+4;
 const dashboard=backend.slice(dashboardStart,dashboardEnd);
-assert.match(dashboard,/transcriptText: protectedTranscript/,'creator dashboard strips full transcript text while retaining general workspace access');
-assert.doesNotMatch(dashboard,/requireGenuineAgeVerified/,'general creator dashboard remains available during Didit maintenance');
+assert.match(dashboard,/requireAgeAssuranceOrApprovedBeta\(identity\.uid\)/,'creator dashboard full content is protected by the temporary beta or genuine Didit gate');
+assert.match(dashboard,/releaseOwnerPayload\(doc\.data\(\), doc\.id\)/,'creator dashboard returns full owner transcript content to approved testers');
 const listening=backend.slice(backend.indexOf('export const myListeningAccess = onCall'),
   backend.indexOf('const professionalRolesForAccount',backend.indexOf('export const myListeningAccess = onCall')));
 assert.match(listening,/betaTester/,'allowlisted closed-beta adults receive temporary catalogue access without a subscription');
