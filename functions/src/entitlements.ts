@@ -45,10 +45,9 @@ export const mayUseTemporaryAccess = (options: {
   && (options.administrator || options.explicitTester);
 
 /**
- * A closed-beta listener grant is NOT a paid subscription. The final
- * ageAccessAllowedForBeta input may be supported by a genuine provider
- * approval or the explicitly allowlisted temporary tester path, but only
- * while the private beta is active. It never changes provider records.
+ * A closed-beta listener grant is NOT a paid subscription or age assurance.
+ * The genuineAgeAssurance input must come from a live Didit approval; an
+ * invite-only beta admission never satisfies the protected-content age gate.
  */
 export const canUseBetaListening = (policy: {
   closedBeta: boolean;
@@ -56,7 +55,7 @@ export const canUseBetaListening = (policy: {
   accountExists: boolean;
   accountSuspended: boolean;
   accountEmailMatches: boolean;
-  ageAccessAllowedForBeta: boolean;
+  genuineAgeAssurance: boolean;
   explicitTester: boolean;
 }): boolean =>
   policy.closedBeta &&
@@ -64,5 +63,5 @@ export const canUseBetaListening = (policy: {
   policy.accountExists &&
   !policy.accountSuspended &&
   policy.accountEmailMatches &&
-  policy.ageAccessAllowedForBeta &&
+  policy.genuineAgeAssurance &&
   policy.explicitTester;
