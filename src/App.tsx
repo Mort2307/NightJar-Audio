@@ -4962,7 +4962,7 @@ function App() {
           <button className="primary-button wide-button" disabled={accountLoading} onClick={() => void signIn()}>
             {accountLoading ? 'Opening secure sign-in…' : 'Sign in to Nightjar'} <ArrowRight size={17} />
           </button>}
-          <p className="access-fine">NightJar is currently in closed beta. All members must complete the normal live Didit 18+ verification before protected access.</p>
+          <p className="access-fine">NightJar is invite-only during this closed beta. Didit verification is temporarily paused; approved testers receive separate, temporary beta access. No Didit approval is created by invitation.</p>
         </section>
       </main>
     );
