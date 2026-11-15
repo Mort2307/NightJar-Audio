@@ -9047,6 +9047,7 @@ const accountDiditSelfServiceEligible = () =>
 
 export const adminAuthoriseDiditControlledCheck = onCall({ region: REGION }, async request => {
   const administrator = requireAdminIdentity(request);
+  if (DIDIT_VERIFICATION_PAUSED) throw new HttpsError('failed-precondition', 'Didit maintenance authorisations are paused. No new session can be started.');
   const uid = cleanText((request.data ?? {}).uid, 128);
   const acknowledgedCharge = (request.data ?? {}).acknowledgedCharge === true;
   if (!DIDIT_VERIFICATION_PAUSED || !/^[a-zA-Z0-9_-]{10,128}$/.test(uid) || !acknowledgedCharge) {
