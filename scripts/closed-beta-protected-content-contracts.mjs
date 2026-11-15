@@ -40,8 +40,8 @@ const betaScopeStart=deploy.indexOf('beta:access)');
 const betaScopeEnd=deploy.indexOf('admin-attention)',betaScopeStart);
 assert.ok(betaScopeStart>0 && betaScopeEnd>betaScopeStart,'the backend workflow has a bounded beta-access deployment preset');
 const betaScope=deploy.slice(betaScopeStart,betaScopeEnd);
-const affected=[...backend.matchAll(/export const ([A-Za-z0-9_]+)\\s*=\\s*onCall[\\s\\S]*?(?=\\nexport const |$)/g)]
-  .filter(match=>/requireAgeVerified\\(|requireGenuineAgeVerified\\(|betaListeningEntitlementFor\\(|temporaryAgeBypassFor\\(|DIDIT_VERIFICATION_PAUSED|DIDIT_ACCOUNT_SELF_SERVICE_ENABLED|TESTING_AGE_ASSURANCE_BYPASS/.test(match[0])
+const affected=[...backend.matchAll(/export const ([A-Za-z0-9_]+)\s*=\s*onCall[\s\S]*?(?=\nexport const |$)/g)]
+  .filter(match=>/requireAgeVerified\(|requireGenuineAgeVerified\(|betaListeningEntitlementFor\(|temporaryAgeBypassFor\(|DIDIT_VERIFICATION_PAUSED|DIDIT_ACCOUNT_SELF_SERVICE_ENABLED|TESTING_AGE_ASSURANCE_BYPASS/.test(match[0])
     || match[1]==='closedBetaRegistrationStatus')
   .map(match=>match[1]);
 for(const name of affected) assert.ok(betaScope.includes('functions:'+name),'backend-first beta preset must deploy changed callable '+name);
