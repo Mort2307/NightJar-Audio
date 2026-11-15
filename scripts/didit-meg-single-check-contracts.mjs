@@ -14,7 +14,7 @@ assert.ok(start>0 && end>start,'one-shot maintenance pilot isolated from public 
 const code = backend.slice(start,end);
 const publicStarter=backend.split('export const startAgeAssurance = onCall')[1]?.split('export const adminAgeTestPass')[0]||'';
 
-assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'standard user-wide Didit path is open');
+assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'standard user-wide Didit path is paused');
 assert.match(backend,/const TESTING_AGE_ASSURANCE_BYPASS = true/,'temporary beta age bypass is disabled after verified-18+ rollout');
 assert.match(publicStarter,/if \(DIDIT_VERIFICATION_PAUSED && !controlledAdminTest\)/,
  'emergency maintenance pause guard remains in place but is currently off');
