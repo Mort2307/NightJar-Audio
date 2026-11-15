@@ -28,17 +28,17 @@ test('temporary access is limited to active approved testers before public launc
   assert.equal(mayUseTemporaryAccess({ ...base, explicitTester: true, ageAssuranceConfigured: true }), false);
 });
 
-test('explicitly admitted closed-beta testers can listen without a paid subscription, and nobody else can', () => {
+test('genuinely age-assured closed-beta testers can listen without a paid subscription, but invitation alone cannot', () => {
   const eligible = {
     closedBeta: true, administrator: false, accountExists: true,
     accountSuspended: false, accountEmailMatches: true,
-    ageAccessAllowedForBeta: true, explicitTester: true,
+    genuineAgeAssurance: true, explicitTester: true,
   };
   assert.equal(canUseBetaListening(eligible), true);
   for (const change of [
     {closedBeta: false}, {administrator: true}, {accountExists: false},
     {accountSuspended: true}, {accountEmailMatches: false},
-    {ageAccessAllowedForBeta: false}, {explicitTester: false},
+    {genuineAgeAssurance: false}, {explicitTester: false},
   ]) assert.equal(canUseBetaListening({...eligible, ...change}), false);
   assert.equal(hasPaidEntitlement(null,'tester-uid'),false,
     'free beta listening must not masquerade as paid subscription');
