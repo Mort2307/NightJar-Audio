@@ -53,7 +53,7 @@ assert.match(launch,/throw new HttpsError\('unavailable'/,'provider errors requi
 assert.doesNotMatch(launch,/tx\.set\(ageRef|status:\s*'COMPLETE'|testMode:\s*true|console\.(log|error)/,
   'pilot cannot fabricate age confirmation or log identity data');
 assert.match(didit,/uid !== payload\.vendorData/,'Didit webhook still binds signed approval to account UID');
-assert.match(index,/const DIDIT_VERIFICATION_PAUSED = true/,'standard age verification is enabled, without lifting one-use safeguards');
+assert.match(index,/const DIDIT_VERIFICATION_PAUSED = true/,'standard and one-use Didit sessions remain paused during maintenance');
 assert.match(app,/const DIDIT_VERIFICATION_PAUSED = true/,'mandatory user-facing verification is available');
 assert.match(app,/if \(DIDIT_VERIFICATION_PAUSED\)/,
   'a future emergency pause still blocks ordinary users');
