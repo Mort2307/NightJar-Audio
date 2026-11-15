@@ -9139,6 +9139,7 @@ export const startMyDiditControlledCheck = onCall({
   timeoutSeconds: 40, maxInstances: 2,
 }, async request => {
   const identity = await requireActiveIdentity(request);
+  if (DIDIT_VERIFICATION_PAUSED) throw new HttpsError('failed-precondition', 'Didit verification is paused during closed-beta maintenance. No new session was started.');
   const selfServiceEnabled = accountDiditSelfServiceEligible();
   if (!DIDIT_VERIFICATION_PAUSED || !diditConfigured() || diditMode() !== 'live' ||
       (request.data ?? {}).explicitConsent !== true) {
