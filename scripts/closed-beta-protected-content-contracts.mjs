@@ -1,4 +1,4 @@
-// Closed-beta access must never unlock adult audio or protected manuscripts.
+// Closed-beta access must never masquerade as genuine Didit age assurance.
 // Source-level regression contract; no Firebase data or provider sessions are touched.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -6,12 +6,15 @@ const backend=readFileSync('functions/src/index.ts','utf8');
 const frontend=readFileSync('src/App.tsx','utf8');
 const hosting=readFileSync('.github/workflows/firebase-hosting-merge.yml','utf8');
 const deploy=readFileSync('.github/workflows/firebase-backend-deploy.yml','utf8');
-const helperStart=backend.indexOf('const requireGenuineAgeVerified = async');
+const helperStart=backend.indexOf('const requireAgeAssuranceOrApprovedBeta = async');
 const helperEnd=backend.indexOf('\nexport const getReleasePlaybackUrl',helperStart);
-assert.ok(helperStart>0 && helperEnd>helperStart,'strict protected-content age gate exists');
+assert.ok(helperStart>0 && helperEnd>helperStart,'protected-content access gate exists');
 const helper=backend.slice(helperStart,helperEnd);
-assert.match(helper,/diditPass\(data\)/,'only a genuine Didit approval satisfies protected-content access');
-assert.doesNotMatch(helper,/temporaryAgeBypassFor|TESTING_AGE_ASSURANCE_BYPASS|CLOSED_BETA/,'beta admission cannot satisfy protected-content age assurance');
+assert.match(helper,/diditPass\(data\)/,'genuine Didit approval remains the normal protected-content path');
+assert.match(helper,/temporaryAgeBypassFor\(uid\)/,'selected closed-beta adults receive the temporary test exception');
+assert.match(helper,/verified: false/,'temporary admission never reports age verification');
+assert.match(helper,/temporary-closed-beta-admission/,'temporary access remains distinguishable from Didit');
+assert.doesNotMatch(helper,/ageAssurance.*\.set\(/,'temporary access never writes a fake provider approval');
 for(const name of [
   'getEditorPortfolioAudioUrl','getReleasePlaybackUrl','getReleaseSyncAudioUrl',
   'getReleaseTranscript','listProtectedScripts','openProtectedScript',
