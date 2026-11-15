@@ -7,6 +7,7 @@ const read = path => fs.readFileSync(path, 'utf8');
 const backend = read('functions/src/index.ts');
 const app = read('src/App.tsx');
 const didit = read('functions/src/didit.ts');
+const nightjars = read('functions/src/nightjars.ts');
 
 assert.match(backend, /const CLOSED_BETA = true/, 'the temporary access path must remain private-beta only');
 assert.match(backend, /const TESTING_AGE_ASSURANCE_BYPASS = true/, 'the explicit closed-beta tester path must be enabled');
@@ -49,5 +50,7 @@ assert.match(app, /if \(DIDIT_VERIFICATION_PAUSED\) \{/, 'client-side controls m
 assert.match(app, /No Didit approval is created by invitation/, 'member-facing copy must not imply invite equals Didit verification');
 assert.match(backend, /export \{ diditWebhook, processDiditWebhook \} from '\.\/didit'/, 'existing Didit webhook processing must remain connected');
 assert.match(didit, /export const diditWebhook/, 'the provider webhook implementation remains present');
+assert.match(nightjars, /const TESTING_AGE_ASSURANCE_BYPASS = true/, 'gift module uses the same temporary beta access mode');
+assert.match(nightjars, /CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist'/, 'gift module uses the server-side invite list');
 
 console.log('NightJar closed-beta Didit pause and trusted-tester access contracts PASS.');
