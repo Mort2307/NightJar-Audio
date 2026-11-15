@@ -17,6 +17,7 @@ on:
           - functions:selected
           - didit:reconcile
           - didit:testers
+          - beta:access
           - admin-attention
           - functions
           - firestore:rules
@@ -173,7 +174,7 @@ jobs:
         run: npm ci --no-fund && npm run validate
 
       - name: Install, check and build backend
-        if: ${{ inputs.scope == 'functions' || inputs.scope == 'functions:selected' || inputs.scope == 'didit:reconcile' || inputs.scope == 'didit:testers' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend' }}
+        if: ${{ inputs.scope == 'functions' || inputs.scope == 'functions:selected' || inputs.scope == 'didit:reconcile' || inputs.scope == 'didit:testers' || inputs.scope == 'beta:access' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend' }}
         run: |
           npm --prefix functions ci --no-fund
           npm --prefix functions run check
@@ -221,6 +222,12 @@ jobs:
               # Safe recovery: reconciliation and status only. No new chargeable Didit sessions.
               targets=(functions:ageStatus functions:reconcileMyDiditVerification functions:adminReconcileDiditApproval functions:adminDiditDiagnostics functions:myDiditControlledCheck)
               DEPLOY_SCOPE="$(IFS=,; echo "${targets[*]}")" ;;
+            beta:access)
+              # Closed-beta Didit pause and general-app admission. Exact function
+              # inventory covers every callable whose age gate or pause behaviour
+              # changed; protected audio/manuscripts use the strict genuine-age gate.
+              targets=(functions:adminAccountOverview functions:adminAssignEditor functions:adminAuthoriseDiditControlledCheck functions:adminBindExistingDiditSource functions:adminDiditDiagnostics functions:adminDiditReuseReadiness functions:adminInspectDiditReuseWorkflow functions:adminListScripts functions:adminManageProfessionalRoles functions:adminPreviewScriptMarketplace functions:adminReconcileDiditApproval functions:adminReviewWriterScript functions:ageStatus functions:clearMyProfileWorkingDraft functions:closedBetaRegistrationStatus functions:collaborationDirectory functions:createArtistPortfolioItem functions:createScriptLicenceOffer functions:createWriterScript functions:createWriterScriptVersion functions:creatorDashboard functions:creatorRecommendationLink functions:deferMyProfileOnboarding functions:deleteMomentMark functions:deleteOwnReleaseComment functions:expressScriptInterest functions:getAdminReleasePreviewUrl functions:getAdminScriptReview functions:getCreatorProfile functions:getEditorPortfolioAudioUrl functions:getMarketplaceScriptSample functions:getMyCommitmentEligibility functions:getMyCommitments functions:getMyCreatorCompensation functions:getMyDirectoryViews functions:getMyListeningBoundaries functions:getMyProfilePortfolioOptions functions:getMyProfileTypeSettings functions:getMyProfileWorkingDraft functions:getPublicProfile functions:getReleaseListenCounts functions:getReleasePlaybackUrl functions:getReleaseSyncAudioUrl functions:getReleaseTranscript functions:getVerifiedCollaborationHistory functions:getVoiceCallingCard functions:listCatalogue functions:listCreators functions:listManuscriptReviewThread functions:listMomentMarks functions:listMyScriptLicenceOffers functions:listNightjarTeamUpdates functions:listProfessionalApplicationBank functions:listProtectedScripts functions:listPublicProfileConnections functions:listPublicProfiles functions:listReleaseReviews functions:listScriptMarketplace functions:listScriptPermissions functions:listUpcomingReleaseCalendar functions:listWriterScripts functions:listWriters functions:listenerLibrary functions:myDiditControlledCheck functions:myDiditReuseRequest functions:myListeningAccess functions:myProductionTimeline functions:openProtectedScript functions:postManuscriptReviewEntry functions:postReleaseComment functions:profileTagCatalogue functions:recommendations functions:recordListeningEvent functions:releaseCommunity functions:releaseReactionState functions:replyToReleaseComment functions:reportReleaseComment functions:requestDiditReuse functions:respondScriptLicenceOffer functions:reviewEditorScript functions:reviewProfessionalApplication functions:saveApprovedProfileFraming functions:saveApprovedWorkFraming functions:saveMomentMark functions:saveMyDirectoryViews functions:saveMyListeningBoundaries functions:saveMyProfileTypeSettings functions:saveMyProfileWorkingDraft functions:saveSyncedReleaseTranscript functions:saveVoiceCallingCard functions:setReleaseCommentReaction functions:setReleaseLove functions:setReleaseReaction functions:setScriptPermission functions:singleMemberDiditMaintenanceStatus functions:spotlightState functions:startAgeAssurance functions:startMyDiditControlledCheck functions:startSingleMemberDiditMaintenanceCheck functions:submitCommitmentEvidence functions:submitCreatorSuggestion functions:submitNightjarTeamFeedback functions:submitProfessionalApplication functions:submitReleaseReview functions:submitWriterScript functions:transparencySnapshot functions:trendingReleases functions:updateScriptRightsAndListing functions:updateWriterScript functions:uploadWriterScriptFile)
+              DEPLOY_SCOPE="$(IFS=,; echo "${targets[*]}")" ;;
             admin-attention)
               # Deliberately fixed set of owner-only callables and event listeners.
               # Never deploy other backend functions from this release preset.
@@ -233,7 +240,7 @@ jobs:
           echo "Nightjar project=nightjar-audio; scope=$DEPLOY_SCOPE; commit=$GITHUB_SHA"
           date +%s > "$RUNNER_TEMP/nightjar-deploy-start"
           trap 'date +%s > "$RUNNER_TEMP/nightjar-deploy-end"' EXIT
-          if [[ "$REQUESTED_SCOPE" == "functions" || "$REQUESTED_SCOPE" == "functions:selected" || "$REQUESTED_SCOPE" == "didit:reconcile" || "$REQUESTED_SCOPE" == "didit:testers" ]]; then
+          if [[ "$REQUESTED_SCOPE" == "functions" || "$REQUESTED_SCOPE" == "functions:selected" || "$REQUESTED_SCOPE" == "didit:reconcile" || "$REQUESTED_SCOPE" == "didit:testers" || "$REQUESTED_SCOPE" == "beta:access" ]]; then
             # Reuse the existing OIDC-authorized workflow. Keep batches small
             # and never retry non-quota failures automatically.
             batch_size=5
