@@ -9041,7 +9041,7 @@ const controlledDiditRef = (uid: string) => db.collection('diditControlledChecks
 // The legacy public age-session starter stays paused; this separate route
 // is available to every active, email-verified Nightjar account admitted by
 // requireActiveIdentity. It never requires an old standalone Didit enquiry.
-const DIDIT_ACCOUNT_SELF_SERVICE_ENABLED = true;
+const DIDIT_ACCOUNT_SELF_SERVICE_ENABLED = false;
 const accountDiditSelfServiceEligible = () =>
   DIDIT_VERIFICATION_PAUSED && DIDIT_ACCOUNT_SELF_SERVICE_ENABLED;
 
