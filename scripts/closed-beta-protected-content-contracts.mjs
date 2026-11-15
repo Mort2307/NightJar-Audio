@@ -23,7 +23,7 @@ for(const name of [
   'adminPreviewScriptMarketplace','listScriptMarketplace','createScriptLicenceOffer',
   'listMyScriptLicenceOffers','respondScriptLicenceOffer','expressScriptInterest','adminAssignEditor',
   'createRelease','updateRelease','finalizeReleaseAudio','submitReleaseForModeration',
-  'saveSyncedReleaseTranscript','adminReleaseAudioLibrary','releaseModerationQueue','creatorDashboard',
+  'saveSyncedReleaseTranscript','adminReleaseAudioLibrary','releaseModerationQueue',
 ]){
   const start=backend.indexOf('export const '+name+' = onCall');
   assert.ok(start>0,'missing protected-content endpoint '+name);
@@ -31,6 +31,10 @@ for(const name of [
   const body=backend.slice(start,next<0?undefined:next);
   assert.match(body,/requireGenuineAgeVerified\(/,'genuine age assurance is mandatory for '+name);
 }
+const dashboard=backend.slice(backend.indexOf('export const creatorDashboard = onCall'),
+  backend.indexOf('export const ',backend.indexOf('export const creatorDashboard = onCall')+20));
+assert.match(dashboard,/transcriptText: protectedTranscript/,'creator dashboard strips full transcript text while retaining general workspace access');
+assert.doesNotMatch(dashboard,/requireGenuineAgeVerified/,'general creator dashboard remains available during Didit maintenance');
 const listening=backend.slice(backend.indexOf('export const myListeningAccess = onCall'),
   backend.indexOf('const professionalRolesForAccount',backend.indexOf('export const myListeningAccess = onCall')));
 assert.match(listening,/genuineAgeAssurance &&/,'unverified beta members are shown as unable to play protected audio');
