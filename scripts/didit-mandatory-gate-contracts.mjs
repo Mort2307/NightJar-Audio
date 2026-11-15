@@ -37,8 +37,8 @@ assert.match(status, /providerVerified: persistentlyVerified/, 'providerVerified
 assert.match(status, /temporaryBypass: bypass\.allowed/, 'temporary beta admission must be reported separately');
 
 const betaListening = backend.slice(backend.indexOf('const betaListeningEntitlementFor'), backend.indexOf('const playbackAccessFor'));
-assert.match(betaListening, /genuineAgeAssurance: diditPass\(assurance\.data\(\)\)/, 'free beta listening still requires genuine live Didit approval');
-assert.doesNotMatch(betaListening, /TESTING_AGE_ASSURANCE_BYPASS/, 'temporary app admission must never unlock adult audio');
+assert.doesNotMatch(betaListening, /ageAssurance|genuineAgeAssurance/, 'temporary full-feature beta entitlement is separate from Didit evidence');
+assert.doesNotMatch(betaListening, /TESTING_AGE_ASSURANCE_BYPASS/, 'the feature entitlement uses only the explicit tester allowlist, not a global bypass flag');
 assert.match(betaListening, /cleanEmail\(data\.email\) === email/, 'beta access remains bound to the same account email');
 assert.match(betaListening, /data\.status === 'suspended'/, 'suspended accounts remain blocked');
 
