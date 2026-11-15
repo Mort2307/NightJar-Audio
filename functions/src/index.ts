@@ -7201,6 +7201,7 @@ export const saveReleaseCalendarTeaser = onCall({region: REGION},async request=>
 
 export const createRelease = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
+  await requireGenuineAgeVerified(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const profile = await profileRef(identity.uid).get();
   const profileData = profile.data() ?? {};
@@ -7276,6 +7277,7 @@ export const createRelease = onCall({ region: REGION }, async (request) => {
 
 export const updateRelease = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
+  await requireGenuineAgeVerified(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
   if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
@@ -7475,6 +7477,7 @@ export const adminVerifyAudioUpload = onCall({ region: REGION }, async (request)
 
 export const finalizeReleaseAudio = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
+  await requireGenuineAgeVerified(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
   const storagePath = cleanText(input.storagePath, 500);
@@ -7615,6 +7618,7 @@ export const removeReleaseAudio = onCall({ region: REGION }, async (request) => 
 
 export const submitReleaseForModeration = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
+  await requireGenuineAgeVerified(identity.uid);
   await requireProfessionalLegalTerms(identity.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   const ref = releaseRef(releaseId);
@@ -7676,6 +7680,7 @@ export const submitReleaseForModeration = onCall({ region: REGION }, async (requ
 
 export const creatorDashboard = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator','admin']);
+  await requireGenuineAgeVerified(identity.uid);
   const targetCreatorId = identity.role === 'creator'
     ? identity.uid
     : cleanText((request.data as { creatorUserId?: unknown } | undefined)?.creatorUserId, 160) || identity.uid;
@@ -7818,7 +7823,7 @@ export const getReleaseSyncAudioUrl = onCall({ region: REGION }, async (request)
 // The original writer script is not processed by a transcription engine.
 export const saveSyncedReleaseTranscript = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireGenuineAgeVerified(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
   const rawTranscript = String(input.transcript ?? '');
@@ -7938,7 +7943,8 @@ const adminReleasePageInput=(raw:unknown,size:number)=>{
   return {cursor:value, size};
 };
 export const adminReleaseAudioLibrary = onCall({ region: REGION }, async (request) => {
-  requireAdminIdentity(request);
+  const admin = requireAdminIdentity(request);
+  await requireGenuineAgeVerified(admin.uid);
   const {cursor,size}=adminReleasePageInput((request.data as Record<string,unknown>|undefined)?.cursor,60);
   let query=db.collection('releases').orderBy(FieldPath.documentId()).limit(size+1);
   if(cursor)query=query.startAfter(cursor);
@@ -7998,7 +8004,8 @@ export const adminAuditReleaseAudioStorage = onCall({region:REGION},async reques
 });
 
 export const releaseModerationQueue = onCall({ region: REGION }, async (request) => {
-  requireAdminIdentity(request);
+  const admin = requireAdminIdentity(request);
+  await requireGenuineAgeVerified(admin.uid);
   const {cursor,size}=adminReleasePageInput((request.data as Record<string,unknown>|undefined)?.cursor,30);
   let query=db.collection('releases').where('status','==','pending_review').orderBy(FieldPath.documentId()).limit(size+1);
   if(cursor)query=query.startAfter(cursor);
