@@ -2374,7 +2374,9 @@ function App() {
       // an ageAssurance approval.
       const verified = data.providerVerified === true && data.reverifyRequired !== true && data.environment === 'live';
       const betaAccess = data.temporaryBypass === true;
-      setAgeVerified(verified);
+      // This state unlocks the app experience, not the Didit verification record.
+      // The separate providerVerified state and TEST ACCESS banner stay truthful.
+      setAgeVerified(verified || betaAccess);
       setAgeConfigured(data.configured === true);
       setAgeProvider(String(data.provider ?? 'didit'));
       setAgeEnvironment(data.environment === 'live' ? 'live' : 'sandbox');
