@@ -28,7 +28,7 @@ test('temporary access is limited to active approved testers before public launc
   assert.equal(mayUseTemporaryAccess({ ...base, explicitTester: true, ageAssuranceConfigured: true }), false);
 });
 
-test('approved adult closed-beta testers can listen without a paid subscription, and nobody else can', () => {
+test('explicitly admitted closed-beta testers can listen without a paid subscription, and nobody else can', () => {
   const eligible = {
     closedBeta: true, administrator: false, accountExists: true,
     accountSuspended: false, accountEmailMatches: true,
