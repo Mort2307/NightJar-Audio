@@ -7735,7 +7735,7 @@ const requireAgeVerified = async (uid: string) => {
     };
   }
 
-  throw new HttpsError('permission-denied', 'Age assurance is required before using this Nightjar feature.');
+  throw new HttpsError('permission-denied', 'Age assurance is required before playing Nightjar audio.');
 };
 
 // Protected adult audio, transcripts and manuscripts must never use the
