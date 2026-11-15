@@ -19,7 +19,7 @@ const start = code.slice(code.indexOf('export const startMyDiditControlledCheck 
 
 assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'standard public starter is paused during closed-beta maintenance');
 assert.match(app,/const DIDIT_VERIFICATION_PAUSED = true/,'frontend disables the Didit starter during closed-beta maintenance');
-assert.match(code,/const DIDIT_ACCOUNT_SELF_SERVICE_ENABLED = true/,'new account-level option is explicitly enabled');
+assert.match(code,/const DIDIT_ACCOUNT_SELF_SERVICE_ENABLED = false/,'new account-level option is disabled while Didit is paused');
 assert.match(code,/const accountDiditSelfServiceEligible = \(\) =>/,'account-wide eligibility helper is defined');
 assert.doesNotMatch(code,/megan\.wright666|directDiditPilotAccount|identity\.admin && identity\.email/,
   'eligibility must not be limited to Meg or administrators');
@@ -40,6 +40,7 @@ assert.match(status,/\['verify\.didit\.me','verification\.didit\.me'\]\.includes
 assert.match(status,/!providerVerified && status === 'authorised'/,'verified users are never offered a new start');
 assert.doesNotMatch(status,/startDiditSession/,'status checks do not start paid Didit sessions');
 assert.match(start,/requireActiveIdentity\(request\)/,'start requires active authenticated user');
+assert.match(start,/if \(DIDIT_VERIFICATION_PAUSED\) throw/,'all-member self-service cannot start a session during maintenance');
 assert.match(start,/diditMode\(\) !== 'live'/,'sandbox never masquerades as live KYC');
 assert.match(start,/explicitConsent !== true/,'member explicitly consents');
 assert.match(start,/await requireCurrentLegalAcceptance\(identity\.uid, 'age_assurance_notice'\)/,
@@ -68,4 +69,4 @@ assert.match(app,/<DiditControlledLiveCheck onVerified=/,'verification is availa
 assert.match(workflow,/\[nightjar-didit-all-members-release\]/,'only tagged main release dispatches backend deploy');
 assert.match(workflow,/myDiditControlledCheck,startMyDiditControlledCheck/,
   'both account callables deploy before Hosting');
-console.log('Nightjar all-member Didit self-service: auth, age-gate access, consent, one-use claims and deployment safety PASS.');
+console.log('Nightjar all-member Didit self-service pause: auth, consent, one-use claims and deployment safety PASS.');
