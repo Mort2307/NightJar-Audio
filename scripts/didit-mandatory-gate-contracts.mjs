@@ -53,4 +53,4 @@ assert.match(didit, /export const diditWebhook/, 'the provider webhook implement
 assert.match(nightjars, /const TESTING_AGE_ASSURANCE_BYPASS = true/, 'gift module uses the same temporary beta access mode');
 assert.match(nightjars, /CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist'/, 'gift module uses the server-side invite list');
 
-console.log('NightJar closed-beta Didit pause and trusted-tester access contracts PASS.');
+console.log('NightJar closed-beta Didit pause and trusted-tester access contracts PASS (source-level).');
