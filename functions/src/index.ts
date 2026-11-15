@@ -7697,7 +7697,9 @@ export const creatorDashboard = onCall({ region: REGION }, async (request) => {
 });
 
 const temporaryAgeBypassFor = async (uid: string) => {
-  if (!TESTING_AGE_ASSURANCE_BYPASS) {
+  // This access path is deliberately bounded to the private beta. Turning off
+  // CLOSED_BETA automatically disables it even if the test flag is left on.
+  if (!TESTING_AGE_ASSURANCE_BYPASS || !CLOSED_BETA) {
     return { allowed: false, reason: null as string | null };
   }
   const snapshot = await accountRef(uid).get();
