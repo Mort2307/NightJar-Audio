@@ -32,7 +32,7 @@ for(const name of [
   assert.match(body,/requireGenuineAgeVerified\(/,'genuine age assurance is mandatory for '+name);
 }
 const dashboardStart=backend.indexOf('export const creatorDashboard = onCall');
-const dashboardEnd=backend.indexOf('\\n});',dashboardStart)+4;
+const dashboardEnd=backend.indexOf('\n});',dashboardStart)+4;
 const dashboard=backend.slice(dashboardStart,dashboardEnd);
 assert.match(dashboard,/transcriptText: protectedTranscript/,'creator dashboard strips full transcript text while retaining general workspace access');
 assert.doesNotMatch(dashboard,/requireGenuineAgeVerified/,'general creator dashboard remains available during Didit maintenance');
