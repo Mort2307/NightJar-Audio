@@ -2421,7 +2421,7 @@ function App() {
   };
 
   const openAgeCheck = async (adminPilot = false, memberPilot = false, acknowledgedOnGate = false) => {
-    if (DIDIT_VERIFICATION_PAUSED && !(adminPilot && role === 'admin')) {
+    if (DIDIT_VERIFICATION_PAUSED) {
       setAgeStatusError('Age verification is temporarily offline while Nightjar repairs the connection. Please do not retry.');
       return;
     }
