@@ -6906,6 +6906,7 @@ export const myListeningAccess = onCall({ region: REGION }, async (request) => {
   return {
     role,
     subscribed: identity.admin || Boolean(subscription),
+    genuineAgeAssurance,
     // App admission is already checked above. The tester entitlement is a
     // temporary feature grant, not a Didit approval or paid subscription.
     closedBetaListening: betaTester,
