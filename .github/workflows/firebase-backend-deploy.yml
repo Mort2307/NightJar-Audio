@@ -180,6 +180,7 @@ jobs:
           npm --prefix functions run check
           npm --prefix functions run audit:guard
           npm --prefix functions run build
+          npm --prefix functions run test:entitlements
           npm --prefix functions run test:didit-resubmission
           npm --prefix functions run test:didit-webhook-signature
           npm --prefix functions run test:didit-adult-evidence
