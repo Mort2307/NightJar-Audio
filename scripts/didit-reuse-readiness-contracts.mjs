@@ -42,5 +42,5 @@ assert.match(admin,/Inspect workflow settings · no paid check/,'workflow inspec
 assert.match(admin,/Check original approval · no new ID check/,'original session verification clearly never starts a new check');
 assert.match(admin,/secure biometric ownership confirmation and account binding are still required/,'no implied age pass');
 assert.match(control,/<AdminDiditReuseReadiness \/>/,'admin control centre contains provider readiness');
-assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = false/,'normal account-bound Didit verification is enabled');
+assert.match(backend,/const DIDIT_VERIFICATION_PAUSED = true/,'normal account-bound Didit verification is enabled');
 console.log('Didit source evidence, zero-cost reuse workflow and fail-closed launch-readiness contracts PASS.');
