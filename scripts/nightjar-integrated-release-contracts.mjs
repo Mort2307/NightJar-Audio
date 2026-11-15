@@ -240,6 +240,21 @@ for(const item of notificationReadabilityFollowup.files){
   overrides.set(item.path,item);
 }
 
+// PR #363: temporary closed-beta Didit pause and invite-only access entry.
+// Pin the App.tsx access-flow change to the immediately preceding approved
+// Didit resubmission UI baseline; preserve all historic RC and follow-up SHAs.
+const closedBetaDiditPauseFollowup=JSON.parse(string('docs/NIGHTJAR_CLOSED_BETA_DIDIT_PAUSE_FOLLOWUP.json'));
+assert.equal(closedBetaDiditPauseFollowup.pr,363,'closed-beta Didit pause requires its own PR review');
+assert.deepEqual(closedBetaDiditPauseFollowup.files.map(item=>item.path),['src/App.tsx'],
+  'closed-beta access follow-up may change only the access-flow App surface');
+for(const item of closedBetaDiditPauseFollowup.files){
+  assert.match(item.sha,/^[0-9a-f]{40}$/);
+  const previous=overrides.get(item.path);
+  assert.ok(previous,'closed-beta access change must anchor to the previously approved App baseline');
+  assert.equal(item.baselineSha,previous.sha,'preserve the previous approved App SHA');
+  overrides.set(item.path,item);
+}
+
 const listed=new Set();
 let originals=0;
 for(const pr of manifest.includes){
