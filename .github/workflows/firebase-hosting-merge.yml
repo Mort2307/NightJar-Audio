@@ -140,10 +140,17 @@ jobs:
           grep -q '^const DIDIT_VERIFICATION_PAUSED = true' src/App.tsx
           grep -q 'const requireGenuineAgeVerified = async' functions/src/index.ts
           START_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
+          DISPATCH_OUTPUT=""
+          if ! DISPATCH_OUTPUT="$(gh api --include -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/dispatches" \
             -f ref=main \
             -f 'inputs[scope]=beta:access' \
-            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+            -f 'inputs[confirmation]=DEPLOY-NIGHTJAR' 2>&1)"; then
+            echo "::error::GitHub rejected the closed-beta backend workflow dispatch."
+            printf '%s\n' "$DISPATCH_OUTPUT"
+            exit 1
+          fi
+          echo "Backend workflow dispatch accepted:"
+          printf '%s\n' "$DISPATCH_OUTPUT"
           # GitHub's workflow-specific run listing can intermittently return an
           # API error immediately after dispatch. Query repository runs instead,
           # allow for runner/API clock skew, and log the selected child run.
