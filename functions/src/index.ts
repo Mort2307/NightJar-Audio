@@ -5506,7 +5506,7 @@ export const moderateEditorPortfolioItem = onCall({ region: REGION }, async (req
 
 export const getEditorPortfolioAudioUrl = onCall({ region: REGION }, async (request) => {
   const identity=await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireGenuineAgeVerified(identity.uid);
   const input=(request.data ?? {}) as Record<string,unknown>;
   const itemId=cleanText(input.itemId,160);
   const slot=cleanText(input.slot,20);
@@ -6827,7 +6827,7 @@ const betaListeningEntitlementFor = async (uid: string, emailValue: unknown, adm
   return canUseBetaListening({
     closedBeta: CLOSED_BETA, administrator, accountExists: account.exists,
     accountSuspended: data.status === 'suspended', accountEmailMatches,
-    ageAccessAllowedForBeta: diditPass(assurance.data()) || (TESTING_AGE_ASSURANCE_BYPASS && CLOSED_BETA && explicitTester), explicitTester,
+    genuineAgeAssurance: diditPass(assurance.data()), explicitTester,
   });
 };
 
@@ -6896,24 +6896,28 @@ export const saveAccessibilityPreferences = onCall({ region: REGION }, async (re
 export const myListeningAccess = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
   await requireAgeVerified(identity.uid);
-  const [account, settings, subscription, betaTester] = await Promise.all([
+  const [account, settings, subscription, betaTester, assurance] = await Promise.all([
     accountRef(identity.uid).get(),
     identity.admin ? readCommercialSettings() : Promise.resolve(null),
     identity.admin ? Promise.resolve(null) : activeListeningSubscriptionFor(identity.uid),
     betaListeningEntitlementFor(identity.uid, identity.email, identity.admin),
+    db.collection('ageAssurance').doc(identity.uid).get(),
   ]);
 
+  const genuineAgeAssurance = diditPass(assurance.data());
   const role = identity.admin ? 'admin' : cleanText(account.data()?.role, 40) || null;
   return {
     role,
     subscribed: identity.admin || Boolean(subscription),
-    closedBetaListening: betaTester,
-    cataloguePlaybackAvailable: identity.admin || Boolean(subscription) || betaTester,
+    closedBetaListening: genuineAgeAssurance && betaTester,
+    cataloguePlaybackAvailable: genuineAgeAssurance && (identity.admin || Boolean(subscription) || betaTester),
     subscriptionStatus: identity.admin ? 'admin' : subscription?.status ?? null,
     planningMonthlyPricePence: identity.admin ? settings?.planningMonthlyPricePence ?? null : null,
     subscriptionUrl: identity.admin ? settings?.listenerSubscriptionUrl ?? null : null,
     creditedWorkIncluded: true,
-    rule: identity.admin ? 'Owner subscription access diagnostics.' : betaTester ? 'Verified closed-beta tester: published listening included at no charge during testing.' : 'Published catalogue listening requires a subscription, a verified work credit, or approved test access.',
+    rule: !genuineAgeAssurance
+      ? 'Genuine live Didit age assurance is required for protected audio. Closed-beta invitation does not satisfy this requirement.'
+      : identity.admin ? 'Owner subscription access diagnostics.' : betaTester ? 'Verified closed-beta tester: published listening included at no charge during testing.' : 'Published catalogue listening requires a subscription or a verified work credit.',
   };
 });
 
@@ -7731,12 +7735,28 @@ const requireAgeVerified = async (uid: string) => {
     };
   }
 
-  throw new HttpsError('permission-denied', 'Age assurance is required before playing Nightjar audio.');
+  throw new HttpsError('permission-denied', 'Age assurance is required before using this Nightjar feature.');
+};
+
+// Protected adult audio, transcripts and manuscripts must never use the
+// temporary closed-beta app-admission path. Only a genuine live Didit result
+// satisfies this check; invitation and legacy testAccess are not age evidence.
+const requireGenuineAgeVerified = async (uid: string) => {
+  const snapshot = await db.collection('ageAssurance').doc(uid).get();
+  const data = snapshot.data();
+  if (!diditPass(data)) {
+    throw new HttpsError(
+      'permission-denied',
+      'Genuine live Didit age assurance is required before accessing protected NightJar content.',
+      { code: 'genuine_age_assurance_required' },
+    );
+  }
+  return data;
 };
 
 export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireGenuineAgeVerified(identity.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   const snapshot = await releaseRef(releaseId).get();
   const data = snapshot.data();
@@ -7773,7 +7793,7 @@ export const getReleasePlaybackUrl = onCall({ region: REGION }, async (request) 
 
 export const getReleaseSyncAudioUrl = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireGenuineAgeVerified(identity.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
   const data = (await releaseRef(releaseId).get()).data();
@@ -7782,7 +7802,7 @@ export const getReleaseSyncAudioUrl = onCall({ region: REGION }, async (request)
   }
   if (!identity.admin) {
     const creator = await requireAccountRole(request, ['creator']);
-    await requireAgeVerified(creator.uid);
+    await requireGenuineAgeVerified(creator.uid);
     if (data.creatorUserId !== creator.uid || !['draft', 'rejected'].includes(String(data.status))) {
       throw new HttpsError('permission-denied', 'Only the owner can synchronise an editable recording.');
     }
@@ -7853,7 +7873,7 @@ export const saveSyncedReleaseTranscript = onCall({ region: REGION }, async (req
 
 export const getReleaseTranscript = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireGenuineAgeVerified(identity.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   if (!releaseId) throw new HttpsError('invalid-argument', 'Release is required.');
 
@@ -8501,7 +8521,7 @@ export const getReleaseListenCounts = onCall({ region: REGION }, async (request)
 
 export const recordListeningEvent = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireAgeVerified(identity.uid);
+  await requireGenuineAgeVerified(identity.uid);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const releaseId = cleanText(input.releaseId, 160);
   const release = await releaseRef(releaseId).get();
@@ -10208,7 +10228,8 @@ export const startSingleMemberDiditMaintenanceCheck = onCall({
 });
 
 export const getAdminReleasePreviewUrl = onCall({ region: REGION }, async (request) => {
-  requireAdminIdentity(request);
+  const admin = requireAdminIdentity(request);
+  await requireGenuineAgeVerified(admin.uid);
   const releaseId = cleanText((request.data as { releaseId?: unknown } | undefined)?.releaseId, 160);
   const snapshot = await releaseRef(releaseId).get();
   const data = snapshot.data();
@@ -10809,6 +10830,7 @@ const adminSourcePreview = async (storagePath: string, fileName: string): Promis
 // These signed links expire quickly and every preview is audited.
 export const getAdminScriptReview = onCall({ region: REGION }, async (request) => {
   const admin = requireAdminIdentity(request);
+  await requireGenuineAgeVerified(admin.uid);
   const scriptId = cleanText((request.data as {scriptId?:unknown}|undefined)?.scriptId, 160);
   if (!scriptId) throw new HttpsError('invalid-argument', 'Choose a script to review.');
   const snapshot = await scriptRef(scriptId).get();
@@ -11073,7 +11095,7 @@ const activePermissionFor = async (scriptId: string, userId: string) => {
 
 export const listProtectedScripts = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator','writer','editor','admin']);
-  await requireAgeVerified(identity.uid);
+  await requireGenuineAgeVerified(identity.uid);
   const snapshot = await db.collection('scripts').limit(1000).get();
 
   const visible: any[] = [];
@@ -11379,7 +11401,7 @@ export const recordProtectionEvent = onCall({ region: REGION }, async (request) 
 
 export const openProtectedScript = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator','writer','editor','admin']);
-  await requireAgeVerified(identity.uid);
+  await requireGenuineAgeVerified(identity.uid);
   const scriptId = cleanText((request.data as { scriptId?: unknown } | undefined)?.scriptId, 160);
   const ref = scriptRef(scriptId);
   const snapshot = await ref.get();
@@ -12237,7 +12259,7 @@ export const listScriptMarketplace = onCall({ region: REGION }, async (request) 
 // VA. Neither protected script text nor private uploaded source files are returned.
 export const getMarketplaceScriptSample = onCall({ region: REGION }, async (request) => {
   const identity = await requireAccountRole(request, ['creator']);
-  await requireAgeVerified(identity.uid);
+  await requireGenuineAgeVerified(identity.uid);
   const scriptId = cleanText((request.data as {scriptId?:unknown}|undefined)?.scriptId, 160);
   if (!scriptId) throw new HttpsError('invalid-argument','Select a marketplace script.');
   const snapshot = await scriptRef(scriptId).get();
