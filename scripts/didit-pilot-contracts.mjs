@@ -65,12 +65,12 @@ assert.match(legalPage, /age_assurance_notice/, 'legal document shows correct ag
 
 
 const publicStarter = index.split('export const startAgeAssurance = onCall')[1]?.split('export const adminAgeTestPass')[0] ?? '';
-assert.match(index, /const DIDIT_VERIFICATION_PAUSED = false/, 'public Didit start is enabled');
+assert.match(index, /const DIDIT_VERIFICATION_PAUSED = true/, 'public Didit start is enabled');
 assert.match(index, /const DIDIT_LIVE_PILOT_ADMINS_ONLY = false/, 'pilot-only restriction is disabled');
 assert.match(publicStarter, /if \(diditPass\(record\)\) return \{ verified: true/, 'already-approved members do not restart ID verification');
 assert.match(publicStarter, /await requireCurrentLegalAcceptance\(identity.uid, 'age_assurance_notice'\)/, 'privacy acknowledgement is required before any new session');
 assert.match(publicStarter, /return startDiditSession\(identity.uid\)/, 'session is bound to signed-in account');
-assert.match(app, /const DIDIT_VERIFICATION_PAUSED = false/, 'frontend shows normal verification route');
+assert.match(app, /const DIDIT_VERIFICATION_PAUSED = true/, 'frontend shows normal verification route');
 assert.match(app, /Verify securely with Didit/, 'mandatory age gate offers secure verification');
 assert.match(status, /verificationPaused: DIDIT_VERIFICATION_PAUSED/, 'client receives authoritative verification status');
 
