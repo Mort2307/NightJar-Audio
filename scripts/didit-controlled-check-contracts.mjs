@@ -54,7 +54,7 @@ assert.doesNotMatch(launch,/tx\.set\(ageRef|status:\s*'COMPLETE'|testMode:\s*tru
   'pilot cannot fabricate age confirmation or log identity data');
 assert.match(didit,/uid !== payload\.vendorData/,'Didit webhook still binds signed approval to account UID');
 assert.match(index,/const DIDIT_VERIFICATION_PAUSED = true/,'standard and one-use Didit sessions remain paused during maintenance');
-assert.match(app,/const DIDIT_VERIFICATION_PAUSED = true/,'mandatory user-facing verification is available');
+assert.match(app,/const DIDIT_VERIFICATION_PAUSED = true/,'the client keeps all Didit starts disabled during maintenance');
 assert.match(app,/if \(DIDIT_VERIFICATION_PAUSED\)/,
   'a future emergency pause still blocks ordinary users');
 assert.match(settings,/<DiditControlledLiveCheck \/>/,'one-use check shows in Settings');
