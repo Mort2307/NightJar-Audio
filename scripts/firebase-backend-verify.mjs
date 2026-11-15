@@ -29,7 +29,7 @@ export function selectedTargets(scope, selection, rawLog) {
       return { name, region: actual?.region || REGION, updated: Boolean(actual) };
     });
   }
-  if (scope === 'functions' || scope === 'all-backend') return confirmed.map((item) => ({ ...item, updated: true }));
+  if (scope === 'functions' || scope === 'all-backend' || scope === 'beta:access') return confirmed.map((item) => ({ ...item, updated: true }));
   return [];
 }
 

@@ -342,13 +342,13 @@ jobs:
       # Post-deploy verification is read-only. No webhooks, scheduled jobs,
       # auth callables, email sends, age checks, payments or write APIs are invoked.
       - name: Prepare Google Cloud CLI for function metadata checks
-        if: ${{ success() && (inputs.scope == 'functions:selected' || inputs.scope == 'functions' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend') }}
+        if: ${{ success() && (inputs.scope == 'functions:selected' || inputs.scope == 'functions' || inputs.scope == 'beta:access' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend') }}
         uses: google-github-actions/setup-gcloud@v3
         with:
           project_id: nightjar-audio
 
       - name: Verify live Cloud Functions and safe HTTP endpoints
-        if: ${{ success() && (inputs.scope == 'functions:selected' || inputs.scope == 'functions' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend') }}
+        if: ${{ success() && (inputs.scope == 'functions:selected' || inputs.scope == 'functions' || inputs.scope == 'beta:access' || inputs.scope == 'admin-attention' || inputs.scope == 'all-backend') }}
         run: node scripts/firebase-backend-verify.mjs
 
       - name: Write sanitized release report
