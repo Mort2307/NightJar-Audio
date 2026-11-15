@@ -1,73 +1,60 @@
-// Mandatory 18+ verification entry contract. Read-only source checks: no Didit
-// requests, Firestore writes, provider sessions or production deployment.
+// Closed-beta Didit pause and trusted-tester access contracts.
+// Read-only source checks: no Firebase writes, provider requests or deployment.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const read = path => fs.readFileSync(path, 'utf8');
-const app = read('src/App.tsx');
-const panel = read('src/components/DiditControlledLiveCheck.tsx');
 const backend = read('functions/src/index.ts');
-const nightjars = read('functions/src/nightjars.ts');
+const app = read('src/App.tsx');
 const didit = read('functions/src/didit.ts');
-const workflow = read('.github/workflows/firebase-hosting-merge.yml');
+const nightjars = read('functions/src/nightjars.ts');
 
-assert.match(backend, /const TESTING_AGE_ASSURANCE_BYPASS = false/, 'private-beta bypass must not admit unverified adults');
-assert.match(nightjars, /const TESTING_AGE_ASSURANCE_BYPASS = false/, 'gift and token endpoints must not bypass Didit');
-const backendWorkflow = read('.github/workflows/firebase-backend-deploy.yml');
-assert.ok(backendWorkflow.includes('DEPLOY_SCOPE="$(node scripts/firebase-current-functions-scope.mjs)"'), 'all-functions release must use explicit non-deleting targets');
-assert.match(backend, /const DIDIT_VERIFICATION_PAUSED = false/, 'public Didit session starter is enabled');
-assert.match(backend, /const DIDIT_ACCOUNT_SELF_SERVICE_ENABLED = true/, 'approved safe self-service check remains available to members');
-assert.match(backend, /const persistentVerified = diditPass\(data\)/, 'adult backend checks durable provider evidence');
-assert.match(backend, /if \(persistentVerified\) return data/, 'provider-approved accounts retain access without repeating ID');
-assert.match(didit, /data\?\.environment === 'live'/, 'only live provider results can grant adult access');
-assert.match(didit, /data\?\.reverifyRequired !== true/, 'revoked approvals must no longer grant access');
+assert.match(backend, /const CLOSED_BETA = true/, 'the temporary access path must remain private-beta only');
+assert.match(backend, /const TESTING_AGE_ASSURANCE_BYPASS = true/, 'the explicit closed-beta tester path must be enabled');
+assert.match(backend, /const DIDIT_VERIFICATION_PAUSED = true/, 'new Didit sessions must remain paused');
+assert.match(backend, /const DIDIT_ACCOUNT_SELF_SERVICE_ENABLED = false/, 'member self-service Didit must remain disabled');
+assert.match(backend, /if \(!TESTING_AGE_ASSURANCE_BYPASS \|\| !CLOSED_BETA\)/, 'temporary access must automatically fail closed outside private beta');
+assert.match(backend, /const testerAccessForEmail = async/, 'tester access must come from the server-side allowlist');
+assert.match(backend, /data\.enabled !== true \|\| cleanEmail\(data\.email\) !== email/, 'disabled or mismatched allowlist entries cannot pass');
 
-assert.match(app, /const verified = data.providerVerified === true && data.reverifyRequired !== true && data.environment === 'live'/,
-  'only authentic unrevoked Didit result advances the UI');
-assert.match(app, /const mayEnter = verified && noticeAccepted/, 'no tester bypass, empty role or unaccepted notice may enter');
-assert.match(app, /setAgeStage\(mayEnter \? 'app' : 'assurance'\)/, 'non-approved status remains on mandatory gate');
-assert.match(app, /if \(ageStage === 'assurance'\) \{/, 'role picker must not hide mandatory gate');
-assert.match(app, /aria-modal="true" aria-labelledby="nightjar-verification-title"/, 'mandatory verification is an accessible dialog');
-assert.match(app, /<DiditControlledLiveCheck onVerified=/, 'account-linked check is presented at the required gate');
-assert.match(app, /DIDIT_VERIFICATION_PAUSED = false/, 'frontend presents the standard verification flow to all unverified members');
+const bypass = backend.slice(backend.indexOf('const temporaryAgeBypassFor = async'), backend.indexOf('const requireAgeVerified = async'));
+assert.match(bypass, /ADMIN_EMAILS\.has\(email\)/, 'administrators retain access');
+assert.match(bypass, /data\.testAccess === true \|\| await testerAccessForEmail\(email\)/, 'only explicitly admitted tester accounts receive the temporary path');
 
-assert.match(panel, /if\(result.authorised \|\| result.providerVerified\)/, 'previously approved member notice status is checked');
-assert.match(panel, /const acceptApprovedNotice=async\(\)=>/, 'approved member can acknowledge a new notice');
-assert.match(panel, /'didit-approved-account-notice-update'/, 'existing approval notice is durable');
-const acknowledgement=panel.slice(panel.indexOf('const acceptApprovedNotice=async'),panel.indexOf('const begin=async'));
-assert.doesNotMatch(acknowledgement, /nightjarDiditControlled\.start\(|nightjarAge\.start\(/,
-  'notice acknowledgement cannot launch a second paid check');
-assert.match(panel, /Check my completed Didit result · no new ID check/, 'existing result can be reconciled without a second session');
-const automaticReturnBlock=panel.slice(panel.indexOf('// Returning from Didit should automatically'),panel.indexOf('const acceptRequiredAgreements=async'));
-assert.match(automaticReturnBlock,/addEventListener\('focus', refreshOnReturn\)/,'returning to the Nightjar tab should refresh the existing status');
-assert.match(automaticReturnBlock,/addEventListener\('visibilitychange', refreshOnReturn\)/,'mobile app resume should refresh existing status');
-assert.match(automaticReturnBlock,/document\.visibilityState !== 'visible'/,'background activity cannot trigger status calls');
-assert.match(automaticReturnBlock,/lastReturnRefreshRef\.current < 15000/,'dual tab focus events are rate-limited');
-assert.match(automaticReturnBlock,/void refresh\(\)/,'return only reads the current account status');
-assert.doesNotMatch(automaticReturnBlock, /nightjarDiditControlled\.(start|reconcile)\(|nightjarAge\.start\(/,
-  'automatic return must neither create a paid ID session nor recover a provider decision without user action');
+const ageGate = backend.slice(backend.indexOf('const requireAgeVerified = async'), backend.indexOf('export const getReleasePlaybackUrl'));
+assert.match(ageGate, /const persistentVerified = diditPass\(data\)/, 'existing genuine provider approval remains authoritative');
+assert.match(ageGate, /if \(persistentVerified\) return data/, 'existing approvals remain unchanged');
+assert.match(ageGate, /provider: 'temporary-test-access'/, 'beta access is clearly distinct from provider verification');
+assert.doesNotMatch(ageGate, /ageAssurance.*\.set\(/, 'temporary beta access must never write a fake provider approval');
+const genuineGate = backend.slice(backend.indexOf('const requireGenuineAgeVerified'), backend.indexOf('export const getReleasePlaybackUrl'));
+assert.match(genuineGate, /diditPass\(data\)/, 'protected content requires genuine Didit evidence');
+assert.doesNotMatch(genuineGate, /temporaryAgeBypassFor|TESTING_AGE_ASSURANCE_BYPASS/, 'protected content never uses temporary beta admission');
 
-assert.match(backend, /tx\.create\(grantRef, \{/, 'one-use account claim is durable and race-safe');
-assert.match(workflow, /\[nightjar-didit-mandatory-gate-release\]/, 'production backend-first release must be explicitly tagged');
-const deploy=workflow.slice(workflow.indexOf('name: Enforce mandatory approved Didit access before Hosting'),
-  workflow.indexOf('# Staged account-wide release.'));
-assert.match(deploy, /inputs\[scope\]=functions'/, 'policy change must redeploy ALL functions using age bypass');
-assert.match(deploy, /gh run watch/, 'Hosting waits for verified backend deployment');
-assert.doesNotMatch(deploy, /startDiditSession\(|startAgeAssurance\(/, 'deploy cannot create provider verifications');
+const status = backend.slice(backend.indexOf('export const ageStatus'), backend.indexOf('const controlledDiditRef'));
+assert.match(status, /providerVerified: persistentlyVerified/, 'providerVerified must report only genuine Didit evidence');
+assert.match(status, /temporaryBypass: bypass\.allowed/, 'temporary beta admission must be reported separately');
 
-// Android Chrome/PWA user-activation regression: never open the Didit popup
-// after a Firebase request. Use an explicit user-tapped, HTTPS-host-allowlisted
-// link; support same-tab navigation for embedded browser limitations.
-const diditStart = app.slice(app.indexOf('const openAgeCheck = async'), app.indexOf('// Verifies a PRE-EXISTING account-bound provider result only.'));
-assert.ok(diditStart.length > 100, 'legacy Didit start handler must be located');
-assert.doesNotMatch(diditStart,/window\.open\(/,'Didit cannot launch a popup after asynchronous Firebase work');
-assert.match(diditStart,/safeDiditLaunchUrl\(data\.launchUrl\)/,'provider launch URL must be validated before exposing a link');
-assert.match(app,/const safeDiditLaunchUrl = \(candidate: unknown\)/,'client URL validator exists');
-assert.match(app,/\['verify\.didit\.me', 'verification\.didit\.me'\]/,'only Didit HTTPS hostnames allowed');
-assert.match(app,/existing = await nightjarDiditControlled\.status\(\)/,'refresh can recover the existing URL without another paid check');
-assert.match(app,/href=\{ageLaunchUrl\} target="_blank"/,'explicit external tap opens the already-created Didit URL');
-assert.match(app,/href=\{ageLaunchUrl\}>Open Didit in this tab instead/,'same-tab fallback bypasses popup handling');
-assert.match(panel,/href=\{launchUrl\} className="secondary-button">Open Didit in this tab instead/,'controlled check has the same-tab fallback');
-assert.match(panel,/!uri\.username && !uri\.password/,'controlled verification forbids credentials in redirect URLs');
+const betaListening = backend.slice(backend.indexOf('const betaListeningEntitlementFor'), backend.indexOf('const playbackAccessFor'));
+assert.match(betaListening, /genuineAgeAssurance: diditPass\(assurance\.data\(\)\)/, 'free beta listening still requires genuine live Didit approval');
+assert.doesNotMatch(betaListening, /TESTING_AGE_ASSURANCE_BYPASS/, 'temporary app admission must never unlock adult audio');
+assert.match(betaListening, /cleanEmail\(data\.email\) === email/, 'beta access remains bound to the same account email');
+assert.match(betaListening, /data\.status === 'suspended'/, 'suspended accounts remain blocked');
 
-console.log('NightJar mandatory once-only Didit age-gate contracts PASS.');
+for (const name of ['startMyDiditControlledCheck','startSingleMemberDiditMaintenanceCheck','startAgeAssurance','adminAuthoriseDiditControlledCheck']) {
+  const start = backend.indexOf('export const ' + name);
+  assert.ok(start >= 0, 'missing Didit pause endpoint: ' + name);
+  const body = backend.slice(start, backend.indexOf('export const ', start + 20));
+  assert.match(body, /if \(DIDIT_VERIFICATION_PAUSED\) throw/, name + ' must reject during the pause');
+}
+
+assert.match(app, /const DIDIT_VERIFICATION_PAUSED = true/, 'the client must present the paused state');
+assert.match(app, /const betaAccess = data\.temporaryBypass === true/, 'the client must recognise separate temporary beta admission');
+assert.match(app, /const mayEnter = betaAccess \|\| \(verified && noticeAccepted\)/, 'allowlisted beta access must not wait for Didit');
+assert.match(app, /if \(DIDIT_VERIFICATION_PAUSED\) \{/, 'client-side controls must not offer an admin exception');
+assert.match(app, /No Didit approval is created by invitation/, 'member-facing copy must not imply invite equals Didit verification');
+assert.match(backend, /export \{ diditWebhook, processDiditWebhook \} from '\.\/didit'/, 'existing Didit webhook processing must remain connected');
+assert.match(didit, /export const diditWebhook/, 'the provider webhook implementation remains present');
+assert.match(nightjars, /const TESTING_AGE_ASSURANCE_BYPASS = false/, 'gift and wallet access remain outside the temporary app-admission bypass');
+assert.doesNotMatch(nightjars, /CLOSED_BETA_ALLOWLIST_COLLECTION|temporaryAgeBypassFor/, 'the Didit bypass must not expand into the separate gifting system');
+
+console.log('NightJar closed-beta Didit pause and trusted-tester access contracts PASS (source-level).');

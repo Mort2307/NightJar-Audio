@@ -187,7 +187,7 @@ const EditorShowcaseModeration = lazy(() => import('./components/EditorShowcaseM
 type View = 'discover' | 'library' | 'creators' | 'creator' | 'writer' | 'editor' | 'artist' | 'messages' | 'admin' | 'protection' | 'profile' | 'calendar' | 'settings';
 type AgeStage = 'gate' | 'assurance' | 'app';
 // Set to false only after the live Didit flow is repaired and tested.
-const DIDIT_VERIFICATION_PAUSED = false; // Public standard Didit entry is available to every unverified member.
+const DIDIT_VERIFICATION_PAUSED = true; // Invite-only closed beta: no new Didit sessions; approved testers use temporary beta access.
 type AccountRole = 'admin' | 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type PreviewRole = 'creator' | 'listener' | 'writer' | 'editor' | 'artist';
 type TestingMode = 'off' | 'demo' | 'simulation' | 'live';
@@ -2369,9 +2369,11 @@ function App() {
         setAgeNoticeAccepted(false);
         setAgeStatusError('Nightjar could not load the age-verification permissions. Please retry before starting a check.');
       }
-      // Only a permanent, unrevoked live Didit adult pass unlocks the app.
-      // Private-beta test access must never count as completed verification.
+      // Genuine provider approval and temporary invite-only beta access are
+      // separate states. Beta access never changes providerVerified or writes
+      // an ageAssurance approval.
       const verified = data.providerVerified === true && data.reverifyRequired !== true && data.environment === 'live';
+      const betaAccess = data.temporaryBypass === true;
       setAgeVerified(verified);
       setAgeConfigured(data.configured === true);
       setAgeProvider(String(data.provider ?? 'didit'));
@@ -2406,7 +2408,7 @@ function App() {
         : ['FAIL','ERROR','CANCELLED','EXPIRED','BLOCKED'].includes(String(data.status)) ? 'FAIL' : 'NOT_STARTED');
       // Once approved, only the current privacy notice can be outstanding:
       // never ask an approved member to repeat their ID check.
-      const mayEnter = verified && noticeAccepted;
+      const mayEnter = betaAccess || (verified && noticeAccepted);
       setAgeStage(mayEnter ? 'app' : 'assurance');
       return mayEnter;
     } catch (error) {
@@ -2419,7 +2421,7 @@ function App() {
   };
 
   const openAgeCheck = async (adminPilot = false, memberPilot = false, acknowledgedOnGate = false) => {
-    if (DIDIT_VERIFICATION_PAUSED && !(adminPilot && role === 'admin')) {
+    if (DIDIT_VERIFICATION_PAUSED) {
       setAgeStatusError('Age verification is temporarily offline while Nightjar repairs the connection. Please do not retry.');
       return;
     }
@@ -4960,7 +4962,7 @@ function App() {
           <button className="primary-button wide-button" disabled={accountLoading} onClick={() => void signIn()}>
             {accountLoading ? 'Opening secure sign-in…' : 'Sign in to Nightjar'} <ArrowRight size={17} />
           </button>}
-          <p className="access-fine">NightJar is currently in closed beta. All members must complete the normal live Didit 18+ verification before protected access.</p>
+          <p className="access-fine">NightJar is invite-only during this closed beta. Didit verification is temporarily paused; approved testers receive separate, temporary beta access. No Didit approval is created by invitation.</p>
         </section>
       </main>
     );

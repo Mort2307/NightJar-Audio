@@ -1,0 +1,10 @@
+{
+  "pr": 363,
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "baselineSha": "a9321891288ab9616861ac7aa109e65771488bef",
+      "sha": "fa60f7642f9f2a00994cfdd00ce72aa0e0064ae1"
+    }
+  ]
+}

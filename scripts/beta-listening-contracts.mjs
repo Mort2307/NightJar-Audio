@@ -15,14 +15,14 @@ const helper=backend.slice(marker,stop);
 assert.match(helper,/!CLOSED_BETA \|\| administrator/,'beta is closed-only and never replaces administrator');
 assert.match(helper,/accountRef\(uid\)\.get\(\)/,'check current account');
 assert.match(helper,/db\.collection\('ageAssurance'\)\.doc\(uid\)\.get\(\)/,'check same user Didit');
-assert.match(helper,/diditPass\(assurance\.data\(\)\)/,'only authentic live Didit 18+ approval');
+assert.match(helper,/genuineAgeAssurance: diditPass\(assurance\.data\(\)\)/,'only genuine Didit approval enables beta listening entitlement');
 assert.match(helper,/cleanEmail\(data\.email\) === email/,'do not grant to mismatched account');
 assert.match(helper,/data\.testAccess === true \|\| Boolean\(await testerAccessForEmail\(email\)\)/,'admin-controlled tester approval only');
 assert.match(helper,/canUseBetaListening/,'pure gate for test coverage');
 assert.match(policy,/!policy\.accountSuspended/,'suspended users stay blocked');
-assert.match(policy,/policy\.providerVerifiedAdult/,'no age bypass');
+assert.match(policy,/policy\.genuineAgeAssurance/,'beta listening still requires genuine provider age assurance');
 assert.match(policy,/policy\.closedBeta/,'beta expiry is automatic when public launch begins');
-assert.match(unit,/test\('approved adult closed-beta testers can listen/,'policy boundaries have unit tests');
+assert.match(unit,/test\('genuinely age-assured closed-beta testers can listen/,'invitation alone cannot grant playback and policy boundaries have unit tests');
 
 const access=backend.slice(backend.indexOf('const playbackAccessFor = ('),backend.indexOf('const decorateReleaseAccess = ('));
 assert.match(access,/if \(options\.subscription\)/,'paid entitlement remains');
@@ -43,18 +43,19 @@ for(const name of [
 }
 const playback=backend.slice(backend.indexOf('export const getReleasePlaybackUrl = onCall'),
   backend.indexOf('export const getReleaseSyncAudioUrl = onCall'));
-assert.match(playback,/await requireAgeVerified\(identity\.uid\)/);
+assert.match(playback,/await requireGenuineAgeVerified\(identity\.uid\)/,'signed adult audio requires genuine live Didit evidence');
 assert.match(playback,/data\.status !== 'released'/,'cannot access draft or unapproved audio');
 assert.match(playback,/!await hasPublishedStudioNoteParent\(data\)/,'studio-note publication gate remains');
 assert.match(playback,/playbackAccessFor\(data, identity\.uid, \{ admin:identity\.admin, subscription, betaTester \}\)/);
 const transcript=backend.slice(backend.indexOf('export const getReleaseTranscript = onCall'),
   backend.indexOf('export const ',backend.indexOf('export const getReleaseTranscript = onCall')+20));
+assert.match(transcript,/await requireGenuineAgeVerified\(identity\.uid\)/,'full audio transcripts require genuine live Didit evidence');
 assert.match(transcript,/data\.status !== 'released' && !ownDraft && !adminPreview/,'draft transcripts remain private');
 assert.match(transcript,/playbackAccessFor\(data, identity\.uid, \{ subscription, betaTester \}\)/);
 const listener=backend.slice(backend.indexOf('export const myListeningAccess = onCall'),
   backend.indexOf('const professionalRolesForAccount',backend.indexOf('export const myListeningAccess = onCall')));
-assert.match(listener,/closedBetaListening: betaTester/);
-assert.match(listener,/cataloguePlaybackAvailable:/);
+assert.match(listener,/closedBetaListening: genuineAgeAssurance && betaTester/);
+assert.match(listener,/genuineAgeAssurance && \(identity\.admin \|\| Boolean\(subscription\) \|\| betaTester\)/,'invited but unverified members cannot be told audio playback is available');
 assert.match(listener,/subscribed: identity\.admin \|\| Boolean\(subscription\)/,'beta cannot falsify subscribed');
 assert.match(workflow,/\[nightjar-beta-listening-release\]/,'Hosting must wait for reviewable selected Functions deploy');
 assert.match(workflow,/listCatalogue,getPublicProfile,getCreatorProfile,myListeningAccess,getReleasePlaybackUrl,getReleaseTranscript,recommendations,trendingReleases,getVoiceCallingCard/,

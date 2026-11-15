@@ -53,9 +53,9 @@ assert.match(launch,/throw new HttpsError\('unavailable'/,'provider errors requi
 assert.doesNotMatch(launch,/tx\.set\(ageRef|status:\s*'COMPLETE'|testMode:\s*true|console\.(log|error)/,
   'pilot cannot fabricate age confirmation or log identity data');
 assert.match(didit,/uid !== payload\.vendorData/,'Didit webhook still binds signed approval to account UID');
-assert.match(index,/const DIDIT_VERIFICATION_PAUSED = false/,'standard age verification is enabled, without lifting one-use safeguards');
-assert.match(app,/const DIDIT_VERIFICATION_PAUSED = false/,'mandatory user-facing verification is available');
-assert.match(app,/if \(DIDIT_VERIFICATION_PAUSED && !\(adminPilot && role === 'admin'\)\)/,
+assert.match(index,/const DIDIT_VERIFICATION_PAUSED = true/,'standard and one-use Didit sessions remain paused during maintenance');
+assert.match(app,/const DIDIT_VERIFICATION_PAUSED = true/,'the client keeps all Didit starts disabled during maintenance');
+assert.match(app,/if \(DIDIT_VERIFICATION_PAUSED\)/,
   'a future emergency pause still blocks ordinary users');
 assert.match(settings,/<DiditControlledLiveCheck \/>/,'one-use check shows in Settings');
 assert.ok(settings.indexOf('<DiditControlledLiveCheck />') < settings.indexOf('nj-settings-master-disclosure'),

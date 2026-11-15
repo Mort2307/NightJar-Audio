@@ -16,8 +16,9 @@ const ci=file('.github/workflows/nightjar-quality-candidate-ci.yml');
 const requireText=(s,x,msg)=>assert.ok(s.includes(x),msg??'Missing '+x);
 requireText(portal,'18+ VERIFICATION REQUIRED');
 assert.ok(!portal.includes('Age assurance is temporarily disabled'),'Outdated age-bypass claim still visible');
-requireText(backendIndex,'const DIDIT_VERIFICATION_PAUSED = false');
-requireText(backendIndex,'const TESTING_AGE_ASSURANCE_BYPASS = false');
+requireText(backendIndex,'const DIDIT_VERIFICATION_PAUSED = true');
+requireText(backendIndex,'const TESTING_AGE_ASSURANCE_BYPASS = true');
+requireText(backendIndex,'if (!TESTING_AGE_ASSURANCE_BYPASS || !CLOSED_BETA)');
 requireText(backendIndex,"buildNightjarQualityCallables(requireActiveIdentity,requireAdminIdentity,requireAgeVerified)");
 for(const name of ['submitTesterFeedback','adminListTesterFeedback','adminReviewTesterFeedback','adminGetQualityAcceptance','adminRecordQualityCheck'])
   requireText(backend,name);

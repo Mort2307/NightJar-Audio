@@ -32,5 +32,6 @@ const editorGate=workflow.slice(workflow.indexOf('- name: Deploy atomic Editor m
 assert.match(editorGate,/submitEditorPortfolioItem,moderateEditorPortfolioItem/,'Deploy submission backend before Hosting');
 assert.match(editorGate,/gh run watch/,'Do not ship UI before backend');
 const i=src.indexOf('export const adminReviewWriterScript = onCall');
-assert.match(src.slice(i,i+3400),/transaction\.create\(reviewEventRef/,'Writer reason remains durable/atomic');
+const reviewEnd=src.indexOf('\n});',i)+4;
+assert.match(src.slice(i,reviewEnd),/transaction\.create\(reviewEventRef/,'Writer reason remains durable/atomic');
 console.log('Concurrent Editor review decision, reason and notification contracts passed.');
