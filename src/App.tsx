@@ -2369,9 +2369,11 @@ function App() {
         setAgeNoticeAccepted(false);
         setAgeStatusError('Nightjar could not load the age-verification permissions. Please retry before starting a check.');
       }
-      // Only a permanent, unrevoked live Didit adult pass unlocks the app.
-      // Private-beta test access must never count as completed verification.
+      // Genuine provider approval and temporary invite-only beta access are
+      // separate states. Beta access never changes providerVerified or writes
+      // an ageAssurance approval.
       const verified = data.providerVerified === true && data.reverifyRequired !== true && data.environment === 'live';
+      const betaAccess = data.temporaryBypass === true;
       setAgeVerified(verified);
       setAgeConfigured(data.configured === true);
       setAgeProvider(String(data.provider ?? 'didit'));
