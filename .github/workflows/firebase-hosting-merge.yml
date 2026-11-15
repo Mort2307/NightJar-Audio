@@ -144,18 +144,26 @@ jobs:
             -f ref=main \
             -f 'inputs[scope]=beta:access' \
             -f 'inputs[confirmation]=DEPLOY-NIGHTJAR'
+          # GitHub's workflow-specific run listing can intermittently return an
+          # API error immediately after dispatch. Query repository runs instead,
+          # allow for runner/API clock skew, and log the selected child run.
+          CUTOFF_TIME="$(date -u -d '2 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
           RUN_ID=""
           for attempt in $(seq 1 48); do
-            RUN_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-backend-deploy.yml/runs?branch=main&event=workflow_dispatch&per_page=30" \
-              | jq -r --arg head "${GITHUB_SHA}" --arg start "${START_TIME}" \
-                '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $start)] | sort_by(.created_at) | last | .id // empty')"
+            RUNS_JSON="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?branch=main&event=workflow_dispatch&per_page=100")" || {
+              echo "::error::Could not query GitHub Actions for the closed-beta backend run."
+              exit 1
+            }
+            RUN_ID="$(jq -r --arg head "${GITHUB_SHA}" --arg cutoff "$CUTOFF_TIME" \
+              '[.workflow_runs[] | select(.head_sha == $head and .created_at >= $cutoff and .event == "workflow_dispatch")] | sort_by(.created_at) | last | .id // empty' <<< "$RUNS_JSON")"
             if [[ -n "$RUN_ID" ]]; then break; fi
             sleep 10
           done
           if [[ -z "$RUN_ID" ]]; then
-            echo "::error::Closed-beta backend deployment was not observed; Hosting blocked."
+            echo "::error::Closed-beta backend dispatch was accepted but no matching workflow run appeared; Hosting blocked."
             exit 1
           fi
+          echo "Observing closed-beta backend workflow run $RUN_ID."
           gh run watch "$RUN_ID" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           echo "Closed-beta access and protected-content age gates deployed before Hosting."
 
