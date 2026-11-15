@@ -12430,7 +12430,7 @@ const input=(request.data??{}) as Record<string,unknown>;
 
 export const collaborationDirectory = onCall({ region: REGION }, async (request) => {
   const identity = await requireActiveIdentity(request);
-  await requireGenuineAgeVerified(identity.uid);
+  await requireAgeVerified(identity.uid);
   const [snapshot, collaborations, publicReleases, scripts] = await Promise.all([
     db.collection('accounts').limit(1000).get(),
     db.collection('collaborationProposals').limit(1000).get(),
