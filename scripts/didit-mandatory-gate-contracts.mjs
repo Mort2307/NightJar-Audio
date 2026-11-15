@@ -26,13 +26,17 @@ assert.match(ageGate, /const persistentVerified = diditPass\(data\)/, 'existing 
 assert.match(ageGate, /if \(persistentVerified\) return data/, 'existing approvals remain unchanged');
 assert.match(ageGate, /provider: 'temporary-test-access'/, 'beta access is clearly distinct from provider verification');
 assert.doesNotMatch(ageGate, /ageAssurance.*\.set\(/, 'temporary beta access must never write a fake provider approval');
+const genuineGate = backend.slice(backend.indexOf('const requireGenuineAgeVerified'), backend.indexOf('export const getReleasePlaybackUrl'));
+assert.match(genuineGate, /diditPass\(data\)/, 'protected content requires genuine Didit evidence');
+assert.doesNotMatch(genuineGate, /temporaryAgeBypassFor|TESTING_AGE_ASSURANCE_BYPASS/, 'protected content never uses temporary beta admission');
 
 const status = backend.slice(backend.indexOf('export const ageStatus'), backend.indexOf('const controlledDiditRef'));
 assert.match(status, /providerVerified: persistentlyVerified/, 'providerVerified must report only genuine Didit evidence');
 assert.match(status, /temporaryBypass: bypass\.allowed/, 'temporary beta admission must be reported separately');
 
 const betaListening = backend.slice(backend.indexOf('const betaListeningEntitlementFor'), backend.indexOf('const playbackAccessFor'));
-assert.match(betaListening, /TESTING_AGE_ASSURANCE_BYPASS && CLOSED_BETA && explicitTester/, 'allowlisted beta members can use free listening during closed beta');
+assert.match(betaListening, /genuineAgeAssurance: diditPass\(assurance\.data\(\)\)/, 'free beta listening still requires genuine live Didit approval');
+assert.doesNotMatch(betaListening, /TESTING_AGE_ASSURANCE_BYPASS/, 'temporary app admission must never unlock adult audio');
 assert.match(betaListening, /cleanEmail\(data\.email\) === email/, 'beta access remains bound to the same account email');
 assert.match(betaListening, /data\.status === 'suspended'/, 'suspended accounts remain blocked');
 
@@ -50,7 +54,7 @@ assert.match(app, /if \(DIDIT_VERIFICATION_PAUSED\) \{/, 'client-side controls m
 assert.match(app, /No Didit approval is created by invitation/, 'member-facing copy must not imply invite equals Didit verification');
 assert.match(backend, /export \{ diditWebhook, processDiditWebhook \} from '\.\/didit'/, 'existing Didit webhook processing must remain connected');
 assert.match(didit, /export const diditWebhook/, 'the provider webhook implementation remains present');
-assert.match(nightjars, /const TESTING_AGE_ASSURANCE_BYPASS = true/, 'gift module uses the same temporary beta access mode');
-assert.match(nightjars, /CLOSED_BETA_ALLOWLIST_COLLECTION = 'closedBetaAllowlist'/, 'gift module uses the server-side invite list');
+assert.match(nightjars, /const TESTING_AGE_ASSURANCE_BYPASS = false/, 'gift and wallet access remain outside the temporary app-admission bypass');
+assert.doesNotMatch(nightjars, /CLOSED_BETA_ALLOWLIST_COLLECTION|temporaryAgeBypassFor/, 'the Didit bypass must not expand into the separate gifting system');
 
 console.log('NightJar closed-beta Didit pause and trusted-tester access contracts PASS (source-level).');
