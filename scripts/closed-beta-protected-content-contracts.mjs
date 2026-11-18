@@ -10,11 +10,19 @@ const helperStart=backend.indexOf('const requireAgeAssuranceOrApprovedBeta = asy
 const helperEnd=backend.indexOf('\nexport const getReleasePlaybackUrl',helperStart);
 assert.ok(helperStart>0 && helperEnd>helperStart,'protected-content access gate exists');
 const helper=backend.slice(helperStart,helperEnd);
-assert.match(helper,/diditPass\(data\)/,'genuine Didit approval remains the normal protected-content path');
-assert.match(helper,/temporaryAgeBypassFor\(uid\)/,'selected closed-beta adults receive the temporary test exception');
-assert.match(helper,/verified: false/,'temporary admission never reports age verification');
-assert.match(helper,/temporary-closed-beta-admission/,'temporary access remains distinguishable from Didit');
-assert.doesNotMatch(helper,/ageAssurance.*\.set\(/,'temporary access never writes a fake provider approval');
+assert.match(helper,/diditPass\(data\)/,'genuine Didit approval is the only protected-content access path');
+assert.doesNotMatch(helper,/temporaryAgeBypassFor\(uid\)/,'temporary beta admission must never unlock protected content');
+assert.doesNotMatch(helper,/temporaryBypass|temporary-closed-beta-admission/,'protected-content gate must not accept or return beta-bypass state');
+assert.match(helper,/genuine_age_assurance_required/,'unverified accounts fail closed with a stable age-assurance error');
+assert.doesNotMatch(helper,/ageAssurance.*\.set\(/,'the protected-content gate never fabricates provider approval');
+
+// General beta admission remains available for ordinary app and creator workflows.
+const generalGateStart=backend.indexOf('const requireAgeVerified = async');
+const generalGateEnd=backend.indexOf('\n// Protected adult audio',generalGateStart);
+assert.ok(generalGateStart>0 && generalGateEnd>generalGateStart,'general beta admission gate exists separately');
+const generalGate=backend.slice(generalGateStart,generalGateEnd);
+assert.match(generalGate,/temporaryAgeBypassFor\(uid\)/,'approved beta testers retain general app access without Didit');
+assert.match(generalGate,/TEMPORARY_ACCESS/,'general beta access remains clearly distinguishable from provider verification');
 for(const name of [
   'getEditorPortfolioAudioUrl','getReleasePlaybackUrl','getReleaseSyncAudioUrl',
   'getReleaseTranscript','listProtectedScripts','openProtectedScript',
@@ -38,7 +46,7 @@ for(const name of [
 const dashboardStart=backend.indexOf('export const creatorDashboard = onCall');
 const dashboardEnd=backend.indexOf('\n});',dashboardStart)+4;
 const dashboard=backend.slice(dashboardStart,dashboardEnd);
-assert.match(dashboard,/requireAgeAssuranceOrApprovedBeta\(identity\.uid\)/,'creator dashboard full content is protected by the temporary beta or genuine Didit gate');
+assert.match(dashboard,/requireAgeAssuranceOrApprovedBeta\(identity\.uid\)/,'creator dashboard full content requires genuine Didit age assurance');
 assert.match(dashboard,/releaseOwnerPayload\(doc\.data\(\), doc\.id\)/,'creator dashboard returns full owner transcript content to approved testers');
 const listening=backend.slice(backend.indexOf('export const myListeningAccess = onCall'),
   backend.indexOf('const professionalRolesForAccount',backend.indexOf('export const myListeningAccess = onCall')));
@@ -58,11 +66,10 @@ const affected=[...backend.matchAll(/export const ([A-Za-z0-9_]+)\s*=\s*onCall[\
 for(const name of affected) assert.ok(betaScope.includes('functions:'+name),'backend-first beta preset must deploy changed callable '+name);
 const assuranceGate=backend.slice(backend.indexOf('const requireAgeAssuranceOrApprovedBeta'),backend.indexOf('export const getReleasePlaybackUrl'));
 assert.match(assuranceGate,/diditPass\(data\)/,'genuine Didit approval is always accepted');
-assert.match(assuranceGate,/temporaryAgeBypassFor\(uid\)/,'only the explicit closed-beta adult allowlist can use the temporary test path');
-assert.match(assuranceGate,/verified: false/,'temporary beta admission never reports age assurance as verified');
-assert.match(assuranceGate,/temporary-closed-beta-admission/,'temporary admission is clearly identified as non-Didit');
+assert.doesNotMatch(assuranceGate,/temporaryAgeBypassFor\(uid\)/,'protected content cannot use the temporary beta allowlist');
+assert.match(assuranceGate,/genuine_age_assurance_required/,'protected content fails closed without genuine Didit approval');
 assert.match(backend,/const CLOSED_BETA = true/,'temporary full-feature access is restricted to closed beta');
 assert.match(backend,/const TESTING_AGE_ASSURANCE_BYPASS = true/,'temporary age gate is explicitly enabled only for the test window');
 assert.match(frontend,/setAgeVerified\(verified \|\| betaAccess\)/,'the complete app UI is unlocked for temporary beta admission');
 assert.match(frontend,/ageTemporaryBypass \? 'TEST ACCESS'/,'the UI labels temporary access honestly instead of claiming Didit verification');
-console.log('NightJar closed-beta: selected adult testers receive full-feature access; genuine Didit records remain separate and public access stays gated.');
+console.log('NightJar closed-beta: approved testers receive general app access without Didit; protected adult content remains genuine-Didit-only.');
