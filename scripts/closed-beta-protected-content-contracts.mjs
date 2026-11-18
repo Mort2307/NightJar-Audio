@@ -6,6 +6,7 @@ const backend=readFileSync('functions/src/index.ts','utf8');
 const frontend=readFileSync('src/App.tsx','utf8');
 const hosting=readFileSync('.github/workflows/firebase-hosting-merge.yml','utf8');
 const deploy=readFileSync('.github/workflows/firebase-backend-deploy.yml','utf8');
+const verifySource=readFileSync('scripts/firebase-backend-verify.mjs','utf8');
 const helperStart=backend.indexOf('const requireGenuineAgeAssurance = async');
 const helperEnd=backend.indexOf('\nexport const getReleasePlaybackUrl',helperStart);
 assert.ok(helperStart>0 && helperEnd>helperStart,'protected-content access gate exists');
@@ -55,6 +56,11 @@ assert.match(listening,/betaTester/,'allowlisted closed-beta adults receive temp
 // The merge workflow must deploy the matching backend before publishing Hosting.
 assert.match(hosting,/\[nightjar-closed-beta-access-release\]/,'closed-beta changes require their dedicated backend-first release tag');
 assert.match(hosting,/inputs\[scope\]=beta:access/,'Hosting waits for the exact closed-beta backend deployment');
+const verifyStart=deploy.indexOf('- name: Prepare Google Cloud CLI for function metadata checks');
+const verifyEnd=deploy.indexOf('- name: Write sanitized release report',verifyStart);
+const verifySteps=deploy.slice(verifyStart,verifyEnd);
+assert.equal((verifySteps.match(/inputs\.scope == 'beta:access'/g)||[]).length,2,'both live-function verification steps include the beta-access scope');
+assert.match(verifySource,/scope === 'functions' \|\| scope === 'all-backend' \|\| scope === 'beta:access'/,'the verification script checks functions deployed by the closed-beta scope');
 const betaScopeStart=deploy.indexOf('beta:access)');
 const betaScopeEnd=deploy.indexOf('admin-attention)',betaScopeStart);
 assert.ok(betaScopeStart>0 && betaScopeEnd>betaScopeStart,'the backend workflow has a bounded beta-access deployment preset');
