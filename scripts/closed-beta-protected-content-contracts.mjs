@@ -41,13 +41,13 @@ for(const name of [
   assert.ok(start>0,'missing protected-content endpoint '+name);
   const next=backend.indexOf('\nexport const ',start+20);
   const body=backend.slice(start,next<0?undefined:next);
-  assert.match(body,/requireGenuineAgeAssurance\(/,'protected feature is available only to Didit-approved users or explicitly allowlisted beta adults: '+name);
+  assert.match(body,/requireGenuineAgeAssurance\(/,'protected feature requires genuine Didit approval: '+name);
 }
 const dashboardStart=backend.indexOf('export const creatorDashboard = onCall');
 const dashboardEnd=backend.indexOf('\n});',dashboardStart)+4;
 const dashboard=backend.slice(dashboardStart,dashboardEnd);
 assert.match(dashboard,/requireGenuineAgeAssurance\(identity\.uid\)/,'creator dashboard full content requires genuine Didit age assurance');
-assert.match(dashboard,/releaseOwnerPayload\(doc\.data\(\), doc\.id\)/,'creator dashboard returns full owner transcript content to approved testers');
+assert.match(dashboard,/releaseOwnerPayload\(doc\.data\(\), doc\.id\)/,'creator dashboard returns full owner transcript content only after genuine age assurance');
 const listening=backend.slice(backend.indexOf('export const myListeningAccess = onCall'),
   backend.indexOf('const professionalRolesForAccount',backend.indexOf('export const myListeningAccess = onCall')));
 assert.match(listening,/betaTester/,'allowlisted closed-beta adults receive temporary catalogue access without a subscription');
