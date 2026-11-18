@@ -7747,26 +7747,17 @@ const requireAgeVerified = async (uid: string) => {
   throw new HttpsError('permission-denied', 'Age assurance is required before playing Nightjar audio.');
 };
 
-// Protected adult audio, transcripts and manuscripts require genuine Didit
-// age assurance in normal operation. During this private closed beta only,
-// deliberately selected adult testers receive a separate temporary admission.
-// That admission never changes ageAssurance, providerVerified or Didit records.
+// Protected adult audio, transcripts and manuscripts always require a
+// genuine live Didit age-assurance result. Closed-beta admission deliberately
+// unlocks general app and creator workflows only; it is never an exception
+// to this content boundary and never changes provider approval records.
 const requireAgeAssuranceOrApprovedBeta = async (uid: string) => {
   const snapshot = await db.collection('ageAssurance').doc(uid).get();
   const data = snapshot.data();
   if (diditPass(data)) return data;
-  const bypass = await temporaryAgeBypassFor(uid);
-  if (bypass.allowed) {
-    return {
-      verified: false,
-      provider: 'temporary-closed-beta-admission',
-      temporaryBypass: true,
-      temporaryBypassReason: bypass.reason,
-    };
-  }
   throw new HttpsError(
     'permission-denied',
-    'Genuine live Didit age assurance is required outside the approved closed beta.',
+    'Genuine live Didit age assurance is required to access protected adult content.',
     { code: 'genuine_age_assurance_required' },
   );
 };
