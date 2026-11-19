@@ -1660,7 +1660,7 @@ export const adminAssessCreatorExpansion = onCall({ region: REGION }, async (req
       eligibleCreatorCount: safePence(data.eligibleCreatorCount ?? 0, 'Historical eligible creator count'),
     };
   });
-  let assessment;
+  let assessment: ReturnType<typeof assessCreatorExpansion>;
   try {
     assessment = assessCreatorExpansion(periods, proposedCreatorCount, DEFAULT_CREATOR_MONTHLY_CAP_PENCE);
   } catch (error) {
