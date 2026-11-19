@@ -18,7 +18,7 @@ import { buildNightjarQualityCallables } from './nightjar-quality';
 import { buildDiditResubmissionCallables } from './didit-resubmissions';
 import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes, type NightjarProfileType } from './profile-types';
 import { evaluateRoleCommitments, isCommitmentTaskReviewable, type RoleCommitmentAssessment } from './commitment-eligibility';
-import { allocateCreatorPool, type CreatorPoolMember } from './creator-pool';
+import { allocateCreatorPool, assessCreatorExpansion, DEFAULT_CREATOR_MONTHLY_CAP_PENCE, isImmediatelyPreviousCreatorPoolMonth, type CreatorPoolMember } from './creator-pool';
 import { calculateEligibleNetRevenuePence, isSameManualPayment } from './finance-settlement';
 import { allocateFinanceRevenuePoolsPence, validateFinanceAllocationPolicy } from './finance-policy';
 import { calculateTaxEstimatePence } from './finance-tax-estimate';
@@ -1434,13 +1434,34 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   const controlSnapshot = await financeControlRef.get();
   const controlRevision = Number(controlSnapshot.data()?.revision ?? 0);
   if (controlSnapshot.data()?.payoutPrepared === true) throw new HttpsError('already-exists', 'A Creator Pool calculation already exists for this period.');
-  const [commitmentPeriod, settlements, adjustments, assignments, existingPayoutPeriod] = await Promise.all([
+  const [commitmentPeriod, settlements, adjustments, assignments, existingPayoutPeriod, previousPayoutPeriods] = await Promise.all([
     commitmentPeriodRef(periodId).get(),
     db.collection('financeRevenueSettlements').where('periodId', '==', periodId).limit(501).get(),
     db.collection('financeRevenueAdjustments').where('periodId', '==', periodId).limit(501).get(),
     db.collection('commitmentAssignments').where('periodId', '==', periodId).limit(5001).get(),
     creatorPayoutPeriodRef(periodId).get(),
+    db.collection('creatorPayoutPeriods').where('periodId', '<', periodId).orderBy('periodId', 'desc').limit(1).get(),
   ]);
+  const previousPayoutPeriod = previousPayoutPeriods.docs[0] ?? null;
+  const previousPayoutData = previousPayoutPeriod?.data() ?? null;
+  if (previousPayoutData?.status === 'draft') {
+    throw new HttpsError('failed-precondition', 'Approve the preceding Creator Pool period before preparing this month, so its retained balance can roll forward exactly once.');
+  }
+  const openingCarryForwardPence = previousPayoutData
+    ? safePence(previousPayoutData.retainedCreatorPoolPence ?? previousPayoutData.unallocatedCreatorPoolPence ?? 0, 'Opening retained Creator Pool balance')
+    : 0;
+  // Retained balance must pass through each immediately following monthly
+  // period before it can roll again. This prevents two out-of-order monthly
+  // preparations from both consuming the same prior-period balance.
+  if (openingCarryForwardPence > 0 && previousPayoutPeriod) {
+    if (!isImmediatelyPreviousCreatorPoolMonth(previousPayoutPeriod.id, periodId)) {
+      const [year, month] = periodId.split('-').map(Number);
+      const expectedPreviousPeriodId = new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
+      throw new HttpsError('failed-precondition', 'The retained Creator Pool balance must be processed through each intervening monthly period before a later period can use it. Prepare and approve ' + expectedPreviousPeriodId + ' first.');
+    }
+  }
+  const previousRemainderStartIndex = Number.isSafeInteger(Number(previousPayoutData?.nextRemainderIndex))
+    && Number(previousPayoutData?.nextRemainderIndex) >= 0 ? Number(previousPayoutData?.nextRemainderIndex) : 0;
   if (!commitmentPeriod.exists || commitmentPeriod.data()?.status !== 'closed') {
     throw new HttpsError('failed-precondition', 'Close the commitment assessment period after all reviews before preparing compensation.');
   }
@@ -1448,8 +1469,8 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   if (settlements.size > 500 || adjustments.size > 500 || assignments.size > 5000) {
     throw new HttpsError('resource-exhausted', 'This period exceeds the safe finance preparation limits. Contact Nightjar engineering before preparing compensation.');
   }
-  if (!settlements.size || settlements.docs.some((doc) => doc.data().status !== 'reconciled')) {
-    throw new HttpsError('failed-precondition', 'Every Stripe settlement must be recorded and reconciled before calculating payouts.');
+  if ((!settlements.size && openingCarryForwardPence === 0) || settlements.docs.some((doc) => doc.data().status !== 'reconciled')) {
+    throw new HttpsError('failed-precondition', 'Record and reconcile the month’s Stripe settlements, or have an approved retained Creator Pool balance to distribute.');
   }
   const settlementNetPence = settlements.docs.reduce((sum, doc) => {
     const next = sum + safePence(doc.data().eligibleNetRevenuePence, 'Eligible net revenue');
@@ -1485,7 +1506,11 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
     throw new HttpsError('failed-precondition', error instanceof Error ? error.message : 'The effective finance policy is invalid.');
   }
   const financePoolAllocation = allocateFinanceRevenuePoolsPence(eligibleNetRevenuePence, financePolicy);
-  const creatorPoolPence = financePoolAllocation.creatorPoolPence;
+  const monthlyCreatorPoolContributionPence = financePoolAllocation.creatorPoolPence;
+  const availableCreatorPoolPence = monthlyCreatorPoolContributionPence + openingCarryForwardPence;
+  if (!Number.isSafeInteger(availableCreatorPoolPence)) {
+    throw new HttpsError('failed-precondition', 'The available Creator Pool balance exceeds the safe calculation range.');
+  }
   const assignmentsByUser = new Map<string, Array<Record<string, any>>>();
   for (const doc of assignments.docs) {
     const data = doc.data();
@@ -1532,10 +1557,26 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
       if (completedCommitmentRoles.length) qualifyingRoleByUser.set(userId, completedCommitmentRoles[0]);
       members.push({ userId, accountStatus: 'active', approvedRoles, completedCommitmentRoles });
     }
-    const calculated = allocateCreatorPool(creatorPoolPence, members);
+    const calculated = allocateCreatorPool(
+      availableCreatorPoolPence,
+      members,
+      DEFAULT_CREATOR_MONTHLY_CAP_PENCE,
+      previousRemainderStartIndex,
+    );
     tx.create(payoutPeriod, {
       periodId, status: 'draft', currency: 'GBP',
-      eligibleNetRevenuePence, creatorPoolPercent: financePolicy.creatorPoolPercent, creatorPoolPence,
+      eligibleNetRevenuePence,
+      creatorPoolPercent: financePolicy.creatorPoolPercent,
+      // creatorPoolPence is the total available balance after carry-forward;
+      // the monthly 50% contribution is stored separately for expansion analysis.
+      creatorPoolPence: availableCreatorPoolPence,
+      monthlyCreatorPoolContributionPence,
+      openingCarryForwardPence,
+      availableCreatorPoolPence,
+      creatorMonthlyCapPence: DEFAULT_CREATOR_MONTHLY_CAP_PENCE,
+      retainedCreatorPoolPence: calculated.unallocatedPence,
+      remainderStartIndex: calculated.remainderStartIndex,
+      nextRemainderIndex: calculated.nextRemainderIndex,
       nightjarPoolPercent: financePolicy.nightjarPoolPercent,
       nightjarPoolPence: financePoolAllocation.nightjarPoolPence,
       ownerPoolPercent: financePolicy.ownerPoolPercent,
@@ -1548,7 +1589,7 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
       eligibleCreatorCount: calculated.eligibleCreatorCount,
       totalAllocatedPence: calculated.totalAllocatedPence,
       unallocatedCreatorPoolPence: calculated.unallocatedPence,
-      nonCreatorRemainderPence: eligibleNetRevenuePence - creatorPoolPence,
+      nonCreatorRemainderPence: eligibleNetRevenuePence - monthlyCreatorPoolContributionPence,
       settlementIds: settlements.docs.map((doc) => doc.id),
       adjustmentIds: adjustments.docs.map((doc) => doc.id),
       preparedByAdminUserId: admin.uid,
@@ -1576,10 +1617,17 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
     subscriptionPricePence: financePolicy.subscriptionPricePence,
     policyVersion: Number(policyDocument.data()?.version ?? 1),
     policyEffectiveFrom: String(policyDocument.data()?.effectiveFrom ?? ''),
-    creatorPoolPence, eligibleCreatorCount: allocation.eligibleCreatorCount,
+    creatorPoolPence: availableCreatorPoolPence,
+    monthlyCreatorPoolContributionPence,
+    openingCarryForwardPence,
+    availableCreatorPoolPence,
+    creatorMonthlyCapPence: DEFAULT_CREATOR_MONTHLY_CAP_PENCE,
+    retainedCreatorPoolPence: allocation.unallocatedPence,
+    eligibleCreatorCount: allocation.eligibleCreatorCount,
     totalAllocatedPence: allocation.totalAllocatedPence,
     unallocatedCreatorPoolPence: allocation.unallocatedPence,
-    nonCreatorRemainderPence: eligibleNetRevenuePence - creatorPoolPence,
+    nextRemainderIndex: allocation.nextRemainderIndex,
+    nonCreatorRemainderPence: eligibleNetRevenuePence - monthlyCreatorPoolContributionPence,
     payouts: allocation.payouts,
   };
 });
@@ -1594,6 +1642,48 @@ export const adminGetCreatorPayoutPeriod = onCall({ region: REGION }, async (req
   return {
     period: { periodId, ...period.data() },
     payouts: await Promise.all(payouts.docs.map(async (doc) => ({ userId: doc.id, displayName: (await accountPresentation(doc.id)).displayName, ...doc.data() }))),
+  };
+});
+
+export const adminAssessCreatorExpansion = onCall({ region: REGION }, async (request) => {
+  requireAdminIdentity(request);
+  const input = (request.data ?? {}) as Record<string, unknown>;
+  const periodId = input.periodId;
+  const proposedCreatorCount = Number(input.proposedCreatorCount);
+  if (!validCommitmentPeriodId(periodId) || !Number.isSafeInteger(proposedCreatorCount)
+    || proposedCreatorCount < 1 || proposedCreatorCount > 500) {
+    throw new HttpsError('invalid-argument', 'Provide a valid finance period and a proposed total creator count from 1 to 500.');
+  }
+
+  const previousPeriods = await db.collection('creatorPayoutPeriods')
+    .where('periodId', '<', periodId).orderBy('periodId', 'desc').limit(3).get();
+  const periods = previousPeriods.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      periodId: doc.id,
+      status: String(data.status ?? ''),
+      monthlyCreatorPoolContributionPence: safePence(
+        data.monthlyCreatorPoolContributionPence ?? data.creatorPoolPence ?? 0,
+        'Historical monthly Creator Pool contribution',
+      ),
+      totalAllocatedPence: safePence(data.totalAllocatedPence ?? 0, 'Historical Creator Pool distribution'),
+      eligibleCreatorCount: safePence(data.eligibleCreatorCount ?? 0, 'Historical eligible creator count'),
+    };
+  });
+  let assessment: ReturnType<typeof assessCreatorExpansion>;
+  try {
+    assessment = assessCreatorExpansion(periods, proposedCreatorCount, DEFAULT_CREATOR_MONTHLY_CAP_PENCE);
+  } catch (error) {
+    throw new HttpsError('invalid-argument', error instanceof Error ? error.message : 'Creator expansion assessment could not be calculated.');
+  }
+  const latest = previousPeriods.docs[0]?.data() ?? null;
+  const openingCarryForwardPence = latest
+    ? safePence(latest.retainedCreatorPoolPence ?? latest.unallocatedCreatorPoolPence ?? 0, 'Opening retained Creator Pool balance')
+    : 0;
+  return {
+    ...assessment,
+    openingCarryForwardPence,
+    creatorMonthlyCapPence: DEFAULT_CREATOR_MONTHLY_CAP_PENCE,
   };
 });
 
@@ -1850,6 +1940,7 @@ export const getMyCreatorCompensation = onCall({ region: REGION }, async (reques
     return {
       periodId: doc.id, periodStatus: period.status,
       creatorPoolPercent: period.creatorPoolPercent,
+      creatorMonthlyCapPence: safePence(period.creatorMonthlyCapPence ?? DEFAULT_CREATOR_MONTHLY_CAP_PENCE, 'Creator monthly cap'),
       eligibleCreatorCount: period.eligibleCreatorCount,
       amountPence: payout.data()?.amountPence ?? 0,
       paidPence: payout.data()?.paidPence ?? 0,

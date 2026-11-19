@@ -2111,8 +2111,8 @@ jobs:
             gh run watch "$run_id" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 15
           }
           deploy_selected_batch 'getMyProfileTypeSettings,saveMyProfileTypeSettings,adminCreateCommitmentTemplate,adminCreateCommitmentPeriod,adminAssignCommitmentTemplate,getMyCommitments,submitCommitmentEvidence,adminReviewCommitmentTask,adminSetCommitmentException,getMyCommitmentEligibility,adminListCommitmentTemplates,adminListCommitmentPeriods,adminCloseCommitmentPeriod,adminCreateFinancePolicy,adminListFinancePolicies,adminRecordRevenueSettlement'
-          deploy_selected_batch 'adminReconcileRevenueSettlement,adminListRevenueSettlements,adminRecordRevenueAdjustment,adminListRevenueAdjustments,adminPrepareCreatorPayoutPeriod,adminGetCreatorPayoutPeriod,adminApproveCreatorPayoutPeriod,adminRecordCreatorPayment,adminSetTaxEstimate,adminSetTaxReserve,adminSetConfirmedTaxLiability,adminRecordTaxPayment,adminGetTaxLedger,getMyCreatorCompensation,adminListCommitmentReviewQueue'
-          echo "All 31 profile, commitment and compensation functions verified before Hosting."
+          deploy_selected_batch 'adminReconcileRevenueSettlement,adminListRevenueSettlements,adminRecordRevenueAdjustment,adminListRevenueAdjustments,adminPrepareCreatorPayoutPeriod,adminGetCreatorPayoutPeriod,adminAssessCreatorExpansion,adminApproveCreatorPayoutPeriod,adminRecordCreatorPayment,adminSetTaxEstimate,adminSetTaxReserve,adminSetConfirmedTaxLiability,adminRecordTaxPayment,adminGetTaxLedger,getMyCreatorCompensation,adminListCommitmentReviewQueue'
+          echo "All 32 profile, commitment and compensation functions verified before Hosting."
 
       - name: Deploy Hosting live
         id: deploy
