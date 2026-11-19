@@ -151,7 +151,17 @@ export const assessCreatorExpansion = (
     historyPeriods: history.map((period) => period.periodId),
     proposedCreatorCount,
   };
-  if (history.length < 3 || history.some((period) => period.status !== 'approved'
+  const consecutiveMonths = history.length === 3
+    && history.every((period) => /^\\d{4}-(0[1-9]|1[0-2])$/.test(period.periodId))
+    && history[1].periodId === (() => {
+      const [year, month] = history[0].periodId.split('-').map(Number);
+      return new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
+    })()
+    && history[2].periodId === (() => {
+      const [year, month] = history[1].periodId.split('-').map(Number);
+      return new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
+    })();
+  if (history.length < 3 || !consecutiveMonths || history.some((period) => period.status !== 'approved'
     || !Number.isSafeInteger(period.monthlyCreatorPoolContributionPence)
     || period.monthlyCreatorPoolContributionPence < 0
     || !Number.isSafeInteger(period.totalAllocatedPence)
@@ -160,7 +170,7 @@ export const assessCreatorExpansion = (
     || period.eligibleCreatorCount < 1)) {
     return {
       ...base, status: 'insufficient_history', readyForReview: false,
-      reason: 'Three consecutive approved payout periods with reconciled Creator Pool contributions are required before expansion can be assessed.',
+      reason: 'Three consecutive approved monthly payout periods with reconciled Creator Pool contributions are required before expansion can be assessed.',
       currentEligibleCreatorCount: history[0]?.eligibleCreatorCount ?? null,
       protectedMonthlyPayoutBenchmarkPence: null,
       requiredMonthlyCreatorPoolPence: null,
