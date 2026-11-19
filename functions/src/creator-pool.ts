@@ -152,7 +152,7 @@ export const assessCreatorExpansion = (
     proposedCreatorCount,
   };
   const consecutiveMonths = history.length === 3
-    && history.every((period) => /^\\d{4}-(0[1-9]|1[0-2])$/.test(period.periodId))
+    && history.every((period) => /^\d{4}-(0[1-9]|1[0-2])$/.test(period.periodId))
     && history[1].periodId === (() => {
       const [year, month] = history[0].periodId.split('-').map(Number);
       return new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
