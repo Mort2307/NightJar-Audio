@@ -14,7 +14,7 @@ For each monthly period:
 
 `availablePool = openingRetainedBalance + monthlyContribution`
 
-The opening retained balance is the previous approved period's retained Creator Pool balance. It is carried once into the new period and snapshotted there.
+The opening retained balance is the previous approved period's retained Creator Pool balance. It is carried once into the new period and snapshotted there. If retained money exists, the payout workflow requires each intervening month to be prepared and approved in order; a later month cannot reuse the same earlier balance if a month was skipped.
 
 ## 2. Equal allocation with the hard ceiling
 
