@@ -139,6 +139,17 @@ test('no expansion is required when proposed roster matches the current roster',
   assert.equal(result.readyForReview, true);
 });
 
+test('expansion gate rejects three records with a missing calendar month', () => {
+  const result = assessCreatorExpansion([
+    { periodId: '2026-10', status: 'approved', monthlyCreatorPoolContributionPence: 3200000, totalAllocatedPence: 1500000, eligibleCreatorCount: 5 },
+    { periodId: '2026-08', status: 'approved', monthlyCreatorPoolContributionPence: 3100000, totalAllocatedPence: 1500000, eligibleCreatorCount: 5 },
+    { periodId: '2026-07', status: 'approved', monthlyCreatorPoolContributionPence: 3000000, totalAllocatedPence: 1500000, eligibleCreatorCount: 5 },
+  ], 10);
+  assert.equal(result.status, 'insufficient_history');
+  assert.equal(result.readyForReview, false);
+});
+
+
 test('allocator and expansion gate reject invalid amounts and limits', () => {
   assert.throws(() => allocateCreatorPool(-1, []), /non-negative/);
   assert.throws(() => allocateCreatorPool(10, [], 0), /positive/);
