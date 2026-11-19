@@ -208,3 +208,12 @@ Required acceptance evidence:
 - Confirm the legal operating entity and accountant-approved tax categories/rules before tax estimates are enabled.
 - The allocation policy makes any tax reserve an explicit fourth percentage within the 100% total; it is not deducted a second time from Creator or NightJar after the waterfall. The separate tax payment ledger still requires accountant-confirmed liability before a payment can be recorded.
 - Confirm whether existing subscribers retain their current Stripe price until they consent/renew, or whether any future price change is intended to apply at renewal under the applicable billing terms.
+
+
+## Creator Pool cap and expansion addendum — 19 November 2026
+
+The implementation in `docs/CREATOR_POOL_CAP_AND_EXPANSION.md` extends the equal-share allocator with a £3,000 hard monthly individual ceiling, a rolling Creator Pool retained balance and a conservative three-consecutive-period expansion assessment. It preserves the current server-derived commitment eligibility, one share per user ID, manual payment workflow and immutable period snapshots.
+
+Important implementation boundary: retained Creator Pool money is not a NightJar/company reserve and is not an individual creator's deferred entitlement. It remains in the shared Creator Pool. The expansion assessment excludes retained balances from recurring-revenue tests and only returns readiness for founder review.
+
+The founder-review Schedule C contract draft has not yet been amended to include the monthly ceiling and treatment of excess balances. The code change must not be deployed for real payouts until that schedule is updated, legally/accountingly reviewed and accepted through the contract process.
