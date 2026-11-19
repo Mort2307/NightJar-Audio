@@ -6,8 +6,8 @@ export const isImmediatelyPreviousCreatorPoolMonth = (
   previousPeriodId: string,
   currentPeriodId: string,
 ): boolean => {
-  if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(previousPeriodId)
-    || !/^\\d{4}-(0[1-9]|1[0-2])$/.test(currentPeriodId)) return false;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(previousPeriodId)
+    || !/^\d{4}-(0[1-9]|1[0-2])$/.test(currentPeriodId)) return false;
   const [year, month] = currentPeriodId.split('-').map(Number);
   return previousPeriodId === new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
 };
