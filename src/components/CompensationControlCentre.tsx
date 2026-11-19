@@ -344,7 +344,7 @@ export default function CompensationControlCentre() {
     </article>
 
     <article className="nj-compensation-card">
-      <span className="mini-label">02 / RECONCILIATION</span><h3>Settlement register</h3>
+      <span className="mini-label">03 / RECONCILIATION</span><h3>Settlement register</h3>
       {loading ? <p>Loading settlement register…</p> : !settlements.length ? <p>No settled revenue has been recorded for this period.</p> : settlements.map((item) => <div className="nj-settlement-row" key={item.id}>
         <div className="nj-settlement-head"><strong>{item.externalId}</strong><span data-status={item.status}>{item.status.replaceAll('_', ' ')}</span></div>
         <small>{item.settledAt} · Source: {item.sourceReference}</small>
@@ -354,7 +354,7 @@ export default function CompensationControlCentre() {
     </article>
 
     <article className="nj-compensation-card">
-      <span className="mini-label">03 / CREATOR POOL</span><h3>Prepare equal-share calculation</h3>
+      <span className="mini-label">04 / CREATOR POOL</span><h3>Prepare equal-share calculation</h3>
       <p>Once the commitment period is closed and revenue is reconciled, NightJar adds the new 50% Creator Pool contribution to the prior retained balance, then divides it equally between eligible individuals. Each person is capped at £3,000 for the month; excess remains in the shared Creator Pool, not as an individual carry-forward. One person receives one share regardless of role count.</p>
       {payoutPeriod ? <div className="nj-payout-period">
         <div className="nj-payout-period-status"><strong>{payoutPeriod.period.periodId} · {payoutPeriod.period.status.toUpperCase()}</strong><span>{payoutPeriod.period.eligibleCreatorCount} eligible individuals</span></div>
@@ -384,7 +384,7 @@ export default function CompensationControlCentre() {
       {!payoutPeriod && <><p className="nj-compensation-period-gate">{commitmentPeriodStatus === 'closed' ? 'Assessment period closed. Finance reconciliation can now be prepared. An approved retained balance may also be distributed in a month with no new settlement.' : 'The matching commitment period must be closed and an effective finance policy must exist before a Creator Pool draft can be prepared.'}</p><button className="nj-compensation-primary" type="button" disabled={busy === 'prepare' || pending > 0 || (!settlements.length && !(expansionAssessment && expansionAssessment.openingCarryForwardPence > 0)) || commitmentPeriodStatus !== 'closed' || !financePolicyForPeriod} onClick={() => void prepare()}>{busy === 'prepare' ? 'Preparing…' : 'Prepare Creator Pool draft'}</button></>}
     </article>
     <article className="nj-compensation-card nj-creator-expansion">
-      <span className="mini-label">04 / CREATOR EXPANSION GATE</span>
+      <span className="mini-label">05 / CREATOR EXPANSION GATE</span>
       <h3>Check sustainable roster growth</h3>
       <p>This conservative assessment uses the three latest approved payout periods. It tests recurring monthly Creator Pool contributions, not retained balances, against the protected recent per-creator payout benchmark. A green result is permission to review expansion, not automatic creator admission.</p>
       <div className="nj-compensation-form-grid">
@@ -416,7 +416,7 @@ export default function CompensationControlCentre() {
     </article>
 
     <article className="nj-compensation-card nj-tax-ledger">
-      <span className="mini-label">04 / TAX RESERVE & LIABILITY LEDGER</span><h3>Keep reserves separate from tax actually due</h3>
+      <span className="mini-label">06 / TAX RESERVE & LIABILITY LEDGER</span><h3>Keep reserves separate from tax actually due</h3>
       <p>No tax rate is assumed. The Tax Reserve percentage above is a policy allocation only. Record cash here only after it has actually been set aside; then record an accountant-confirmed liability separately and actual tax payments against that liability.</p>
       <div className="nj-tax-estimate-panel">
         <h4>Transparent tax estimate</h4>
