@@ -4,6 +4,7 @@ import {
   allocateCreatorPool,
   assessCreatorExpansion,
   DEFAULT_CREATOR_MONTHLY_CAP_PENCE,
+  isImmediatelyPreviousCreatorPoolMonth,
   type CreatorPoolMember,
 } from './creator-pool';
 
@@ -149,6 +150,14 @@ test('expansion gate rejects three records with a missing calendar month', () =>
   assert.equal(result.readyForReview, false);
 });
 
+
+test('Creator Pool retained balance can only roll through the immediately following month', () => {
+  assert.equal(isImmediatelyPreviousCreatorPoolMonth('2026-10', '2026-11'), true);
+  assert.equal(isImmediatelyPreviousCreatorPoolMonth('2025-12', '2026-01'), true);
+  assert.equal(isImmediatelyPreviousCreatorPoolMonth('2026-09', '2026-11'), false);
+  assert.equal(isImmediatelyPreviousCreatorPoolMonth('2026-11', '2026-11'), false);
+  assert.equal(isImmediatelyPreviousCreatorPoolMonth('bad-period', '2026-11'), false);
+});
 
 test('allocator and expansion gate reject invalid amounts and limits', () => {
   assert.throws(() => allocateCreatorPool(-1, []), /non-negative/);
