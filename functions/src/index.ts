@@ -18,7 +18,7 @@ import { buildNightjarQualityCallables } from './nightjar-quality';
 import { buildDiditResubmissionCallables } from './didit-resubmissions';
 import { NIGHTJAR_PROFILE_TYPES, isNightjarProfileType, normaliseProfileTypeRecord, normaliseProfileTypeSettings, resolveVisibleProfileTypes, type NightjarProfileType } from './profile-types';
 import { evaluateRoleCommitments, isCommitmentTaskReviewable, type RoleCommitmentAssessment } from './commitment-eligibility';
-import { allocateCreatorPool, assessCreatorExpansion, DEFAULT_CREATOR_MONTHLY_CAP_PENCE, type CreatorPoolMember } from './creator-pool';
+import { allocateCreatorPool, assessCreatorExpansion, DEFAULT_CREATOR_MONTHLY_CAP_PENCE, isImmediatelyPreviousCreatorPoolMonth, type CreatorPoolMember } from './creator-pool';
 import { calculateEligibleNetRevenuePence, isSameManualPayment } from './finance-settlement';
 import { allocateFinanceRevenuePoolsPence, validateFinanceAllocationPolicy } from './finance-policy';
 import { calculateTaxEstimatePence } from './finance-tax-estimate';
@@ -1454,9 +1454,9 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   // period before it can roll again. This prevents two out-of-order monthly
   // preparations from both consuming the same prior-period balance.
   if (openingCarryForwardPence > 0 && previousPayoutPeriod) {
-    const [year, month] = periodId.split('-').map(Number);
-    const expectedPreviousPeriodId = new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
-    if (previousPayoutPeriod.id !== expectedPreviousPeriodId) {
+    if (!isImmediatelyPreviousCreatorPoolMonth(previousPayoutPeriod.id, periodId)) {
+      const [year, month] = periodId.split('-').map(Number);
+      const expectedPreviousPeriodId = new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
       throw new HttpsError('failed-precondition', 'The retained Creator Pool balance must be processed through each intervening monthly period before a later period can use it. Prepare and approve ' + expectedPreviousPeriodId + ' first.');
     }
   }
