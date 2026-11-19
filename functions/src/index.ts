@@ -1450,6 +1450,16 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
   const openingCarryForwardPence = previousPayoutData
     ? safePence(previousPayoutData.retainedCreatorPoolPence ?? previousPayoutData.unallocatedCreatorPoolPence ?? 0, 'Opening retained Creator Pool balance')
     : 0;
+  // Retained balance must pass through each immediately following monthly
+  // period before it can roll again. This prevents two out-of-order monthly
+  // preparations from both consuming the same prior-period balance.
+  if (openingCarryForwardPence > 0 && previousPayoutPeriod) {
+    const [year, month] = periodId.split('-').map(Number);
+    const expectedPreviousPeriodId = new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
+    if (previousPayoutPeriod.id !== expectedPreviousPeriodId) {
+      throw new HttpsError('failed-precondition', 'The retained Creator Pool balance must be processed through each intervening monthly period before a later period can use it. Prepare and approve ' + expectedPreviousPeriodId + ' first.');
+    }
+  }
   const previousRemainderStartIndex = Number.isSafeInteger(Number(previousPayoutData?.nextRemainderIndex))
     && Number(previousPayoutData?.nextRemainderIndex) >= 0 ? Number(previousPayoutData?.nextRemainderIndex) : 0;
   if (!commitmentPeriod.exists || commitmentPeriod.data()?.status !== 'closed') {
