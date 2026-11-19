@@ -1,5 +1,17 @@
 export const DEFAULT_CREATOR_MONTHLY_CAP_PENCE = 300000;
 
+/** Returns true only when previousPeriodId is the calendar month immediately
+ * before currentPeriodId. Both values use the canonical YYYY-MM format. */
+export const isImmediatelyPreviousCreatorPoolMonth = (
+  previousPeriodId: string,
+  currentPeriodId: string,
+): boolean => {
+  if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(previousPeriodId)
+    || !/^\\d{4}-(0[1-9]|1[0-2])$/.test(currentPeriodId)) return false;
+  const [year, month] = currentPeriodId.split('-').map(Number);
+  return previousPeriodId === new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
+};
+
 export type CreatorPoolMember = {
   userId: string;
   accountStatus: 'active' | 'pending_review' | 'suspended' | 'closed';
