@@ -155,7 +155,10 @@ const adminRecordRevenueAdjustmentCall = httpsCallable<{ periodId: string; amoun
 const adminListRevenueAdjustmentsCall = httpsCallable<{ periodId: string }, { adjustments: Array<{ id: string; amountPence: number; reason: string; sourceReference: string }> }>(functions, 'adminListRevenueAdjustments');
 const adminPrepareCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
   prepared: boolean; periodId: string; eligibleNetRevenuePence: number;
-  creatorPoolPercent: number; creatorPoolPence: number; nightjarPoolPercent: number; nightjarPoolPence: number;
+  creatorPoolPercent: number; creatorPoolPence: number; monthlyCreatorPoolContributionPence: number;
+  openingCarryForwardPence: number; availableCreatorPoolPence: number; creatorMonthlyCapPence: number;
+  retainedCreatorPoolPence: number; nextRemainderIndex: number;
+  nightjarPoolPercent: number; nightjarPoolPence: number;
   ownerPoolPercent: number; ownerPoolPence: number; taxReservePercent: number; taxReservePoolPence: number;
   subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string;
   eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number;
@@ -168,9 +171,28 @@ const adminGetCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, {
     ownerPoolPercent: number; ownerPoolPence: number; taxReservePercent: number; taxReservePoolPence: number;
   subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string;
     eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number;
+    monthlyCreatorPoolContributionPence?: number; openingCarryForwardPence?: number; availableCreatorPoolPence?: number;
+    creatorMonthlyCapPence?: number; retainedCreatorPoolPence?: number; nextRemainderIndex?: number;
   };
   payouts: Array<{ userId: string; displayName: string; amountPence: number; paidPence: number; outstandingPence: number; qualifyingRole: NightjarCommitmentRole | null; status: string }>;
 }>(functions, 'adminGetCreatorPayoutPeriod');
+type NightjarCreatorExpansionAssessment = {
+  status: 'insufficient_history' | 'no_expansion_required' | 'ready' | 'not_ready';
+  readyForReview: boolean;
+  reason: string;
+  historyPeriods: string[];
+  currentEligibleCreatorCount: number | null;
+  proposedCreatorCount: number;
+  protectedMonthlyPayoutBenchmarkPence: number | null;
+  requiredMonthlyCreatorPoolPence: number | null;
+  minimumRecentMonthlyContributionPence: number | null;
+  averageRecentMonthlyContributionPence: number | null;
+  supportedCreatorCount: number | null;
+  shortfallPence: number | null;
+  openingCarryForwardPence: number;
+  creatorMonthlyCapPence: number;
+};
+const adminAssessCreatorExpansionCall = httpsCallable<{ periodId: string; proposedCreatorCount: number }, NightjarCreatorExpansionAssessment>(functions, 'adminAssessCreatorExpansion');
 const adminApproveCreatorPayoutPeriodCall = httpsCallable<{ periodId: string }, { approved: boolean; periodId: string }>(functions, 'adminApproveCreatorPayoutPeriod');
 const adminRecordCreatorPaymentCall = httpsCallable<{ periodId: string; userId: string; amountPence: number; reference: string; paidAt: string }, { recorded: boolean; duplicate: boolean; paymentId: string; paidPence?: number; outstandingPence?: number }>(functions, 'adminRecordCreatorPayment');
 
@@ -192,7 +214,7 @@ const adminGetTaxLedgerCall = httpsCallable<{ periodId: string }, {
   liabilityEntries: Array<{ id: string; liabilityPence: number; accountantReference: string; recordedAt: unknown; recordedByAdminUserId: string }>;
 }>(functions, 'adminGetTaxLedger');
 const getMyCreatorCompensationCall = httpsCallable<void, { compensation: Array<{
-  periodId: string; periodStatus: string; creatorPoolPercent: number; eligibleCreatorCount: number;
+  periodId: string; periodStatus: string; creatorPoolPercent: number; creatorMonthlyCapPence: number; eligibleCreatorCount: number;
   amountPence: number; paidPence: number; outstandingPence: number; status: string; qualifyingRole: string | null;
   payments: Array<{ amountPence: number; reference: string; paidAt: string }>;
 }> }>(functions, 'getMyCreatorCompensation');
@@ -301,6 +323,10 @@ export const nightjarAccount = {
 
   async adminGetCreatorPayoutPeriod(periodId: string) {
     return (await adminGetCreatorPayoutPeriodCall({ periodId })).data;
+  },
+
+  async adminAssessCreatorExpansion(input: { periodId: string; proposedCreatorCount: number }) {
+    return (await adminAssessCreatorExpansionCall(input)).data;
   },
 
   async adminApproveCreatorPayoutPeriod(periodId: string) {
