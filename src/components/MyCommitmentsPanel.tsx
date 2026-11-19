@@ -9,7 +9,7 @@ export default function MyCommitmentsPanel() {
   const [assignments, setAssignments] = useState<NightjarCommitmentAssignment[]>([]);
   const [eligible, setEligible] = useState(false);
   const [qualifyingRole, setQualifyingRole] = useState<string | null>(null);
-  const [compensation, setCompensation] = useState<Array<{ periodId: string; periodStatus: string; amountPence: number; paidPence: number; outstandingPence: number; status: string; qualifyingRole: string | null; payments: Array<{ amountPence: number; reference: string; paidAt: string }> }>>([]);
+  const [compensation, setCompensation] = useState<Array<{ periodId: string; periodStatus: string; creatorMonthlyCapPence: number; amountPence: number; paidPence: number; outstandingPence: number; status: string; qualifyingRole: string | null; payments: Array<{ amountPence: number; reference: string; paidAt: string }> }>>([]);
   const [periodId, setPeriodId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState('');
@@ -95,7 +95,7 @@ export default function MyCommitmentsPanel() {
         <header><div><span className="mini-label">CREATOR POOL / YOUR RECORDS</span><h3>My compensation</h3><p>Only your own payout and payment records are shown here.</p></div></header>
         {compensation.map((record) => <div className="nj-member-compensation-row" key={record.periodId}>
           <div><strong>{record.periodId}</strong><small>{record.qualifyingRole ? roleName(record.qualifyingRole) + ' qualified' : 'Eligibility record'} · {record.status.replaceAll('_', ' ')}</small></div>
-          <div><strong>{new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(record.amountPence / 100)}</strong><small>Paid {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(record.paidPence / 100)} · Outstanding {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(record.outstandingPence / 100)}</small></div>
+          <div><strong>{new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(record.amountPence / 100)}</strong><small>Monthly ceiling {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(record.creatorMonthlyCapPence / 100)} · Paid {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(record.paidPence / 100)} · Outstanding {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(record.outstandingPence / 100)}</small></div>
           {record.payments.map((payment, index) => <small className="nj-member-payment-reference" key={payment.reference + index}>Payment: {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(payment.amountPence / 100)} · {payment.paidAt} · Ref {payment.reference}</small>)}
         </div>)}
       </article>}
