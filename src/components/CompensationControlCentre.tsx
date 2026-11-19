@@ -11,8 +11,26 @@ type Settlement = {
 type Payout = { userId: string; displayName: string; amountPence: number; paidPence: number; outstandingPence: number; qualifyingRole: NightjarCommitmentRole | null; status: string };
 type FinancePolicy = { id: string; policyId: string; effectiveFrom: string; version: number; subscriptionPricePence: number; creatorPoolPercent: number; nightjarPoolPercent: number; ownerPoolPercent: number; taxReservePercent: number; priceScope: string; status: string };
 type PayoutPeriod = {
-  period: { periodId: string; status: string; eligibleNetRevenuePence: number; creatorPoolPercent: number; creatorPoolPence: number; nightjarPoolPercent: number; nightjarPoolPence: number; ownerPoolPercent: number; ownerPoolPence: number; taxReservePercent: number; taxReservePoolPence: number; subscriptionPricePence: number; policyVersion: number; policyEffectiveFrom: string; eligibleCreatorCount: number; totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number };
+  period: {
+    periodId: string; status: string; eligibleNetRevenuePence: number;
+    creatorPoolPercent: number; creatorPoolPence: number; monthlyCreatorPoolContributionPence?: number;
+    openingCarryForwardPence?: number; availableCreatorPoolPence?: number; creatorMonthlyCapPence?: number;
+    retainedCreatorPoolPence?: number; nextRemainderIndex?: number;
+    nightjarPoolPercent: number; nightjarPoolPence: number; ownerPoolPercent: number; ownerPoolPence: number;
+    taxReservePercent: number; taxReservePoolPence: number; subscriptionPricePence: number;
+    policyVersion: number; policyEffectiveFrom: string; eligibleCreatorCount: number;
+    totalAllocatedPence: number; unallocatedCreatorPoolPence: number; nonCreatorRemainderPence: number;
+  };
   payouts: Payout[];
+};
+type ExpansionAssessment = {
+  status: 'insufficient_history' | 'no_expansion_required' | 'ready' | 'not_ready';
+  readyForReview: boolean; reason: string; historyPeriods: string[];
+  currentEligibleCreatorCount: number | null; proposedCreatorCount: number;
+  protectedMonthlyPayoutBenchmarkPence: number | null; requiredMonthlyCreatorPoolPence: number | null;
+  minimumRecentMonthlyContributionPence: number | null; averageRecentMonthlyContributionPence: number | null;
+  supportedCreatorCount: number | null; shortfallPence: number | null;
+  openingCarryForwardPence: number; creatorMonthlyCapPence: number;
 };
 const today = (() => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; })();
 const month = today.slice(0, 7);
@@ -43,6 +61,8 @@ export default function CompensationControlCentre() {
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [adjustmentReference, setAdjustmentReference] = useState('');
   const [payoutPeriod, setPayoutPeriod] = useState<PayoutPeriod | null>(null);
+  const [proposedTotalCreators, setProposedTotalCreators] = useState('');
+  const [expansionAssessment, setExpansionAssessment] = useState<ExpansionAssessment | null>(null);
   const [commitmentPeriodStatus, setCommitmentPeriodStatus] = useState('missing');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
@@ -145,7 +165,7 @@ export default function CompensationControlCentre() {
   }, [periodId]);
   useEffect(() => { refreshRef.current = refresh; }, [refresh]);
   useEffect(() => {
-    setSettlements([]); setAdjustments([]); setPayoutPeriod(null); setCommitmentPeriodStatus('missing');
+    setSettlements([]); setAdjustments([]); setPayoutPeriod(null); setExpansionAssessment(null); setCommitmentPeriodStatus('missing');
     setExternalId(''); setSettledAt(periodId + '-01'); setSourceReference(''); setGross('');
     setRefunds('0'); setChargebacks('0'); setFees('0'); setVat('0'); setOtherDeductions('0');
     setReconciliationNotes({}); setPaymentRefs({}); setPaymentAmounts({});
@@ -183,7 +203,14 @@ export default function CompensationControlCentre() {
     taxReservePercent: Number(policyTaxReservePercent),
   }), 'Immutable finance policy saved. Existing subscriptions and Stripe prices were not changed.');
 
-  const prepare = () => run('prepare', () => nightjarAccount.adminPrepareCreatorPayoutPeriod(periodId), 'Creator Pool calculation prepared as a draft.');
+  const prepare = () => run('prepare', () => nightjarAccount.adminPrepareCreatorPayoutPeriod(periodId), 'Capped Creator Pool calculation prepared as a draft.');
+  const assessExpansion = () => run('expansion', async () => {
+    const proposed = Number(proposedTotalCreators);
+    if (!Number.isSafeInteger(proposed) || proposed < 1) throw new Error('Enter a valid proposed total creator count.');
+    const result = await nightjarAccount.adminAssessCreatorExpansion({ periodId, proposedCreatorCount: proposed });
+    setExpansionAssessment(result as ExpansionAssessment);
+    return result;
+  }, 'Creator expansion assessment updated.');
   const recordAdjustment = () => run('adjustment', () => nightjarAccount.adminRecordRevenueAdjustment({
     periodId, amountPence: pence(adjustmentAmount), reason: adjustmentReason.trim(), sourceReference: adjustmentReference.trim(),
   }), 'Audited revenue adjustment recorded.');
@@ -328,16 +355,19 @@ export default function CompensationControlCentre() {
 
     <article className="nj-compensation-card">
       <span className="mini-label">03 / CREATOR POOL</span><h3>Prepare equal-share calculation</h3>
-      <p>Once the commitment period is closed and every settlement is reconciled, Nightjar applies the effective-dated Creator Pool percentage and divides that pool equally between eligible individuals. One individual receives one share regardless of role count.</p>
+      <p>Once the commitment period is closed and revenue is reconciled, NightJar adds the new 50% Creator Pool contribution to the prior retained balance, then divides it equally between eligible individuals. Each person is capped at £3,000 for the month; excess remains in the shared Creator Pool, not as an individual carry-forward. One person receives one share regardless of role count.</p>
       {payoutPeriod ? <div className="nj-payout-period">
         <div className="nj-payout-period-status"><strong>{payoutPeriod.period.periodId} · {payoutPeriod.period.status.toUpperCase()}</strong><span>{payoutPeriod.period.eligibleCreatorCount} eligible individuals</span></div>
         <div className="nj-compensation-stats">
           <div><span>Eligible net revenue</span><strong>{money(payoutPeriod.period.eligibleNetRevenuePence)}</strong></div>
-          <div><span>Creator Pool ({payoutPeriod.period.creatorPoolPercent}%)</span><strong>{money(payoutPeriod.period.creatorPoolPence)}</strong></div>
+          <div><span>New Creator Pool contribution ({payoutPeriod.period.creatorPoolPercent}%)</span><strong>{money(payoutPeriod.period.monthlyCreatorPoolContributionPence ?? payoutPeriod.period.creatorPoolPence)}</strong></div>
+          <div><span>Opening retained balance</span><strong>{money(payoutPeriod.period.openingCarryForwardPence ?? 0)}</strong></div>
+          <div><span>Total available Creator Pool</span><strong>{money(payoutPeriod.period.availableCreatorPoolPence ?? payoutPeriod.period.creatorPoolPence)}</strong></div>
+          <div><span>Individual monthly ceiling</span><strong>{money(payoutPeriod.period.creatorMonthlyCapPence ?? 300000)}</strong></div>
+          <div><span>Retained Creator Pool after payouts</span><strong>{money(payoutPeriod.period.retainedCreatorPoolPence ?? payoutPeriod.period.unallocatedCreatorPoolPence)}</strong></div>
           <div><span>NightJar operations ({payoutPeriod.period.nightjarPoolPercent}%)</span><strong>{money(payoutPeriod.period.nightjarPoolPence)}</strong></div>
           <div><span>Meg & Mike pool ({payoutPeriod.period.ownerPoolPercent}%)</span><strong>{money(payoutPeriod.period.ownerPoolPence)}</strong></div>
           <div><span>Tax reserve allocation ({payoutPeriod.period.taxReservePercent}%)</span><strong>{money(payoutPeriod.period.taxReservePoolPence)}</strong></div>
-          <div><span>Unallocated Creator Pool</span><strong>{money(payoutPeriod.period.unallocatedCreatorPoolPence)}</strong></div>
         </div>
         <div className="nj-compensation-unallocated"><CircleAlert size={16}/><span>These are policy allocations in the draft ledger, not bank movements. NightJar and Meg & Mike amounts are not automatic transfers or founder distributions. The Tax Reserve amount is not yet cash segregated or tax paid; record only an actual cash reserve in the separate tax ledger below.</span></div>
         {payoutPeriod.period.status === 'draft' && <button className="nj-compensation-primary" type="button" disabled={busy === 'approve'} onClick={() => void approve()}>{busy === 'approve' ? 'Approving…' : 'Approve payout ledger'}</button>}
@@ -351,8 +381,40 @@ export default function CompensationControlCentre() {
           </div>}
         </div>)}
       </div> : <div className="nj-compensation-empty"><ShieldCheck size={17}/><span>No payout ledger exists for this period yet. It will only be created after all source settlements are reconciled and the commitment period is closed.</span></div>}
-      {!payoutPeriod && <><p className="nj-compensation-period-gate">{commitmentPeriodStatus === 'closed' ? 'Assessment period closed. Finance reconciliation can now be prepared.' : 'The matching commitment period must be closed and an effective finance policy must exist before a Creator Pool draft can be prepared.'}</p><button className="nj-compensation-primary" type="button" disabled={busy === 'prepare' || pending > 0 || !settlements.length || commitmentPeriodStatus !== 'closed' || !financePolicyForPeriod} onClick={() => void prepare()}>{busy === 'prepare' ? 'Preparing…' : 'Prepare Creator Pool draft'}</button></>}
+      {!payoutPeriod && <><p className="nj-compensation-period-gate">{commitmentPeriodStatus === 'closed' ? 'Assessment period closed. Finance reconciliation can now be prepared. An approved retained balance may also be distributed in a month with no new settlement.' : 'The matching commitment period must be closed and an effective finance policy must exist before a Creator Pool draft can be prepared.'}</p><button className="nj-compensation-primary" type="button" disabled={busy === 'prepare' || pending > 0 || (!settlements.length && !(expansionAssessment && expansionAssessment.openingCarryForwardPence > 0)) || commitmentPeriodStatus !== 'closed' || !financePolicyForPeriod} onClick={() => void prepare()}>{busy === 'prepare' ? 'Preparing…' : 'Prepare Creator Pool draft'}</button></>}
     </article>
+    <article className="nj-compensation-card nj-creator-expansion">
+      <span className="mini-label">04 / CREATOR EXPANSION GATE</span>
+      <h3>Check sustainable roster growth</h3>
+      <p>This conservative assessment uses the three latest approved payout periods. It tests recurring monthly Creator Pool contributions, not retained balances, against the protected recent per-creator payout benchmark. A green result is permission to review expansion, not automatic creator admission.</p>
+      <div className="nj-compensation-form-grid">
+        <label>Total eligible Creator Pool roster after expansion
+          <input type="number" min="1" max="500" step="1" value={proposedTotalCreators} onChange={(event) => setProposedTotalCreators(event.target.value)} placeholder="e.g. 8"/>
+        </label>
+        <div className="nj-compensation-net-preview"><span>Standard individual ceiling</span><strong>£3,000 per monthly period</strong></div>
+      </div>
+      <button className="nj-compensation-primary" type="button" disabled={busy === 'expansion' || !/^\d+$/.test(proposedTotalCreators.trim()) || Number(proposedTotalCreators) < 1 || Number(proposedTotalCreators) > 500} onClick={() => void assessExpansion()}>{busy === 'expansion' ? 'Assessing…' : 'Assess proposed expansion'}</button>
+      {expansionAssessment && <div className="nj-payout-period">
+        <div className="nj-payout-period-status">
+          <strong>{expansionAssessment.status.replaceAll('_', ' ').toUpperCase()}</strong>
+          <span>{expansionAssessment.historyPeriods.length} / 3 periods assessed</span>
+        </div>
+        <div className="nj-compensation-stats">
+          <div><span>Current eligible roster</span><strong>{expansionAssessment.currentEligibleCreatorCount ?? '—'}</strong></div>
+          <div><span>Proposed roster</span><strong>{expansionAssessment.proposedCreatorCount}</strong></div>
+          <div><span>Protected payout benchmark</span><strong>{expansionAssessment.protectedMonthlyPayoutBenchmarkPence === null ? '—' : money(expansionAssessment.protectedMonthlyPayoutBenchmarkPence)}</strong></div>
+          <div><span>Monthly contribution required</span><strong>{expansionAssessment.requiredMonthlyCreatorPoolPence === null ? '—' : money(expansionAssessment.requiredMonthlyCreatorPoolPence)}</strong></div>
+          <div><span>Lowest of last three monthly contributions</span><strong>{expansionAssessment.minimumRecentMonthlyContributionPence === null ? '—' : money(expansionAssessment.minimumRecentMonthlyContributionPence)}</strong></div>
+          <div><span>Retained pool (shown separately)</span><strong>{money(expansionAssessment.openingCarryForwardPence)}</strong></div>
+          <div><span>Additional recurring contribution needed</span><strong>{expansionAssessment.shortfallPence === null ? '—' : money(expansionAssessment.shortfallPence)}</strong></div>
+        </div>
+        <div className={expansionAssessment.readyForReview ? 'nj-compensation-success' : 'nj-compensation-unallocated'}>
+          {expansionAssessment.reason}
+        </div>
+        {expansionAssessment.readyForReview && <p className="nj-compensation-footnote">Ready for founder review only. NightJar must still confirm signed creator-pool terms, active approved roles, commitment eligibility and onboarding arrangements before adding anyone.</p>}
+      </div>}
+    </article>
+
     <article className="nj-compensation-card nj-tax-ledger">
       <span className="mini-label">04 / TAX RESERVE & LIABILITY LEDGER</span><h3>Keep reserves separate from tax actually due</h3>
       <p>No tax rate is assumed. The Tax Reserve percentage above is a policy allocation only. Record cash here only after it has actually been set aside; then record an accountant-confirmed liability separately and actual tax payments against that liability.</p>
