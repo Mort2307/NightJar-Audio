@@ -163,11 +163,11 @@ export default function CompensationControlCentre() {
   };
 
   const recordSettlement = () => run('settlement', () => nightjarAccount.adminRecordRevenueSettlement({
-    periodId, provider: 'stripe', externalId: externalId.trim(), settledAt,
+    periodId, provider: 'manual_bank_transfer', externalId: externalId.trim(), settledAt,
     sourceReference: sourceReference.trim(), grossPence: pence(gross),
     refundPence: pence(refunds), chargebackPence: pence(chargebacks),
     processorFeePence: pence(fees), vatPence: pence(vat), otherDeductionsPence: pence(otherDeductions),
-  }), 'Stripe settlement recorded for reconciliation.');
+  }), 'Bank-transfer settlement recorded for reconciliation.');
 
   const reconcile = (settlement: Settlement) => run('reconcile-' + settlement.id, () => nightjarAccount.adminReconcileRevenueSettlement({
     settlementId: settlement.id,
@@ -181,7 +181,7 @@ export default function CompensationControlCentre() {
     nightjarPoolPercent: Number(policyNightjarPercent),
     ownerPoolPercent: Number(policyOwnerPercent),
     taxReservePercent: Number(policyTaxReservePercent),
-  }), 'Immutable finance policy saved. Existing subscriptions and Stripe prices were not changed.');
+  }), 'Immutable finance policy saved. Subscription billing and payment collection remain inactive.');
 
   const prepare = () => run('prepare', () => nightjarAccount.adminPrepareCreatorPayoutPeriod(periodId), 'Creator Pool calculation prepared as a draft.');
   const recordAdjustment = () => run('adjustment', () => nightjarAccount.adminRecordRevenueAdjustment({
@@ -275,7 +275,7 @@ export default function CompensationControlCentre() {
         <label>Tax reserve allocation (%) · optional<input type="number" min="0" max="100" step="1" value={policyTaxReservePercent} onChange={(event) => setPolicyTaxReservePercent(event.target.value)}/></label>
         <div className="nj-compensation-net-preview"><span>Allocation total</span><strong>{policyPercentTotal === null ? 'Enter whole percentages from 0 to 100.' : policyPercentTotal + '% / 100%'}</strong></div>
       </div>
-      <p className="nj-compensation-footnote">The £ price is a planning value for new subscriptions only. Saving this policy does not create or change Stripe prices, update existing customer agreements or collect payment. The Meg & Mike pool is an accounting allocation, not an automatic founder payout. A non-zero tax reserve allocates cash to a bookkeeping bucket only; it is not a tax estimate, confirmed liability or payment.</p>
+      <p className="nj-compensation-footnote">The £ price is a planning value for new subscriptions only. Saving this policy does not create or change subscription prices, update customer agreements or collect payment. The Meg & Mike pool is an accounting allocation, not an automatic founder payout. A non-zero tax reserve allocates cash to a bookkeeping bucket only; it is not a tax estimate, confirmed liability or payment.</p>
       <button className="nj-compensation-primary" type="button" disabled={busy === 'policy' || !policyPriceValid || !policyPercentagesValid || policyPercentTotal !== 100 || !/^\d{4}-\d{2}$/.test(policyEffectiveMonth)} onClick={() => void saveFinancePolicy()}>{busy === 'policy' ? 'Saving policy…' : 'Save immutable finance policy'}</button>
       {!!financePolicies.length && <div className="nj-finance-policy-history">
         <h4>Saved policy versions</h4>
@@ -287,16 +287,16 @@ export default function CompensationControlCentre() {
     </article>
 
     <article className="nj-compensation-card">
-      <span className="mini-label">01 / STRIPE SETTLEMENT IMPORT</span><h3>Record a settled Stripe payout</h3>
-      <p>This is an auditable manual source entry, not a live Stripe webhook. Enter figures from the Stripe payout/balance report. MRR and unpaid invoices are not accepted as cash received.</p>
+      <span className="mini-label">01 / MANUAL BANK-TRANSFER RECONCILIATION</span><h3>Record a settled bank transfer</h3>
+      <p>This is an auditable manual source entry, not a payment integration. Enter figures only after funds have settled into NightJar’s bank account. Forecast MRR and unpaid invoices are not accepted as cash received.</p>
       <div className="nj-compensation-form-grid">
-        <label>Stripe payout / balance reference<input value={externalId} onChange={(event) => setExternalId(event.target.value)} placeholder="po_… or txn_…"/></label>
+        <label>Bank statement / transfer reference<input value={externalId} onChange={(event) => setExternalId(event.target.value)} placeholder="Bank transaction reference"/></label>
         <label>Settlement date<input type="date" value={settledAt} onChange={(event) => setSettledAt(event.target.value)}/></label>
-        <label className="wide">Source report reference<input value={sourceReference} onChange={(event) => setSourceReference(event.target.value)} placeholder="Stripe payout reconciliation report / export reference"/></label>
+        <label className="wide">Source report reference<input value={sourceReference} onChange={(event) => setSourceReference(event.target.value)} placeholder="Bank statement or settlement evidence reference"/></label>
         <label>Gross receipts (£)<input type="number" min="0" step="0.01" value={gross} onChange={(event) => setGross(event.target.value)}/></label>
         <label>Refunds (£)<input type="number" min="0" step="0.01" value={refunds} onChange={(event) => setRefunds(event.target.value)}/></label>
         <label>Chargebacks (£)<input type="number" min="0" step="0.01" value={chargebacks} onChange={(event) => setChargebacks(event.target.value)}/></label>
-        <label>Processor fees (£)<input type="number" min="0" step="0.01" value={fees} onChange={(event) => setFees(event.target.value)}/></label>
+        <label>Bank / transfer fees (£)<input type="number" min="0" step="0.01" value={fees} onChange={(event) => setFees(event.target.value)}/></label>
         <label>VAT collected (£)<input type="number" min="0" step="0.01" value={vat} onChange={(event) => setVat(event.target.value)}/></label>
         <label>Other deductions (£)<input type="number" min="0" step="0.01" value={otherDeductions} onChange={(event) => setOtherDeductions(event.target.value)}/></label>
       </div>
@@ -322,7 +322,7 @@ export default function CompensationControlCentre() {
         <div className="nj-settlement-head"><strong>{item.externalId}</strong><span data-status={item.status}>{item.status.replaceAll('_', ' ')}</span></div>
         <small>{item.settledAt} · Source: {item.sourceReference}</small>
         <div className="nj-settlement-amounts"><span>Gross {money(item.grossPence)}</span><span>Refunds {money(item.refundPence)}</span><span>Chargebacks {money(item.chargebackPence)}</span><span>Fees {money(item.processorFeePence)}</span><span>VAT {money(item.vatPence)}</span><span>Other deductions {money(item.otherDeductionsPence)}</span><strong>Net {money(item.eligibleNetRevenuePence)}</strong></div>
-        {item.status === 'pending_reconciliation' && <div className="nj-settlement-reconcile"><textarea rows={2} value={reconciliationNotes[item.id] ?? ''} onChange={(event) => setReconciliationNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="Confirm the Stripe source report and explain the reconciliation…"/><button type="button" disabled={busy === 'reconcile-' + item.id || (reconciliationNotes[item.id] ?? '').trim().length < 8} onClick={() => void reconcile(item)}><CheckCircle2 size={14}/> Mark reconciled</button></div>}
+        {item.status === 'pending_reconciliation' && <div className="nj-settlement-reconcile"><textarea rows={2} value={reconciliationNotes[item.id] ?? ''} onChange={(event) => setReconciliationNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="Confirm the bank settlement evidence and explain the reconciliation…"/><button type="button" disabled={busy === 'reconcile-' + item.id || (reconciliationNotes[item.id] ?? '').trim().length < 8} onClick={() => void reconcile(item)}><CheckCircle2 size={14}/> Mark reconciled</button></div>}
       </div>)}
     </article>
 

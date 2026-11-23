@@ -142,7 +142,7 @@ const adminCreateFinancePolicyCall = httpsCallable<{
 }>(functions, 'adminCreateFinancePolicy');
 const adminListFinancePoliciesCall = httpsCallable<void, { policies: NightjarFinancePolicy[] }>(functions, 'adminListFinancePolicies');
 const adminRecordRevenueSettlementCall = httpsCallable<{
-  periodId: string; provider: 'stripe'; externalId: string; settledAt: string; sourceReference: string;
+  periodId: string; provider: 'manual_bank_transfer'; externalId: string; settledAt: string; sourceReference: string;
   grossPence: number; refundPence: number; chargebackPence: number; processorFeePence: number; vatPence: number; otherDeductionsPence?: number;
 }, { recorded: boolean; settlementId: string; eligibleNetRevenuePence: number; status: string }>(functions, 'adminRecordRevenueSettlement');
 const adminReconcileRevenueSettlementCall = httpsCallable<{ settlementId: string; reconciliationNote: string }, { reconciled: boolean; settlementId: string; eligibleNetRevenuePence: number }>(functions, 'adminReconcileRevenueSettlement');
@@ -273,7 +273,7 @@ export const nightjarAccount = {
   },
 
   async adminRecordRevenueSettlement(input: {
-    periodId: string; provider: 'stripe'; externalId: string; settledAt: string; sourceReference: string;
+    periodId: string; provider: 'manual_bank_transfer'; externalId: string; settledAt: string; sourceReference: string;
     grossPence: number; refundPence: number; chargebackPence: number; processorFeePence: number; vatPence: number; otherDeductionsPence?: number;
   }) {
     return (await adminRecordRevenueSettlementCall(input)).data;
