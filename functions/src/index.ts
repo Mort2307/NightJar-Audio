@@ -1308,16 +1308,16 @@ export const adminRecordRevenueSettlement = onCall({ region: REGION }, async (re
   const admin = requireAdminIdentity(request);
   const input = (request.data ?? {}) as Record<string, unknown>;
   const periodId = input.periodId;
-  const provider = input.provider === 'stripe' ? 'stripe' : null;
+  const provider = input.provider === 'manual_bank_transfer' ? 'manual_bank_transfer' : null;
   const externalId = cleanText(input.externalId, 160);
   const settledAt = cleanText(input.settledAt, 10);
   const sourceReference = cleanText(input.sourceReference, 500);
   if (!validCommitmentPeriodId(periodId) || !provider || !/^[A-Za-z0-9_-]{1,160}$/.test(externalId)
     || !validIsoCalendarDate(settledAt) || settledAt.slice(0, 7) !== periodId || sourceReference.length < 4) {
-    throw new HttpsError('invalid-argument', 'Provide a period, Stripe payout or balance reference, settlement date and source report reference.');
+    throw new HttpsError('invalid-argument', 'Provide a period, manual bank-transfer reference, settlement date and source record reference.');
   }
   const grossPence = safePence(input.grossPence, 'Gross amount');
-  if (grossPence < 1) throw new HttpsError('invalid-argument', 'A settled Stripe entry must contain positive gross receipts.');
+  if (grossPence < 1) throw new HttpsError('invalid-argument', 'A settled revenue entry must contain positive gross receipts.');
   const refundPence = safePence(input.refundPence, 'Refunds');
   const chargebackPence = safePence(input.chargebackPence, 'Chargebacks');
   const processorFeePence = safePence(input.processorFeePence, 'Processor fees');
@@ -1338,7 +1338,7 @@ export const adminRecordRevenueSettlement = onCall({ region: REGION }, async (re
       tx.get(ref), tx.get(creatorPayoutPeriodRef(periodId)), tx.get(financePeriodControlRef(periodId)),
     ]);
     if (payoutPeriod.exists || control.data()?.payoutPrepared === true) throw new HttpsError('failed-precondition', 'Revenue for this period is locked because a Creator Pool calculation already exists.');
-    if (existing.exists) throw new HttpsError('already-exists', 'This Stripe settlement reference has already been recorded.');
+    if (existing.exists) throw new HttpsError('already-exists', 'This settlement reference has already been recorded.');
     tx.create(ref, {
       settlementId, periodId, provider, externalId, settledAt, sourceReference,
       grossPence, refundPence, chargebackPence, processorFeePence, vatPence,
@@ -1449,7 +1449,7 @@ export const adminPrepareCreatorPayoutPeriod = onCall({ region: REGION }, async 
     throw new HttpsError('resource-exhausted', 'This period exceeds the safe finance preparation limits. Contact Nightjar engineering before preparing compensation.');
   }
   if (!settlements.size || settlements.docs.some((doc) => doc.data().status !== 'reconciled')) {
-    throw new HttpsError('failed-precondition', 'Every Stripe settlement must be recorded and reconciled before calculating payouts.');
+    throw new HttpsError('failed-precondition', 'Every revenue settlement must be recorded and reconciled before calculating payouts.');
   }
   const settlementNetPence = settlements.docs.reduce((sum, doc) => {
     const next = sum + safePence(doc.data().eligibleNetRevenuePence, 'Eligible net revenue');
